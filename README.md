@@ -15,6 +15,15 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
+Create local configuration before using a hosted model provider:
+
+```bash
+cp .env.example .env
+```
+
+Then replace the placeholder API key in `.env`. The real `.env` file is ignored by
+Git and must never be committed.
+
 ## Inspect a text PDF
 
 ```bash
