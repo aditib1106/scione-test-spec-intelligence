@@ -124,3 +124,28 @@ def test_groq_error_message_omits_failed_generation() -> None:
     assert "HTTP 400" in message
     assert "json_validate_failed" in message
     assert "sensitive extracted document content" not in message
+
+
+def test_groq_rate_limit_error_is_short_and_actionable() -> None:
+    error = SimpleNamespace(
+        status_code=429,
+        body={
+            "error": {
+                "type": "tokens",
+                "code": "rate_limit_exceeded",
+                "message": (
+                    "Request too large in organization org_private on output tokens per "
+                    "minute (OTPM): Limit 1000, Requested 2750. Upgrade billing."
+                ),
+            }
+        },
+    )
+
+    message = _safe_api_error_message(error)
+
+    assert message == (
+        "Groq rate limit exceeded: OTPM limit 1000, this request needs 2750. "
+        "The current full-document output is too large for this limit."
+    )
+    assert "org_private" not in message
+    assert "billing" not in message

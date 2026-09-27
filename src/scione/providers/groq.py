@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from time import perf_counter
 from typing import Any, Literal
 
@@ -56,11 +57,30 @@ def _safe_api_error_message(exc: groq.APIError) -> str:
     if isinstance(body, dict):
         error = body.get("error")
         if isinstance(error, dict):
+            code = error.get("code")
+            message = error.get("message")
+            if status_code == 429 or code == "rate_limit_exceeded":
+                quota = (
+                    re.search(
+                        r"\(([A-Z]+)\):\s*Limit\s+([\d,]+),\s*Requested\s+([\d,]+)",
+                        message,
+                    )
+                    if isinstance(message, str)
+                    else None
+                )
+                if quota:
+                    kind, limit, requested = quota.groups()
+                    return (
+                        "Groq rate limit exceeded: "
+                        f"{kind} limit {limit}, this request needs {requested}. "
+                        "The current full-document output is too large for this limit."
+                    )
+                return "Groq rate limit exceeded. Try again after the limit resets."
+
             for key in ("type", "code", "param"):
                 value = error.get(key)
                 if value:
                     details.append(f"{key}={value}")
-            message = error.get("message")
             if isinstance(message, str) and message:
                 details.append(f"message={message[:500]}")
 
