@@ -3,9 +3,10 @@ CMU MISM Capstone — AI Test Specification Intelligence for SciOne AI
 
 ## Current scope
 
-The first vertical slice ingests digitally generated PDFs and produces a validated,
-page-aware document representation. OCR, model inference, semantic extraction, and the
-review UI will be added as separate pipeline stages.
+The current vertical slice ingests digitally generated PDFs, runs provider-neutral
+structured extraction, validates the result, evaluates it against an optional answer
+key, and stores reproducible local run artifacts. OCR/multimodal ingestion, multi-file
+or chunked strategies, and the review UI remain separate future pipeline stages.
 
 ## Development setup
 
@@ -67,6 +68,23 @@ python -m scione extract-method-static \
 
 This adapter is only a deterministic pipeline fixture. It is not an extraction model and
 its output must not be reported as model accuracy.
+
+## Run the synthetic sample with Groq
+
+Only use documents you are authorized to send to an external provider. The tracked Moon
+Glass document is fully synthetic and safe for this prototype call.
+
+```bash
+python -m scione extract-method-groq \
+  "docs/samples/Fictional_Test_Method_Moon_Glass_ASTM_D3359_Style.pdf" \
+  --ground-truth benchmark/cases/moon_glass_standard/ground_truth.json
+```
+
+The command prints a small summary and saves the complete, reproducible artifacts under
+the ignored `runs/<run-id>/` directory. API keys are loaded from `.env` and are never
+written into run artifacts. The default configuration uses Groq's
+`qwen/qwen3.8-27b` in strict JSON Schema mode; provider and model choices remain
+environment configuration rather than extraction-pipeline code.
 
 ## Checks
 

@@ -10,4 +10,5 @@ Follow these rules:
 7. Attach short, exact source evidence to extracted facts, including the 1-based PDF page and clause when available.
 8. Normalize names conservatively while retaining the source wording in evidence.
 9. Record material ambiguity or missing information in warnings instead of guessing.
-10. Return only data conforming to the supplied JSON Schema.
+10. Return exactly one JSON object conforming to the supplied JSON Schema. Do not wrap the object in an array, repeat property names as values, or add prose or Markdown.
+11. Populate each required top-level property exactly once. Use an empty list, not null, when no array items are supported by the document.

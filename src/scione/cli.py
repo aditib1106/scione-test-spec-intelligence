@@ -9,10 +9,12 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from scione.config import ConfigurationError, Settings
 from scione.evaluation import TestMethodEvaluator
 from scione.extraction import ExtractionError, MethodExtractionRunner
 from scione.ingestion import IngestionError, PyMuPDFTextIngestor
-from scione.providers import ProviderError, StaticModelProvider
+from scione.providers import GroqModelProvider, ProviderError, StaticModelProvider
+from scione.runs import FileRunStore, RunStoreError
 from scione.schemas import TestMethodExtraction, TextReadingOrder
 
 
@@ -49,6 +51,22 @@ def build_parser() -> argparse.ArgumentParser:
     extract_parser.add_argument("pdf", type=Path)
     extract_parser.add_argument("static_response", type=Path)
     extract_parser.add_argument(
+        "--reading-order",
+        choices=[order.value for order in TextReadingOrder],
+        default=TextReadingOrder.CONTENT_STREAM.value,
+    )
+
+    groq_parser = subparsers.add_parser(
+        "extract-method-groq",
+        help="Extract a synthetic method PDF with the configured Groq model.",
+    )
+    groq_parser.add_argument("pdf", type=Path)
+    groq_parser.add_argument(
+        "--ground-truth",
+        type=Path,
+        help="Optional answer key used to produce an evaluation artifact.",
+    )
+    groq_parser.add_argument(
         "--reading-order",
         choices=[order.value for order in TextReadingOrder],
         default=TextReadingOrder.CONTENT_STREAM.value,
@@ -100,6 +118,59 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
 
         print(run.model_dump_json(indent=2))
+        return 0
+
+    if args.command == "extract-method-groq":
+        try:
+            settings = Settings()
+            document = PyMuPDFTextIngestor(
+                reading_order=TextReadingOrder(args.reading_order)
+            ).ingest(args.pdf)
+            provider = GroqModelProvider(
+                api_key=settings.require_groq_api_key(),
+                model_name=settings.groq_model,
+                timeout_seconds=settings.groq_timeout_seconds,
+                max_retries=settings.groq_max_retries,
+                max_completion_tokens=settings.groq_max_completion_tokens,
+                reasoning_effort=settings.groq_reasoning_effort,
+                temperature=settings.groq_temperature,
+                strict_structured_output=settings.groq_strict_structured_output,
+            )
+            run = MethodExtractionRunner(provider).run(document)
+            evaluation = None
+            if args.ground_truth is not None:
+                ground_truth = TestMethodExtraction.model_validate_json(
+                    args.ground_truth.read_text(encoding="utf-8")
+                )
+                evaluation = TestMethodEvaluator().evaluate(run.extraction, ground_truth)
+            run_directory = FileRunStore(settings.scione_runs_dir).save_method_run(
+                document=document,
+                run=run,
+                evaluation=evaluation,
+            )
+        except (
+            ConfigurationError,
+            ExtractionError,
+            IngestionError,
+            OSError,
+            RunStoreError,
+            ValidationError,
+        ) as exc:
+            print(f"Extraction failed: {exc}")
+            return 1
+
+        summary = {
+            "run_id": run.run_id,
+            "run_directory": str(run_directory),
+            "provider": run.provider,
+            "model": run.model,
+            "prompt_version": run.prompt_version,
+            "schema_version": run.schema_version,
+            "latency_ms": run.latency_ms,
+            "usage": run.usage.model_dump(),
+            "evaluated": evaluation is not None,
+        }
+        print(json.dumps(summary, indent=2))
         return 0
 
     return 2

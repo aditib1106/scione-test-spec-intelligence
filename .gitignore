@@ -225,5 +225,5 @@ __marimo__/
 docs/*.pdf
 
 # Local runtime data
-runs/
+/runs/
 uploads/
