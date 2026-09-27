@@ -39,3 +39,9 @@ def test_file_store_persists_reproducible_run_artifacts(tmp_path: Path) -> None:
         "raw_response.txt",
         "run.json",
     }
+
+    loaded = FileRunStore(tmp_path).load_method_run(run.run_id)
+    assert loaded.run == run
+    assert loaded.document == document
+    assert loaded.evaluation == evaluation
+    assert FileRunStore(tmp_path).list_method_run_ids() == [run.run_id]

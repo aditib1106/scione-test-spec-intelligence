@@ -13,9 +13,10 @@ from scione.config import ConfigurationError, Settings
 from scione.evaluation import TestMethodEvaluator
 from scione.extraction import ExtractionError, MethodExtractionRunner
 from scione.ingestion import IngestionError, PyMuPDFTextIngestor
-from scione.providers import GroqModelProvider, ProviderError, StaticModelProvider
-from scione.runs import FileRunStore, RunStoreError
+from scione.providers import ProviderError, StaticModelProvider
+from scione.runs import RunStoreError
 from scione.schemas import TestMethodExtraction, TextReadingOrder
+from scione.workbench import create_configured_provider, execute_method_workbench
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -123,30 +124,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "extract-method-groq":
         try:
             settings = Settings()
-            document = PyMuPDFTextIngestor(
-                reading_order=TextReadingOrder(args.reading_order)
-            ).ingest(args.pdf)
-            provider = GroqModelProvider(
-                api_key=settings.require_groq_api_key(),
-                model_name=settings.groq_model,
-                timeout_seconds=settings.groq_timeout_seconds,
-                max_retries=settings.groq_max_retries,
-                max_completion_tokens=settings.groq_max_completion_tokens,
-                reasoning_effort=settings.groq_reasoning_effort,
-                temperature=settings.groq_temperature,
-                strict_structured_output=settings.groq_strict_structured_output,
-            )
-            run = MethodExtractionRunner(provider).run(document)
-            evaluation = None
-            if args.ground_truth is not None:
-                ground_truth = TestMethodExtraction.model_validate_json(
-                    args.ground_truth.read_text(encoding="utf-8")
-                )
-                evaluation = TestMethodEvaluator().evaluate(run.extraction, ground_truth)
-            run_directory = FileRunStore(settings.scione_runs_dir).save_method_run(
-                document=document,
-                run=run,
-                evaluation=evaluation,
+            result = execute_method_workbench(
+                args.pdf,
+                provider=create_configured_provider(settings),
+                runs_dir=settings.scione_runs_dir,
+                reading_order=TextReadingOrder(args.reading_order),
+                ground_truth_path=args.ground_truth,
             )
         except (
             ConfigurationError,
@@ -160,15 +143,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
 
         summary = {
-            "run_id": run.run_id,
-            "run_directory": str(run_directory),
-            "provider": run.provider,
-            "model": run.model,
-            "prompt_version": run.prompt_version,
-            "schema_version": run.schema_version,
-            "latency_ms": run.latency_ms,
-            "usage": run.usage.model_dump(),
-            "evaluated": evaluation is not None,
+            "run_id": result.run.run_id,
+            "run_directory": str(result.run_directory),
+            "provider": result.run.provider,
+            "model": result.run.model,
+            "prompt_version": result.run.prompt_version,
+            "schema_version": result.run.schema_version,
+            "latency_ms": result.run.latency_ms,
+            "usage": result.run.usage.model_dump(),
+            "evaluated": result.evaluation is not None,
         }
         print(json.dumps(summary, indent=2))
         return 0

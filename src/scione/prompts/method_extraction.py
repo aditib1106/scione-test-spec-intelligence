@@ -6,8 +6,8 @@ from importlib.resources import files
 
 from scione.schemas import IngestedDocument
 
-METHOD_EXTRACTION_PROMPT_VERSION = "method_extraction_v0.1"
-_PROMPT_FILE = "method_extraction_v0_1.txt"
+METHOD_EXTRACTION_PROMPT_VERSION = "method_extraction_v0.2"
+_PROMPT_FILE = "method_extraction_v0_2.txt"
 
 
 def load_method_extraction_system_prompt() -> str:

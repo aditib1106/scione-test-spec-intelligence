@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -14,6 +15,16 @@ from scione.schemas import IngestedDocument
 
 class RunStoreError(RuntimeError):
     """Raised when local run artifacts cannot be persisted safely."""
+
+
+@dataclass(frozen=True)
+class StoredMethodRun:
+    """Validated artifacts loaded from one saved run directory."""
+
+    directory: Path
+    document: IngestedDocument
+    run: MethodExtractionRun
+    evaluation: EvaluationReport | None
 
 
 class FileRunStore:
@@ -46,9 +57,57 @@ class FileRunStore:
             raise RunStoreError(f"Unable to save run {run.run_id}: {exc}") from exc
         return run_directory
 
+    def list_method_run_ids(self) -> list[str]:
+        """Return newest run directories first without loading their large payloads."""
+
+        if not self.root.exists():
+            return []
+        try:
+            directories = [
+                path
+                for path in self.root.iterdir()
+                if path.is_dir() and (path / "run.json").is_file()
+            ]
+            directories.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        except OSError as exc:
+            raise RunStoreError(f"Unable to list runs in {self.root}: {exc}") from exc
+        return [path.name for path in directories]
+
+    def load_method_run(self, run_id: str) -> StoredMethodRun:
+        """Load one run by directory name while rejecting path traversal."""
+
+        if not run_id or Path(run_id).name != run_id:
+            raise RunStoreError(f"Invalid run id: {run_id!r}")
+        run_directory = self.root / run_id
+        try:
+            document_payload = json.loads(
+                (run_directory / "document.json").read_text(encoding="utf-8")
+            )
+            # Runs created before the loader existed included computed display fields.
+            document_payload.pop("total_character_count", None)
+            document_payload.pop("total_non_whitespace_character_count", None)
+            document = IngestedDocument.model_validate(document_payload)
+            run = MethodExtractionRun.model_validate_json(
+                (run_directory / "run.json").read_text(encoding="utf-8")
+            )
+            evaluation_path = run_directory / "evaluation.json"
+            evaluation = (
+                EvaluationReport.model_validate_json(evaluation_path.read_text(encoding="utf-8"))
+                if evaluation_path.exists()
+                else None
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            raise RunStoreError(f"Unable to load run {run_id}: {exc}") from exc
+        return StoredMethodRun(
+            directory=run_directory,
+            document=document,
+            run=run,
+            evaluation=evaluation,
+        )
+
     @staticmethod
     def _write_model(path: Path, value: BaseModel) -> None:
-        payload = value.model_dump(mode="json")
+        payload = value.model_dump(mode="json", exclude_computed_fields=True)
         path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",

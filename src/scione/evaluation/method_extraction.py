@@ -36,7 +36,22 @@ class EvaluationReport(BaseModel):
 def _normalize(value: str | int | float | None) -> str:
     if value is None:
         return "<null>"
-    return re.sub(r"\s+", " ", str(value).strip().casefold())
+    return re.sub(r"\s+", " ", str(value).strip().casefold().replace("_", " "))
+
+
+def _normalize_unit(value: str | None) -> str:
+    normalized = _normalize(value)
+    aliases = {
+        "spectral degrees": "spectral degree",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _normalize_method_id(value: str | None) -> str:
+    """Treat source-equivalent labels such as A and Test Method A alike."""
+
+    normalized = _normalize(value)
+    return re.sub(r"^(?:test\s+)?method\s+", "", normalized)
 
 
 def _metric(name: str, predicted: Iterable[str], expected: Iterable[str]) -> SetMetric:
@@ -122,14 +137,14 @@ class TestMethodEvaluator:
     @staticmethod
     def _methods(extraction: TestMethodExtraction) -> Iterable[str]:
         return [
-            f"{_normalize(method.method_id)}|{_normalize(method.name)}"
+            f"{_normalize_method_id(method.method_id)}|{_normalize(method.name)}"
             for method in extraction.methods
         ]
 
     @staticmethod
     def _exposures(extraction: TestMethodExtraction) -> Iterable[str]:
         return [
-            f"{_normalize(method.method_id)}|{_normalize(exposure.name)}|{_normalize(exposure.cycle_count)}"
+            f"{_normalize_method_id(method.method_id)}|{_normalize(exposure.name)}|{_normalize(exposure.cycle_count)}"
             for method in extraction.methods
             for exposure in method.exposures
         ]
@@ -139,10 +154,10 @@ class TestMethodEvaluator:
         return [
             "|".join(
                 [
-                    _normalize(method.method_id),
+                    _normalize_method_id(method.method_id),
                     _normalize(condition.name),
                     _normalize(condition.raw_value),
-                    _normalize(condition.unit),
+                    _normalize_unit(condition.unit),
                 ]
             )
             for method in extraction.methods
@@ -153,7 +168,7 @@ class TestMethodEvaluator:
     @staticmethod
     def _parameters(extraction: TestMethodExtraction) -> Iterable[str]:
         return [
-            f"{_normalize(method.method_id)}|{_normalize(parameter.name)}|{_normalize(parameter.unit)}"
+            f"{_normalize_method_id(method.method_id)}|{_normalize(parameter.name)}|{_normalize_unit(parameter.unit)}"
             for method in extraction.methods
             for parameter in method.parameters
         ]
@@ -161,7 +176,7 @@ class TestMethodEvaluator:
     @staticmethod
     def _classification_labels(extraction: TestMethodExtraction) -> Iterable[str]:
         return [
-            f"{_normalize(method.method_id)}|{_normalize(level.label)}"
+            f"{_normalize_method_id(method.method_id)}|{_normalize(level.label)}"
             for method in extraction.methods
             for level in method.classifications
         ]
@@ -175,7 +190,7 @@ class TestMethodEvaluator:
         return [
             json.dumps(
                 {
-                    "method_id": _normalize(criterion.method_id),
+                    "method_id": _normalize_method_id(criterion.method_id),
                     "parameter": _normalize(criterion.parameter),
                     "operator": _normalize(criterion.operator),
                     "value": _normalize(criterion.value),
