@@ -45,6 +45,20 @@ The evaluator reports separate precision/recall/F1 values for document identity,
 methods, exposures, parameters, classifications, references, and acceptance criteria.
 It deliberately does not hide those dimensions behind one overall score.
 
+## Test the extraction pipeline without an API
+
+The static provider exercises prompt construction, provider orchestration, schema
+validation, and run metadata without making a network request:
+
+```bash
+python -m scione extract-method-static \
+  "docs/samples/Fictional_Test_Method_Moon_Glass_ASTM_D3359_Style.pdf" \
+  benchmark/cases/moon_glass_standard/ground_truth.json
+```
+
+This adapter is only a deterministic pipeline fixture. It is not an extraction model and
+its output must not be reported as model accuracy.
+
 ## Checks
 
 ```bash

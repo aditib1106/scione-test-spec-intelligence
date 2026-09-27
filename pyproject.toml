@@ -30,6 +30,9 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+scione = ["prompts/*.txt"]
+
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]

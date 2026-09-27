@@ -10,7 +10,9 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from scione.evaluation import TestMethodEvaluator
+from scione.extraction import ExtractionError, MethodExtractionRunner
 from scione.ingestion import IngestionError, PyMuPDFTextIngestor
+from scione.providers import ProviderError, StaticModelProvider
 from scione.schemas import TestMethodExtraction, TextReadingOrder
 
 
@@ -39,6 +41,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate_parser.add_argument("prediction", type=Path)
     evaluate_parser.add_argument("ground_truth", type=Path)
+
+    extract_parser = subparsers.add_parser(
+        "extract-method-static",
+        help="Run the full extraction pipeline with a deterministic JSON fixture.",
+    )
+    extract_parser.add_argument("pdf", type=Path)
+    extract_parser.add_argument("static_response", type=Path)
+    extract_parser.add_argument(
+        "--reading-order",
+        choices=[order.value for order in TextReadingOrder],
+        default=TextReadingOrder.CONTENT_STREAM.value,
+    )
 
     return parser
 
@@ -72,6 +86,20 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         report = TestMethodEvaluator().evaluate(prediction, ground_truth)
         print(report.model_dump_json(indent=2))
+        return 0
+
+    if args.command == "extract-method-static":
+        try:
+            document = PyMuPDFTextIngestor(
+                reading_order=TextReadingOrder(args.reading_order)
+            ).ingest(args.pdf)
+            provider = StaticModelProvider.from_json_file(args.static_response)
+            run = MethodExtractionRunner(provider).run(document)
+        except (IngestionError, ProviderError, ExtractionError) as exc:
+            print(f"Extraction failed: {exc}")
+            return 1
+
+        print(run.model_dump_json(indent=2))
         return 0
 
     return 2
