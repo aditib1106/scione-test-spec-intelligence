@@ -17,6 +17,9 @@ dependencies = [
     "streamlit>=1.49,<2",
 ]
 
+[project.scripts]
+scione = "scione.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.4,<9",
@@ -37,4 +40,3 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-
