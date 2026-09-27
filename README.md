@@ -86,6 +86,29 @@ written into run artifacts. The default configuration uses Groq's
 `qwen/qwen3.8-27b` in strict JSON Schema mode; provider and model choices remain
 environment configuration rather than extraction-pipeline code.
 
+## Open the review workbench
+
+The web interface loads saved runs without making another model call. A new request is
+sent only after pressing **Run extraction** in the sidebar.
+
+```bash
+python -m streamlit run src/scione/web/app.py
+```
+
+The workbench can run the tracked synthetic PDF or an uploaded text-based PDF. It shows
+the page text seen by the model, normalized methods and parameters, source evidence,
+field-level evaluation differences, and downloadable validated JSON. Do not upload
+documents that are not authorized for the configured external provider.
+
+## Add another model provider
+
+The extraction runner depends only on the `ModelProvider` contract. To add another
+vendor or a local model, implement that contract and register the adapter in
+`create_configured_provider()` in `src/scione/workbench.py`. Prompt construction,
+schema validation, evaluation, CLI behavior, run storage, and the review UI remain
+unchanged. Models available through Groq can already be changed with `GROQ_MODEL`
+without adding an adapter.
+
 ## Checks
 
 ```bash
