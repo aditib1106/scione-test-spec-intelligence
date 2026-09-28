@@ -1,0 +1,173 @@
+{
+  "schema_version": "0.1",
+  "document": {
+    "document_type": "test_method_standard",
+    "designation": "FTM-MG-017",
+    "title": "Standard Test Methods for Rating Portal Stability of Enchanted Moon-Glass",
+    "version": "26",
+    "organization": null,
+    "is_fictional": true,
+    "evidence": [
+      {
+        "page": 1,
+        "clause": null,
+        "quote": "Designation: FTM-MG-017 - 26"
+      }
+    ]
+  },
+  "test_items": [
+    {
+      "source_name": "portal stability",
+      "normalized_name": "portal stability",
+      "description": "Resistance to whisper loss and apparent hue change during controlled paired-portal transit.",
+      "evidence": [
+        {
+          "page": 1,
+          "clause": "1.1",
+          "quote": "resistance of enchanted moon-glass vessels to loss of stored whisper content and change in apparent hue"
+        }
+      ]
+    }
+  ],
+  "methods": [
+    {
+      "method_id": "A",
+      "name": "Single-Whisper Transit Test",
+      "applicability": "A single ordered whisper imprint in similarly charged moon-glass vials.",
+      "exposures": [
+        {
+          "name": "paired portal transit",
+          "cycle_count": 5,
+          "conditions": [
+            {
+              "name": "fringe setting",
+              "raw_value": "4",
+              "unit": null,
+              "evidence": [{"page": 2, "clause": "8.6", "quote": "Set the transit rings to fringe setting 4"}]
+            },
+            {
+              "name": "transit duration in each direction",
+              "raw_value": "2.0 +/- 0.1",
+              "unit": "s",
+              "evidence": [{"page": 2, "clause": "8.6", "quote": "a transit duration of 2.0 +/- 0.1 s in each direction"}]
+            },
+            {
+              "name": "outbound-to-return interval",
+              "raw_value": "30 +/- 2",
+              "unit": "s",
+              "evidence": [{"page": 2, "clause": "8.6", "quote": "after 30 +/- 2 s, return it through the paired ring"}]
+            },
+            {
+              "name": "recovery interval",
+              "raw_value": "10.0 +/- 0.2",
+              "unit": "min",
+              "evidence": [{"page": 2, "clause": "8.7", "quote": "allow the specimen to recover for 10.0 +/- 0.2 min"}]
+            }
+          ],
+          "evidence": [{"page": 2, "clause": "8.6", "quote": "Repeat until five portal cycles have been completed."}]
+        }
+      ],
+      "parameters": [
+        {
+          "name": "enchantment density",
+          "unit": "AM/ch3",
+          "description": null,
+          "evidence": [{"page": 2, "clause": "8.3", "quote": "verify an enchantment density of 60 +/- 3 AM/ch3"}]
+        },
+        {
+          "name": "hue signature",
+          "unit": "spectral degree",
+          "description": null,
+          "evidence": [{"page": 2, "clause": "8.4", "quote": "record the circular mean, H0, to the nearest 0.1 spectral degree"}]
+        },
+        {
+          "name": "chromatic drift",
+          "unit": "spectral degree",
+          "description": "Angular difference between initial and final hue signatures.",
+          "evidence": [{"page": 1, "clause": "3.1.4", "quote": "chromatic drift"}]
+        },
+        {
+          "name": "recovered rune sequence",
+          "unit": null,
+          "description": null,
+          "evidence": [{"page": 2, "clause": "8.8", "quote": "Inspect the returned sequence"}]
+        },
+        {
+          "name": "portal stability classification",
+          "unit": "ordinal rating",
+          "description": "Discrete classification from 0A through 5A.",
+          "evidence": [{"page": 2, "clause": "8.8", "quote": "Rate the result in accordance with the scale illustrated in Fig. 1."}]
+        }
+      ],
+      "classifications": [
+        {"label": "5A", "description": "All 12 runes recovered in order and chromatic drift no greater than 1.0 spectral degree.", "evidence": [{"page": 2, "clause": "Fig. 1", "quote": "5A"}]},
+        {"label": "4A", "description": "One outer rune may be faint or delayed, none omitted, and chromatic drift no greater than 3.0 spectral degrees.", "evidence": [{"page": 2, "clause": "Fig. 1", "quote": "4A"}]},
+        {"label": "3A", "description": "One rune omitted or substituted, or two displaced, with chromatic drift no greater than 6.0 spectral degrees.", "evidence": [{"page": 2, "clause": "Fig. 1", "quote": "3A"}]},
+        {"label": "2A", "description": "Two or three runes omitted, substituted, or displaced, without unsolicited sequence.", "evidence": [{"page": 2, "clause": "Fig. 1", "quote": "2A"}]},
+        {"label": "1A", "description": "Four to eight runes not recovered in assigned positions, or one unsolicited sequence.", "evidence": [{"page": 2, "clause": "Fig. 1", "quote": "1A"}]},
+        {"label": "0A", "description": "Fewer than four reference runes recovered, or a persistent unrelated whisper.", "evidence": [{"page": 2, "clause": "Fig. 1", "quote": "0A"}]}
+      ],
+      "evidence": [{"page": 2, "clause": null, "quote": "TEST METHOD A-SINGLE-WHISPER TRANSIT TEST"}]
+    },
+    {
+      "method_id": "B",
+      "name": "Lattice-Whisper Transit Test",
+      "applicability": "A six-cell whisper lattice in similarly charged moon-glass vessels.",
+      "exposures": [
+        {
+          "name": "paired portal transit",
+          "cycle_count": 5,
+          "conditions": [
+            {
+              "name": "referenced Method A transit conditions",
+              "raw_value": "conditions specified in 8.6 with recovery specified in 8.7",
+              "unit": null,
+              "evidence": [{"page": 3, "clause": "13.5", "quote": "using the conditions specified in 8.6, and allow the specimen to recover as specified in 8.7"}]
+            }
+          ],
+          "evidence": [{"page": 3, "clause": "13.5", "quote": "Expose the specimen to five portal cycles"}]
+        }
+      ],
+      "parameters": [
+        {
+          "name": "enchantment density",
+          "unit": "AM/ch3",
+          "description": null,
+          "evidence": [{"page": 3, "clause": "13.3", "quote": "Measure initial enchantment density at the center of each cell."}]
+        },
+        {
+          "name": "rune loss, substitution, migration, or duplication",
+          "unit": null,
+          "description": null,
+          "evidence": [{"page": 3, "clause": "13.6", "quote": "inspect each cell for rune loss, substitution, migration, or duplication"}]
+        },
+        {
+          "name": "portal stability classification",
+          "unit": "ordinal rating",
+          "description": "Discrete classification from 0B through 5B.",
+          "evidence": [{"page": 3, "clause": "13.6", "quote": "Rate the result in accordance with the scale illustrated in Fig. 2."}]
+        }
+      ],
+      "classifications": [
+        {"label": "5B", "description": "All six cells retain all three runes in order and no rune crosses a cell boundary.", "evidence": [{"page": 3, "clause": "Fig. 2", "quote": "5B"}]},
+        {"label": "4B", "description": "One faint rune and less than 5 percent of total lattice content affected.", "evidence": [{"page": 3, "clause": "Fig. 2", "quote": "4B"}]},
+        {"label": "3B", "description": "One or two runes lost or displaced and 5 to 15 percent affected.", "evidence": [{"page": 3, "clause": "Fig. 2", "quote": "3B"}]},
+        {"label": "2B", "description": "Three to six runes affected and 15 to 35 percent affected.", "evidence": [{"page": 3, "clause": "Fig. 2", "quote": "2B"}]},
+        {"label": "1B", "description": "Seven to twelve runes affected, or an entire cell lost, and 35 to 65 percent affected.", "evidence": [{"page": 3, "clause": "Fig. 2", "quote": "1B"}]},
+        {"label": "0B", "description": "More than 65 percent affected or cell boundaries no longer distinguishable.", "evidence": [{"page": 3, "clause": "Fig. 2", "quote": "0B"}]}
+      ],
+      "evidence": [{"page": 2, "clause": null, "quote": "TEST METHOD B-LATTICE-WHISPER TRANSIT TEST"}]
+    }
+  ],
+  "referenced_documents": [
+    {"code": "GP-12", "title": "Practice for Conditioning Enchanted Containers in Quiet Rooms", "evidence": [{"page": 1, "clause": "2.1", "quote": "GP-12"}]},
+    {"code": "AT-3", "title": "Terminology Relating to Echo-Bearing Materials", "evidence": [{"page": 1, "clause": "2.1", "quote": "AT-3"}]},
+    {"code": "PSC-7", "title": "Practice for Containment of Low-Energy Transit Rings", "evidence": [{"page": 1, "clause": "2.1", "quote": "PSC-7"}]},
+    {"code": "RM-9", "title": "Test Method for Assigning Spectral Degrees to Luminous Artifacts", "evidence": [{"page": 1, "clause": "2.1", "quote": "RM-9"}]},
+    {"code": "WT-4", "title": "Practice for Producing Whisper Imprints of Uniform Density", "evidence": [{"page": 1, "clause": "2.1", "quote": "WT-4"}]}
+  ],
+  "acceptance_criteria": [],
+  "warnings": [
+    "This document defines test procedures and classification scales but does not define a customer pass/fail threshold."
+  ]
+}
