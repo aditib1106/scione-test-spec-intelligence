@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import tempfile
 from pathlib import Path
 
@@ -9,11 +10,19 @@ import streamlit as st
 from pydantic import ValidationError
 
 from scione.config import ConfigurationError, Settings
+from scione.evaluation import EvaluationReport, TestMethodEvaluator
 from scione.extraction import ExtractionError
 from scione.ingestion import IngestionError
 from scione.runs import FileRunStore, RunStoreError, StoredMethodRun
-from scione.schemas import TestMethodDefinition, TextReadingOrder
-from scione.web.presentation import evaluation_rows, evidence_rows
+from scione.schemas import TestMethodDefinition, TestMethodExtraction, TextReadingOrder
+from scione.web.presentation import (
+    comparison_evaluation_rows,
+    comparison_summary_rows,
+    evaluation_detail_rows,
+    evaluation_rows,
+    evaluation_summary,
+    evidence_rows,
+)
 from scione.workbench import create_configured_provider, execute_method_workbench
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -23,6 +32,10 @@ SAMPLE_PDF = (
 SAMPLE_GROUND_TRUTH = (
     REPOSITORY_ROOT / "benchmark" / "cases" / "moon_glass_standard" / "ground_truth.json"
 )
+PROVIDER_LABELS = {
+    "groq": "GroqCloud",
+    "gemini": "Google Gemini",
+}
 
 
 def _apply_theme() -> None:
@@ -90,9 +103,33 @@ def _persist_uploaded_file(directory: Path, uploaded_file: object, fallback: str
     return destination
 
 
+def _provider_key_is_configured(settings: Settings, provider_name: str) -> bool:
+    try:
+        if provider_name == "groq":
+            settings.require_groq_api_key()
+        elif provider_name == "gemini":
+            settings.require_gemini_api_key()
+        else:
+            return False
+    except ConfigurationError:
+        return False
+    return True
+
+
+def _provider_model(settings: Settings, provider_name: str) -> str:
+    if provider_name == "groq":
+        return settings.groq_model
+    if provider_name == "gemini":
+        return settings.gemini_model
+    raise ConfigurationError(f"Unsupported provider: {provider_name}")
+
+
 def _run_controls(settings: Settings, store: FileRunStore) -> str | None:
-    st.sidebar.markdown("## Run control")
-    st.sidebar.caption("A model call happens only when you press the button.")
+    st.sidebar.markdown("## New run settings")
+    st.sidebar.caption(
+        "These settings apply only to the next run. A model call happens only "
+        "when you press the button."
+    )
     source = st.sidebar.radio(
         "PDF source",
         ["Synthetic sample", "Upload PDF"],
@@ -121,14 +158,52 @@ def _run_controls(settings: Settings, store: FileRunStore) -> str | None:
             type=["json"],
         )
 
-    key_ready = settings.groq_api_key is not None
+    provider_names = list(PROVIDER_LABELS)
+    default_provider = settings.model_provider.strip().casefold()
+    default_provider_index = (
+        provider_names.index(default_provider) if default_provider in provider_names else 0
+    )
+    selected_provider = st.sidebar.selectbox(
+        "Provider for next run",
+        provider_names,
+        index=default_provider_index,
+        format_func=lambda name: PROVIDER_LABELS[name],
+    )
+    selected_model = st.sidebar.selectbox(
+        "Model for next run",
+        [_provider_model(settings, selected_provider)],
+    )
+    key_ready = _provider_key_is_configured(settings, selected_provider)
     st.sidebar.markdown(
-        f"**Provider:** `{settings.model_provider}`  \n"
-        f"**Model:** `{settings.groq_model}`  \n"
+        f"**Next run provider:** `{selected_provider}`  \n"
+        f"**Next run model:** `{selected_model}`  \n"
         f"**API key:** {'configured' if key_ready else 'missing'}"
     )
 
-    if st.sidebar.button("Run extraction", type="primary", width="stretch"):
+    free_tier_confirmed = True
+    if selected_provider == "gemini":
+        st.sidebar.caption(
+            "Gemini comparison uses saved runs and makes no extra request. "
+            "The app cannot inspect Google billing status."
+        )
+        st.sidebar.warning(
+            "Free-tier Gemini is for synthetic or otherwise non-sensitive documents only."
+        )
+        free_tier_confirmed = st.sidebar.checkbox(
+            "I confirmed this Google project is on the Free tier",
+            value=False,
+        )
+    if settings.scione_single_attempt_mode:
+        st.sidebar.success("Single-attempt guard enabled: automatic API retries are off.")
+    if not key_ready:
+        st.sidebar.warning(f"Configure the {selected_provider} API key before running.")
+
+    if st.sidebar.button(
+        "Run extraction",
+        type="primary",
+        width="stretch",
+        disabled=not key_ready or not free_tier_confirmed,
+    ):
         if source == "Upload PDF" and uploaded_pdf is None:
             st.sidebar.warning("Choose a PDF before running extraction.")
         else:
@@ -156,7 +231,11 @@ def _run_controls(settings: Settings, store: FileRunStore) -> str | None:
                             )
                         result = execute_method_workbench(
                             pdf_path,
-                            provider=create_configured_provider(settings),
+                            provider=create_configured_provider(
+                                settings,
+                                provider_name=selected_provider,
+                                model_name=selected_model,
+                            ),
                             runs_dir=settings.scione_runs_dir,
                             reading_order=TextReadingOrder(reading_order_value),
                             ground_truth_path=ground_truth_path,
@@ -174,7 +253,7 @@ def _run_controls(settings: Settings, store: FileRunStore) -> str | None:
                 st.sidebar.error(str(exc))
 
     st.sidebar.divider()
-    st.sidebar.markdown("## Saved runs")
+    st.sidebar.markdown("## Review saved run")
     run_ids = store.list_method_run_ids()
     if not run_ids:
         st.sidebar.info("No saved runs yet.")
@@ -250,10 +329,128 @@ def _render_method(method: TestMethodDefinition) -> None:
             )
 
 
-def _render_extraction(stored: StoredMethodRun) -> None:
+def _load_comparable_runs(
+    store: FileRunStore,
+    selected: StoredMethodRun,
+) -> list[StoredMethodRun]:
+    comparable: list[StoredMethodRun] = []
+    for run_id in store.list_method_run_ids():
+        if run_id == selected.run.run_id:
+            continue
+        candidate = store.load_method_run(run_id)
+        if (
+            candidate.document.sha256 == selected.document.sha256
+            and candidate.document.text_reading_order == selected.document.text_reading_order
+            and candidate.run.strategy == selected.run.strategy
+            and candidate.run.prompt_version == selected.run.prompt_version
+            and candidate.run.schema_version == selected.run.schema_version
+        ):
+            comparable.append(candidate)
+    return comparable
+
+
+def _ground_truth_for_display(stored: StoredMethodRun) -> TestMethodExtraction | None:
+    """Load the persisted truth, with a compatibility fallback for old sample runs."""
+
+    if stored.ground_truth is not None:
+        return stored.ground_truth
+    if not SAMPLE_PDF.is_file() or not SAMPLE_GROUND_TRUTH.is_file():
+        return None
+    sample_sha256 = hashlib.sha256(SAMPLE_PDF.read_bytes()).hexdigest()
+    if stored.document.sha256 != sample_sha256:
+        return None
+    return TestMethodExtraction.model_validate_json(
+        SAMPLE_GROUND_TRUTH.read_text(encoding="utf-8")
+    )
+
+
+def _evaluation_for_display(
+    stored: StoredMethodRun,
+) -> tuple[EvaluationReport | None, TestMethodExtraction | None]:
+    ground_truth = _ground_truth_for_display(stored)
+    if ground_truth is None:
+        return stored.evaluation, None
+    return (
+        TestMethodEvaluator().evaluate(
+            stored.run.extraction,
+            ground_truth,
+            source_document=stored.document,
+        ),
+        ground_truth,
+    )
+
+
+def _render_comparison(selected: StoredMethodRun, store: FileRunStore) -> None:
+    st.subheader("Saved-run comparison")
+    st.caption(
+        "This view reads existing run artifacts only. It makes no model call. "
+        "Candidates are restricted to the same PDF, reading order, prompt, schema, and strategy."
+    )
+    comparable = _load_comparable_runs(store, selected)
+    if not comparable:
+        st.info(
+            "Run this same document with another provider or model to unlock a fair comparison."
+        )
+        return
+
+    comparison_by_id = {stored.run.run_id: stored for stored in comparable}
+    comparison_id = st.selectbox(
+        "Compare selected run with",
+        list(comparison_by_id),
+        format_func=lambda run_id: (
+            f"{comparison_by_id[run_id].run.provider} / "
+            f"{comparison_by_id[run_id].run.model} · {run_id[:8]}…"
+        ),
+    )
+    comparison = comparison_by_id[comparison_id]
+    selected_evaluation, _ = _evaluation_for_display(selected)
+    comparison_evaluation, _ = _evaluation_for_display(comparison)
+    reports = {
+        run_id: report
+        for run_id, report in (
+            (selected.run.run_id, selected_evaluation),
+            (comparison.run.run_id, comparison_evaluation),
+        )
+        if report is not None
+    }
+    st.dataframe(
+        comparison_summary_rows([selected, comparison], reports=reports),
+        width="stretch",
+        hide_index=True,
+    )
+    st.caption(
+        "Mean field F1 is an unweighted diagnostic summary; use the dimensions below "
+        "to identify exactly where each model succeeds or fails."
+    )
+
+    if selected_evaluation is None or comparison_evaluation is None:
+        st.info("Both runs need the same ground truth before field-level scores can be compared.")
+        return
+
+    st.markdown("**Field-level score comparison**")
+    st.dataframe(
+        comparison_evaluation_rows(selected_evaluation, comparison_evaluation),
+        width="stretch",
+        hide_index=True,
+    )
+    left, right = st.columns(2)
+    with left:
+        st.markdown(
+            f"**Selected: {selected.run.provider} / {selected.run.model}**"
+        )
+        st.caption(f"Run {selected.run.run_id}")
+    with right:
+        st.markdown(
+            f"**Comparison: {comparison.run.provider} / {comparison.run.model}**"
+        )
+        st.caption(f"Run {comparison.run.run_id}")
+
+
+def _render_extraction(stored: StoredMethodRun, store: FileRunStore) -> None:
     extraction = stored.run.extraction
     document = stored.document
     run = stored.run
+    evaluation, ground_truth = _evaluation_for_display(stored)
 
     st.markdown(
         """
@@ -267,14 +464,20 @@ def _render_extraction(stored: StoredMethodRun) -> None:
         unsafe_allow_html=True,
     )
 
-    metric_columns = st.columns(5)
+    summary = evaluation_summary(evaluation) if evaluation is not None else None
+    metric_columns = st.columns(6)
     metric_columns[0].metric("PDF pages", document.page_count)
     metric_columns[1].metric("Methods", len(extraction.methods))
     metric_columns[2].metric("Evidence", len(evidence_rows(extraction)))
-    metric_columns[3].metric("Latency", f"{run.latency_ms / 1000:.2f}s")
-    metric_columns[4].metric("Tokens", run.usage.total_tokens or "—")
+    metric_columns[3].metric(
+        "Diagnostic F1",
+        f"{summary['mean_f1']:.3f}" if summary and summary["mean_f1"] is not None else "—",
+    )
+    metric_columns[4].metric("Latency", f"{run.latency_ms / 1000:.2f}s")
+    metric_columns[5].metric("Tokens", run.usage.total_tokens or "—")
     st.markdown(
-        f'<div class="run-meta">Run {run.run_id} · {run.provider} / {run.model} · '
+        f'<div class="run-meta">Reviewing saved run {run.run_id} · '
+        f"{run.provider} / {run.model} · "
         f"{run.prompt_version} · {document.text_reading_order.value}</div>",
         unsafe_allow_html=True,
     )
@@ -282,8 +485,14 @@ def _render_extraction(stored: StoredMethodRun) -> None:
     if extraction.warnings:
         st.warning("\n\n".join(extraction.warnings))
 
-    overview_tab, evidence_tab, evaluation_tab, json_tab = st.tabs(
-        ["Extraction review", "Evidence & source", "Evaluation", "JSON & metadata"]
+    overview_tab, evidence_tab, evaluation_tab, comparison_tab, json_tab = st.tabs(
+        [
+            "Model output",
+            "Evidence & source",
+            "Results vs truth",
+            "Compare runs",
+            "Raw JSON & metadata",
+        ]
     )
 
     with overview_tab:
@@ -361,29 +570,80 @@ def _render_extraction(stored: StoredMethodRun) -> None:
         )
 
     with evaluation_tab:
-        if stored.evaluation is None:
+        if evaluation is None:
             st.info("This run has no ground truth, so no evaluation was computed.")
         else:
-            st.subheader("Field-level metrics")
+            st.subheader("Quality at a glance")
             st.caption(
-                "The fixture is provisional. Metrics remain separate so one strong "
-                "field cannot hide another weak field."
+                "This is a deterministic diagnostic against the review fixture, not a "
+                "claim of production accuracy. Each dimension remains visible so strong "
+                "classification extraction cannot hide missing procedure details. "
+                f"Evaluator version: {evaluation.evaluator_version}."
             )
+            summary = evaluation_summary(evaluation)
+            summary_columns = st.columns(4)
+            summary_columns[0].metric(
+                "Mean field F1",
+                f"{summary['mean_f1']:.3f}" if summary["mean_f1"] is not None else "—",
+            )
+            summary_columns[1].metric(
+                "Truth values found",
+                f"{summary['matched']}/{summary['expected']}",
+            )
+            summary_columns[2].metric("Unexpected values", summary["unexpected"])
+            summary_columns[3].metric(
+                "Evidence grounded",
+                (
+                    f"{summary['evidence_grounded']}/{summary['evidence_total']}"
+                    if summary["evidence_total"] is not None
+                    else "—"
+                ),
+            )
+
+            st.markdown("**Dimension-by-dimension results**")
             st.dataframe(
-                evaluation_rows(stored.evaluation),
+                evaluation_rows(evaluation),
                 width="stretch",
                 hide_index=True,
             )
-            for metric in stored.evaluation.metrics:
-                if metric.missing or metric.unexpected:
-                    with st.expander(
-                        f"{metric.name.replace('_', ' ').title()} · review differences"
-                    ):
-                        left, right = st.columns(2)
-                        left.markdown("**Missing**")
-                        left.code("\n".join(metric.missing) or "None")
-                        right.markdown("**Unexpected**")
-                        right.code("\n".join(metric.unexpected) or "None")
+
+            metric_by_name = {metric.name: metric for metric in evaluation.metrics}
+            selected_metric_name = st.selectbox(
+                "Inspect one dimension",
+                list(metric_by_name),
+                format_func=lambda name: name.replace("_", " ").title(),
+                key=f"evaluation-dimension-{run.run_id}",
+            )
+            selected_metric = metric_by_name[selected_metric_name]
+            st.caption(
+                "Values below are normalized only for formatting. Missing and unexpected "
+                "values remain separate instead of being paired by a subjective similarity score."
+            )
+            st.dataframe(
+                evaluation_detail_rows(selected_metric),
+                width="stretch",
+                hide_index=True,
+            )
+
+            grounding = evaluation.evidence_grounding
+            if grounding and grounding.ungrounded:
+                with st.expander(
+                    f"Evidence requiring review · {len(grounding.ungrounded)}"
+                ):
+                    st.code("\n\n".join(grounding.ungrounded))
+
+            if ground_truth is not None:
+                with st.expander("Raw model output and ground truth"):
+                    prediction_column, truth_column = st.columns(2)
+                    with prediction_column:
+                        st.markdown("**Model output**")
+                        st.json(extraction.model_dump(mode="json"), expanded=False)
+                    with truth_column:
+                        st.markdown("**Ground truth**")
+                        st.json(ground_truth.model_dump(mode="json"), expanded=False)
+
+    with comparison_tab:
+        _render_comparison(stored, store)
 
     with json_tab:
         st.subheader("Validated prediction")
@@ -418,7 +678,7 @@ def main() -> None:
     except RunStoreError as exc:
         st.error(str(exc))
         return
-    _render_extraction(stored)
+    _render_extraction(stored, store)
 
 
 if __name__ == "__main__":

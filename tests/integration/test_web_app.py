@@ -39,11 +39,13 @@ def test_web_app_renders_saved_run(monkeypatch: MonkeyPatch, tmp_path: Path) -> 
 
     assert not app.exception
     assert [tab.label for tab in app.tabs] == [
-        "Extraction review",
+        "Model output",
         "Evidence & source",
-        "Evaluation",
-        "JSON & metadata",
+        "Results vs truth",
+        "Compare runs",
+        "Raw JSON & metadata",
     ]
     metrics = {metric.label: metric.value for metric in app.metric}
     assert metrics["PDF pages"] == "4"
     assert metrics["Methods"] == "2"
+    assert metrics["Diagnostic F1"] == "1.000"
