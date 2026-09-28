@@ -5,8 +5,9 @@ CMU MISM Capstone — AI Test Specification Intelligence for SciOne AI
 
 The current vertical slice ingests digitally generated PDFs, runs provider-neutral
 structured extraction, validates the result, evaluates it against an optional answer
-key, and stores reproducible local run artifacts. OCR/multimodal ingestion, multi-file
-or chunked strategies, and the review UI remain separate future pipeline stages.
+key, stores reproducible local run artifacts, and exposes the result in a local review
+workbench. OCR/multimodal ingestion and multi-file or chunked strategies remain future
+pipeline stages.
 
 ## Development setup
 
@@ -51,9 +52,12 @@ python -m scione evaluate \
   benchmark/cases/moon_glass_standard/ground_truth.json
 ```
 
-The evaluator reports separate precision/recall/F1 values for document identity,
-methods, exposures, parameters, classifications, references, and acceptance criteria.
-It deliberately does not hide those dimensions behind one overall score.
+The evaluator reports separate precision/recall/F1 values for document identity, test
+items, methods, exposures, conditions, parameters, classifications, references, and
+acceptance criteria. It normalizes non-semantic formatting differences, reports model
+extras separately from missed truth values, and verifies that cited evidence occurs on
+the claimed physical PDF page. A mean F1 is displayed only as a diagnostic summary;
+the field-level results remain the source of truth.
 
 ## Test the extraction pipeline without an API
 
@@ -69,7 +73,7 @@ python -m scione extract-method-static \
 This adapter is only a deterministic pipeline fixture. It is not an extraction model and
 its output must not be reported as model accuracy.
 
-## Run the synthetic sample with Groq
+## Run the synthetic sample with a hosted provider
 
 Only use documents you are authorized to send to an external provider. The tracked Moon
 Glass document is fully synthetic and safe for this prototype call.
@@ -86,6 +90,16 @@ written into run artifacts. The default configuration uses Groq's
 `qwen/qwen3.8-27b` in strict JSON Schema mode; provider and model choices remain
 environment configuration rather than extraction-pipeline code.
 
+The web workbench also supports Google Gemini through the official `google-genai` SDK.
+The default is `gemini-3.5-flash-lite`, which completed the full synthetic structured
+extraction more reliably than `gemini-3.8-flash` during Free-tier testing. The model ID
+remains configurable. Gemini uses the same extracted text, prompt, JSON Schema,
+evaluator, and artifact store as Groq so model results remain comparable. Keep the
+Google project on the Free tier for no-cost synthetic experiments. The application
+cannot inspect or change the project's billing status. Free-tier Gemini data may be
+used by Google to improve its products, so do not send client, licensed, or confidential
+documents.
+
 ## Open the review workbench
 
 The web interface loads saved runs without making another model call. A new request is
@@ -97,8 +111,13 @@ python -m streamlit run src/scione/web/app.py
 
 The workbench can run the tracked synthetic PDF or an uploaded text-based PDF. It shows
 the page text seen by the model, normalized methods and parameters, source evidence,
-field-level evaluation differences, and downloadable validated JSON. Do not upload
-documents that are not authorized for the configured external provider.
+field-level scores, and an explicit ground-truth-versus-model table for every dimension.
+New evaluated runs persist a ground-truth snapshot so later reviews remain reproducible.
+Saved-run comparisons and downloadable validated JSON remain available. Provider and
+model settings in the sidebar apply only to the next run; the reviewed run's actual
+provider and model appear above the results. Comparisons read existing run artifacts and
+never make additional model calls. Do not upload documents that are not authorized for
+the configured external provider.
 
 ## Add another model provider
 
