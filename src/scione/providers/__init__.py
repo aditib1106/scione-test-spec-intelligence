@@ -7,11 +7,13 @@ from scione.providers.base import (
     StructuredGenerationResponse,
     TokenUsage,
 )
+from scione.providers.gemini import GeminiModelProvider
 from scione.providers.groq import GroqModelProvider
 from scione.providers.static import StaticModelProvider
 
 __all__ = [
     "ModelProvider",
+    "GeminiModelProvider",
     "GroqModelProvider",
     "ProviderError",
     "StaticModelProvider",

@@ -1,4 +1,4 @@
-"""Prompt loading and document rendering for method extraction v0.1."""
+"""Prompt loading and document rendering for method extraction."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from importlib.resources import files
 
 from scione.schemas import IngestedDocument
 
-METHOD_EXTRACTION_PROMPT_VERSION = "method_extraction_v0.2"
-_PROMPT_FILE = "method_extraction_v0_2.txt"
+METHOD_EXTRACTION_PROMPT_VERSION = "method_extraction_v0.4"
+_PROMPT_FILE = "method_extraction_v0_4.txt"
 
 
 def load_method_extraction_system_prompt() -> str:

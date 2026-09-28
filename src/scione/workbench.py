@@ -9,7 +9,7 @@ from scione.config import ConfigurationError, Settings
 from scione.evaluation import EvaluationReport, TestMethodEvaluator
 from scione.extraction import MethodExtractionRun, MethodExtractionRunner
 from scione.ingestion import PyMuPDFTextIngestor
-from scione.providers import GroqModelProvider, ModelProvider
+from scione.providers import GeminiModelProvider, GroqModelProvider, ModelProvider
 from scione.runs import FileRunStore
 from scione.schemas import IngestedDocument, TestMethodExtraction, TextReadingOrder
 
@@ -22,25 +22,42 @@ class WorkbenchRun:
     run: MethodExtractionRun
     evaluation: EvaluationReport | None
     run_directory: Path
+    ground_truth: TestMethodExtraction | None = None
 
 
-def create_configured_provider(settings: Settings) -> ModelProvider:
+def create_configured_provider(
+    settings: Settings,
+    *,
+    provider_name: str | None = None,
+    model_name: str | None = None,
+) -> ModelProvider:
     """Build the selected adapter without coupling the extraction runner to a vendor."""
 
-    provider_name = settings.model_provider.strip().casefold()
-    if provider_name == "groq":
+    selected_provider = (provider_name or settings.model_provider).strip().casefold()
+    max_retries = 0 if settings.scione_single_attempt_mode else None
+    if selected_provider == "groq":
         return GroqModelProvider(
             api_key=settings.require_groq_api_key(),
-            model_name=settings.groq_model,
+            model_name=model_name or settings.groq_model,
             timeout_seconds=settings.groq_timeout_seconds,
-            max_retries=settings.groq_max_retries,
+            max_retries=(settings.groq_max_retries if max_retries is None else max_retries),
             max_completion_tokens=settings.groq_max_completion_tokens,
             reasoning_effort=settings.groq_reasoning_effort,
             temperature=settings.groq_temperature,
             strict_structured_output=settings.groq_strict_structured_output,
         )
+    if selected_provider == "gemini":
+        return GeminiModelProvider(
+            api_key=settings.require_gemini_api_key(),
+            model_name=model_name or settings.gemini_model,
+            timeout_seconds=settings.gemini_timeout_seconds,
+            max_retries=(settings.gemini_max_retries if max_retries is None else max_retries),
+            max_output_tokens=settings.gemini_max_output_tokens,
+            temperature=settings.gemini_temperature,
+            thinking_level=settings.gemini_thinking_level,
+        )
     raise ConfigurationError(
-        f"Unsupported MODEL_PROVIDER={settings.model_provider!r}. "
+        f"Unsupported provider={selected_provider!r}. "
         "Install an adapter and register it in create_configured_provider()."
     )
 
@@ -58,19 +75,26 @@ def execute_method_workbench(
     document = PyMuPDFTextIngestor(reading_order=reading_order).ingest(pdf_path)
     run = MethodExtractionRunner(provider).run(document)
     evaluation = None
+    ground_truth = None
     if ground_truth_path is not None:
         ground_truth = TestMethodExtraction.model_validate_json(
             Path(ground_truth_path).read_text(encoding="utf-8")
         )
-        evaluation = TestMethodEvaluator().evaluate(run.extraction, ground_truth)
+        evaluation = TestMethodEvaluator().evaluate(
+            run.extraction,
+            ground_truth,
+            source_document=document,
+        )
     run_directory = FileRunStore(runs_dir).save_method_run(
         document=document,
         run=run,
         evaluation=evaluation,
+        ground_truth=ground_truth,
     )
     return WorkbenchRun(
         document=document,
         run=run,
         evaluation=evaluation,
         run_directory=run_directory,
+        ground_truth=ground_truth,
     )

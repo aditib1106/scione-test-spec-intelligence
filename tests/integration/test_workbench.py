@@ -23,4 +23,9 @@ def test_workbench_executes_evaluates_and_persists(tmp_path: Path) -> None:
     assert result.run.provider == "static"
     assert result.evaluation is not None
     assert all(metric.f1 == 1.0 for metric in result.evaluation.metrics)
+    assert result.evaluation.evaluator_version == "0.3"
+    assert result.evaluation.evidence_grounding is not None
+    assert result.evaluation.evidence_grounding.rate == 1.0
+    assert result.ground_truth is not None
+    assert (result.run_directory / "ground_truth.json").is_file()
     assert result.run_directory.is_dir()

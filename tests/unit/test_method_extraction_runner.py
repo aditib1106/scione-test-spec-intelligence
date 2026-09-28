@@ -28,11 +28,14 @@ def test_prompt_preserves_page_boundaries_and_acceptance_rule() -> None:
     system_prompt = load_method_extraction_system_prompt()
     user_prompt = build_method_extraction_user_prompt(document)
 
-    assert METHOD_EXTRACTION_PROMPT_VERSION == "method_extraction_v0.2"
+    assert METHOD_EXTRACTION_PROMPT_VERSION == "method_extraction_v0.4"
     assert "classification definition is not a customer acceptance criterion" in system_prompt
     assert 'use only the document\'s concise identifier, such as "A" or "B"' in system_prompt
     assert "Never create methods from headings such as Keywords" in system_prompt
     assert 'nearest "=== PAGE N ===" marker' in system_prompt
+    assert "check each method for completeness" in system_prompt
+    assert "Represent the same underlying parameter once" in system_prompt
+    assert "portal stability" not in system_prompt.casefold()
     assert "=== PAGE 1 ===" in user_prompt
     assert document.document_id in user_prompt
 

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from scione.evaluation import EvaluationReport
 from scione.extraction import MethodExtractionRun
-from scione.schemas import IngestedDocument
+from scione.schemas import IngestedDocument, TestMethodExtraction
 
 
 class RunStoreError(RuntimeError):
@@ -25,6 +25,7 @@ class StoredMethodRun:
     document: IngestedDocument
     run: MethodExtractionRun
     evaluation: EvaluationReport | None
+    ground_truth: TestMethodExtraction | None = None
 
 
 class FileRunStore:
@@ -39,6 +40,7 @@ class FileRunStore:
         document: IngestedDocument,
         run: MethodExtractionRun,
         evaluation: EvaluationReport | None = None,
+        ground_truth: TestMethodExtraction | None = None,
     ) -> Path:
         self.root.mkdir(parents=True, exist_ok=True)
         run_directory = self.root / run.run_id
@@ -53,6 +55,8 @@ class FileRunStore:
             )
             if evaluation is not None:
                 self._write_model(run_directory / "evaluation.json", evaluation)
+            if ground_truth is not None:
+                self._write_model(run_directory / "ground_truth.json", ground_truth)
         except OSError as exc:
             raise RunStoreError(f"Unable to save run {run.run_id}: {exc}") from exc
         return run_directory
@@ -96,6 +100,14 @@ class FileRunStore:
                 if evaluation_path.exists()
                 else None
             )
+            ground_truth_path = run_directory / "ground_truth.json"
+            ground_truth = (
+                TestMethodExtraction.model_validate_json(
+                    ground_truth_path.read_text(encoding="utf-8")
+                )
+                if ground_truth_path.exists()
+                else None
+            )
         except (OSError, TypeError, ValueError) as exc:
             raise RunStoreError(f"Unable to load run {run_id}: {exc}") from exc
         return StoredMethodRun(
@@ -103,6 +115,7 @@ class FileRunStore:
             document=document,
             run=run,
             evaluation=evaluation,
+            ground_truth=ground_truth,
         )
 
     @staticmethod

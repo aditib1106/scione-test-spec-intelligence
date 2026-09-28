@@ -29,12 +29,14 @@ def test_file_store_persists_reproducible_run_artifacts(tmp_path: Path) -> None:
         document=document,
         run=run,
         evaluation=evaluation,
+        ground_truth=ground_truth,
     )
 
     assert run_directory == tmp_path / run.run_id
     assert {path.name for path in run_directory.iterdir()} == {
         "document.json",
         "evaluation.json",
+        "ground_truth.json",
         "prediction.json",
         "raw_response.txt",
         "run.json",
@@ -44,4 +46,5 @@ def test_file_store_persists_reproducible_run_artifacts(tmp_path: Path) -> None:
     assert loaded.run == run
     assert loaded.document == document
     assert loaded.evaluation == evaluation
+    assert loaded.ground_truth == ground_truth
     assert FileRunStore(tmp_path).list_method_run_ids() == [run.run_id]

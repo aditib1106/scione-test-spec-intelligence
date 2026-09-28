@@ -2,8 +2,9 @@
 
 from scione.evaluation.method_extraction import (
     EvaluationReport,
+    EvidenceGrounding,
     SetMetric,
     TestMethodEvaluator,
 )
 
-__all__ = ["EvaluationReport", "SetMetric", "TestMethodEvaluator"]
+__all__ = ["EvidenceGrounding", "EvaluationReport", "SetMetric", "TestMethodEvaluator"]
