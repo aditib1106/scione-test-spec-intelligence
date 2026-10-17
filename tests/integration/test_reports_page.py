@@ -143,7 +143,7 @@ def open_reports() -> AppTest:
 
 def all_text(app) -> str:
     values = []
-    for kind in ("markdown", "caption", "info", "warning", "error", "text", "json"):
+    for kind in ("markdown", "caption", "info", "success", "warning", "error", "text", "json"):
         values.extend(str(element.value) for element in app.get(kind))
     for metric in app.metric:
         values.extend((metric.label, str(metric.value)))
@@ -157,6 +157,9 @@ def inspect_pencil(app: AppTest) -> AppTest:
 
 
 def save_support(app: AppTest) -> AppTest:
+    # These historical detail-editor tests inspect the same requirement after
+    # saving. Continuous single-click review is covered separately below.
+    app.checkbox(key="report_advance_after_save").uncheck()
     app.selectbox(key="report_mapping_test").set_value("pencil_hardness")
     app.selectbox(key="report_mapping_capability").set_value("cap_pencil")
     app.selectbox(key="report_mapping_verdict").set_value("supported")
@@ -191,6 +194,23 @@ def requirement_matrix(app: AppTest):
 def requirement_choices(app: AppTest) -> list[str]:
     selector = next((item for item in app.selectbox if item.key == "report_item"), None)
     return selector.options if selector is not None else []
+
+
+def make_adhesion_available(stores) -> None:
+    """Give the lab a second resolved method, without creating any human decisions."""
+
+    _, _, labs = stores
+    lab = labs.load_or_create()
+    lab.capabilities[1].method_ids = ["iso_2409"]
+    lab.capabilities[1].declared_constraints = "2 mm spacing on flat coated panels."
+    labs.save(lab)
+
+
+def select_scope_batch(app: AppTest, *, acknowledge: bool = True) -> AppTest:
+    app = app.multiselect(key="report_bulk_items").set_value(["req_pencil", "req_adhesion"]).run()
+    if acknowledge:
+        app = app.checkbox(key="report_bulk_ack").check().run()
+    return app
 
 
 def test_empty_reports_provide_next_step_without_saving_fake_report(stores) -> None:
@@ -866,3 +886,326 @@ def test_generating_after_lab_edit_does_not_reprice_old_human_quantity(stores) -
         reports.load_workspace(document.document_id, run.run_id).quantities["req_pencil"]
         == original.workspace.quantities["req_pencil"]
     )
+
+
+def test_scope_confirm_and_decline_advance_in_order_without_collapsing_controls(
+    stores, monkeypatch: MonkeyPatch
+) -> None:
+    import scione.web.reports as reports_page
+
+    document, run = seed(stores)
+    make_adhesion_available(stores)
+    _, reports, _ = stores
+    containers: list[tuple[str | None, int | None]] = []
+    original_container = DeltaGenerator.container
+    original_top_container = reports_page.st.container
+
+    def capture_container(self, *args, **kwargs):
+        containers.append((kwargs.get("key"), kwargs.get("height")))
+        return original_container(self, *args, **kwargs)
+
+    def capture_top_container(*args, **kwargs):
+        containers.append((kwargs.get("key"), kwargs.get("height")))
+        return original_top_container(*args, **kwargs)
+
+    monkeypatch.setattr(DeltaGenerator, "container", capture_container)
+    monkeypatch.setattr(reports_page.st, "container", capture_top_container)
+    app = open_reports()
+    assert app.checkbox(key="report_advance_after_save").value
+    assert app.selectbox(key="report_item").value == "req_pencil"
+    app = app.button(key="report_confirm_scope").click().run()
+    assert not app.exception
+    assert app.selectbox(key="report_item").value == "req_adhesion"
+    assert not app.button(key="report_confirm_scope").disabled
+    app.text_area(key="report_scope_note").set_value("Customer panel size exceeds our fixture.")
+    app = app.button(key="report_decline_scope").click().run()
+    assert not app.exception
+    # The missing pull-off test is a known gap, not an item to blindly approve.
+    assert app.selectbox(key="report_item").value == "req_adhesion"
+    assert not app.button(key="report_confirm_scope").disabled
+    assert not app.button(key="report_decline_scope").disabled
+    assert not next(
+        expander
+        for expander in app.expander
+        if expander.label == "Change test or method / record a gap"
+    ).proto.expanded
+    assert ("report_requirement_details", 540) in containers
+    assert ("report_scope_status", 90) in containers
+    workspace = reports.load_workspace(document.document_id, run.run_id)
+    assert workspace.mappings["req_pencil"].capability_verdict == "supported"
+    assert workspace.mappings["req_adhesion"].capability_verdict == "unsupported"
+    assert "req_pull" not in workspace.mappings
+
+
+def test_continuous_review_can_stay_on_current_item_and_wrap_to_earlier_pending_item(
+    stores,
+) -> None:
+    seed(stores)
+    make_adhesion_available(stores)
+    app = open_reports()
+    app = app.checkbox(key="report_advance_after_save").uncheck().run()
+    app = app.button(key="report_confirm_scope").click().run()
+    assert not app.exception
+    assert app.selectbox(key="report_item").value == "req_pencil"
+    assert "Lab support confirmed for this requirement" in all_text(app)
+    app = app.button(key="report_next_pending").click().run()
+    assert app.selectbox(key="report_item").value == "req_adhesion"
+    # Reset the first scope to pending; reviewing the last visible item then
+    # wraps to the earlier pending item, rather than jumping to the top page.
+    app = app.selectbox(key="report_item").set_value("req_pencil").run()
+    app.text_area(key="report_mapping_note").set_value("Recheck the customer part shape.")
+    app.selectbox(key="report_mapping_verdict").set_value("unreviewed")
+    app = app.button(key="report_save_mapping").click().run()
+    app = app.selectbox(key="report_item").set_value("req_adhesion").run()
+    app = app.checkbox(key="report_advance_after_save").check().run()
+    app = app.button(key="report_confirm_scope").click().run()
+    assert not app.exception
+    assert app.selectbox(key="report_item").value == "req_pencil"
+
+
+def test_batch_requires_explicit_selection_and_acknowledgment(stores) -> None:
+    document, run = seed(stores)
+    make_adhesion_available(stores)
+    _, reports, _ = stores
+    app = open_reports()
+    assert app.multiselect(key="report_bulk_items").value == []
+    assert not app.checkbox(key="report_bulk_ack").value
+    assert app.button(key="report_bulk_confirm").disabled
+    assert app.button(key="report_bulk_decline").disabled
+    app = select_scope_batch(app, acknowledge=False)
+    assert app.button(key="report_bulk_confirm").disabled
+    assert app.button(key="report_bulk_decline").disabled
+    assert reports.load_workspace(document.document_id, run.run_id).version == 0
+    app = app.checkbox(key="report_bulk_ack").check().run()
+    assert not app.button(key="report_bulk_confirm").disabled
+    assert not app.button(key="report_bulk_decline").disabled
+    assert reports.load_workspace(document.document_id, run.run_id).version == 0
+
+
+def test_changing_batch_selection_requires_a_new_acknowledgment(stores) -> None:
+    document, run = seed(stores)
+    _, reports, _ = stores
+    make_adhesion_available(stores)
+    app = select_scope_batch(open_reports())
+    assert app.checkbox(key="report_bulk_ack").value
+    app = app.multiselect(key="report_bulk_items").set_value(["req_pencil"]).run()
+    assert not app.exception
+    assert not app.checkbox(key="report_bulk_ack").value
+    assert app.button(key="report_bulk_confirm").disabled
+    assert app.button(key="report_bulk_decline").disabled
+    assert reports.load_workspace(document.document_id, run.run_id).version == 0
+
+
+def test_batch_is_one_atomic_scope_decision_without_source_or_quantity_changes(
+    stores, monkeypatch: MonkeyPatch
+) -> None:
+    document, run = seed(stores)
+    make_adhesion_available(stores)
+    specs, reports, labs = stores
+    source_before = specs.load_review(document.document_id, run.run_id)
+    writes = []
+    original_save = FileReportStore.save_workspace
+
+    def capture_save(self, workspace, *, expected_version):
+        writes.append((workspace.model_copy(deep=True), expected_version))
+        return original_save(self, workspace, expected_version=expected_version)
+
+    monkeypatch.setattr(FileReportStore, "save_workspace", capture_save)
+    app = select_scope_batch(open_reports())
+    app = app.button(key="report_bulk_confirm").click().run()
+    assert not app.exception
+    workspace = reports.load_workspace(document.document_id, run.run_id)
+    assert workspace.version == 1
+    assert set(workspace.mappings) == {"req_pencil", "req_adhesion"}
+    assert len(writes) == 1
+    assert writes[0][1] == 0
+    for choice in workspace.mappings.values():
+        assert choice.capability_verdict == "supported"
+        assert choice.lab_fingerprint == lab_fingerprint(labs.load_or_create())
+    assert workspace.mappings["req_pencil"].selected_method_codes == ["ISO 15184"]
+    assert workspace.mappings["req_adhesion"].selected_method_codes == ["ISO 2409"]
+    assert not workspace.quantities
+    assert not reports.list_reports()
+    assert specs.load_review(document.document_id, run.run_id) == source_before
+    assert specs.load_extraction(document.document_id, run.run_id) == run
+    assert app.multiselect(key="report_bulk_items").value == []
+    assert not app.checkbox(key="report_bulk_ack").value
+    assert app.text_area(key="report_bulk_note").value == ""
+    assert app.button(key="report_bulk_confirm").disabled
+
+
+def test_batch_decline_requires_a_reason_and_keeps_prices_unquoted(stores) -> None:
+    document, run = seed(stores)
+    make_adhesion_available(stores)
+    specs, reports, _ = stores
+    app = select_scope_batch(open_reports())
+    app = app.button(key="report_bulk_decline").click().run()
+    assert not app.exception
+    assert "Explain the limitation" in all_text(app)
+    assert reports.load_workspace(document.document_id, run.run_id).version == 0
+    app.text_area(key="report_bulk_note").set_value("Fixture cannot accommodate either part.")
+    app = app.button(key="report_bulk_decline").click().run()
+    assert not app.exception
+    workspace = reports.load_workspace(document.document_id, run.run_id)
+    assert workspace.version == 1
+    assert set(workspace.mappings) == {"req_pencil", "req_adhesion"}
+    for choice in workspace.mappings.values():
+        assert choice.capability_verdict == "unsupported"
+        assert choice.note == "Fixture cannot accommodate either part."
+    assert not workspace.quantities
+    table = requirement_matrix(app).set_index("ID")
+    assert table.loc["req_pencil", "Result"] == "Condition / scope gap"
+    assert table.loc["req_adhesion", "Result"] == "Condition / scope gap"
+    assert specs.load_extraction(document.document_id, run.run_id) == run
+    assert not specs.load_review(document.document_id, run.run_id).decisions
+
+
+def test_batch_does_not_offer_unknown_identity_wrong_methods_or_excluded_items(stores) -> None:
+    document, run = seed(stores)
+    specs, _, _ = stores
+    changed = run.model_copy(deep=True)
+    changed.run_id = str(uuid4())
+    unknown = changed.extraction.requirements[0].model_copy(deep=True)
+    unknown.id = "req_unknown"
+    unknown.original_test_name = "Customer custom widget procedure"
+    unknown.requested_methods = []
+    changed.extraction.requirements.append(unknown)
+    specs.save_extraction(document.document_id, changed)
+    app = open_reports()
+    choices = app.multiselect(key="report_bulk_items").options
+    assert len(choices) == 1
+    assert "Pencil hardness" in choices[0]
+    assert "Cross-cut" not in "\n".join(choices)
+    assert "Pull-off" not in "\n".join(choices)
+    assert "Customer custom" not in "\n".join(choices)
+    specs.save_review(
+        document.document_id,
+        changed.run_id,
+        "req_pencil",
+        "excluded",
+        "Customer removed this test.",
+        expected_version=0,
+    )
+    app = app.run()
+    assert not app.exception
+    assert not any(item.key == "report_bulk_items" for item in app.multiselect)
+    assert "Resolve a test and method match" in all_text(app)
+
+
+def test_batch_lab_decision_preserves_pending_source_flags_and_quote_block(stores) -> None:
+    document, run = seed(stores)
+    make_adhesion_available(stores)
+    specs, reports, _ = stores
+    changed = run.model_copy(deep=True)
+    changed.run_id = str(uuid4())
+    changed.extraction.review_issues = ["req_pencil: confirm the source acceptance criterion."]
+    specs.save_extraction(document.document_id, changed)
+    source_before = specs.load_review(document.document_id, changed.run_id)
+    app = select_scope_batch(open_reports())
+    assert "still need a source check" in all_text(app)
+    app = app.button(key="report_bulk_confirm").click().run()
+    assert not app.exception
+    table = requirement_matrix(app).set_index("ID")
+    assert table.loc["req_pencil", "Content review"] == "Needs review"
+    assert table.loc["req_pencil", "Lab scope review"] == "Confirmed by lab reviewer"
+    assert pending_review_count(app) == 1
+    app = inspect_pencil(app)
+    assert quote_submit(app).disabled
+    assert not reports.load_workspace(document.document_id, changed.run_id).quantities
+    assert specs.load_review(document.document_id, changed.run_id) == source_before
+    assert specs.load_extraction(document.document_id, changed.run_id) == changed
+
+
+@pytest.mark.parametrize("change", ["lab", "workspace", "source"])
+def test_stale_batch_cannot_overwrite_new_lab_source_or_review_data(stores, change: str) -> None:
+    document, run = seed(stores)
+    make_adhesion_available(stores)
+    specs, reports, labs = stores
+    app = select_scope_batch(open_reports())
+    before = reports.load_workspace(document.document_id, run.run_id)
+    if change == "lab":
+        lab = labs.load_or_create()
+        lab.capabilities[0].price = Decimal("0.125")
+        labs.save(lab)
+    elif change == "workspace":
+        before.mappings["req_pencil"] = MappingChoice(
+            canonical_test_id="pencil_hardness",
+            note="Another reviewer saved a new identity choice.",
+        )
+        before = reports.save_workspace(before, expected_version=0)
+    else:
+        specs.save_review(
+            document.document_id,
+            run.run_id,
+            "req_pencil",
+            "excluded",
+            "Customer removed this scope while this batch was open.",
+            expected_version=0,
+        )
+    app = app.run()
+    assert not app.exception
+    assert "Reload the batch and check it again" in all_text(app)
+    assert app.button(key="report_bulk_confirm").disabled
+    assert app.button(key="report_bulk_decline").disabled
+    assert reports.load_workspace(document.document_id, run.run_id) == before
+    app = app.button(key="report_bulk_reload").click().run()
+    assert not app.exception
+    assert app.multiselect(key="report_bulk_items").value == []
+    assert not app.checkbox(key="report_bulk_ack").value
+    assert app.button(key="report_bulk_confirm").disabled
+    assert reports.load_workspace(document.document_id, run.run_id) == before
+
+
+def test_new_extraction_run_clears_old_batch_and_does_not_carry_its_acknowledgment(stores) -> None:
+    document, run = seed(stores)
+    make_adhesion_available(stores)
+    specs, reports, _ = stores
+    app = select_scope_batch(open_reports())
+    app = app.text_area(key="report_bulk_note").set_value("Unsaved old-run batch.").run()
+    changed = run.model_copy(deep=True)
+    changed.run_id = str(uuid4())
+    specs.save_extraction(document.document_id, changed)
+    app = app.run()
+    assert not app.exception
+    assert app.multiselect(key="report_bulk_items").value == []
+    assert not app.checkbox(key="report_bulk_ack").value
+    assert app.text_area(key="report_bulk_note").value == ""
+    assert app.button(key="report_bulk_confirm").disabled
+    assert reports.load_workspace(document.document_id, run.run_id).version == 0
+    assert reports.load_workspace(document.document_id, changed.run_id).version == 0
+
+
+def test_batch_compare_and_swap_race_preserves_other_review_without_partial_batch(
+    stores, monkeypatch: MonkeyPatch
+) -> None:
+    document, run = seed(stores)
+    make_adhesion_available(stores)
+    _, reports, _ = stores
+    app = select_scope_batch(open_reports())
+    original_save = FileReportStore.save_workspace
+    competing = []
+
+    def save_after_competing_review(self, workspace, *, expected_version):
+        if not competing:
+            other = self.load_workspace(document.document_id, run.run_id)
+            other.mappings["req_pencil"] = MappingChoice(
+                canonical_test_id="pencil_hardness",
+                note="Concurrent reviewer saved this choice before the batch completed.",
+            )
+            competing.append(original_save(self, other, expected_version=0))
+        return original_save(self, workspace, expected_version=expected_version)
+
+    monkeypatch.setattr(FileReportStore, "save_workspace", save_after_competing_review)
+    app = app.button(key="report_bulk_confirm").click().run()
+    assert not app.exception
+    assert app.error
+    assert len(competing) == 1
+    assert reports.load_workspace(document.document_id, run.run_id) == competing[0]
+    assert set(competing[0].mappings) == {"req_pencil"}
+    assert competing[0].mappings["req_pencil"].capability_verdict == "unreviewed"
+    assert "req_adhesion" not in competing[0].mappings
+    assert not competing[0].quantities
+    app = app.run()
+    assert not app.exception
+    assert app.button(key="report_bulk_confirm").disabled
+    assert "Reload the batch" in all_text(app)

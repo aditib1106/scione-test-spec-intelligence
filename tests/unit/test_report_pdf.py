@@ -353,19 +353,137 @@ def test_needs_content_review_is_visible_without_raw_technical_flags() -> None:
     assert "RAW_REVIEW_REASON_SENTINEL" not in text
 
 
-def test_thirty_five_typical_requirements_are_compact_without_duplicate_index() -> None:
+def test_thirty_five_requirements_add_only_a_bounded_listed_methods_overview() -> None:
     snapshot = _snapshot(count=35)
 
     data = render_report_pdf(snapshot)
     text = _compact(_pdf_text(data))
 
     with pymupdf.open(stream=data, filetype="pdf") as pdf:
-        assert len(pdf) < 10
+        assert len(pdf) <= 10
     for line in snapshot.lines:
-        assert text.count(line.requirement.original_test_name) == 1
+        # Only listed methods repeat in the short front overview. The full
+        # unresolved requirements are not duplicated into another giant index.
+        assert text.count(line.requirement.original_test_name) == (
+            2 if line.status == "in_house" else 1
+        )
     assert "Detailed requirements and source evidence" not in text
     assert "Requirement comparison" not in text
     assert "Technical/source review appendix" not in text
+
+
+def test_front_page_surfaces_five_listed_methods_rates_and_independent_reviews() -> None:
+    snapshot = _snapshot(count=49)
+    names = [
+        "Cross-cut adhesion",
+        "Gloss",
+        "Pencil hardness",
+        "Stone-chip resistance",
+        "Cyclic corrosion",
+    ]
+    for index, line in enumerate(snapshot.lines):
+        line.status = "in_house" if index < 5 else "needs_review"
+        if index < 5:
+            line.requirement.original_test_name = names[index]
+            line.capability = line.capability.model_copy(
+                update={"price": [Decimal("50"), Decimal("25.00"), None, None, None][index]}
+            )
+    snapshot.lines[0].extraction_review_state = "needs_attention"
+    snapshot.lines[0].mapping_choice = MappingChoice(
+        canonical_test_id="cross_cut_adhesion",
+        capability_verdict="supported",
+        lab_fingerprint=lab_fingerprint(snapshot.lab),
+        note="Reviewer checked this request against the lab declaration",
+    )
+    snapshot.lines[2].extraction_review_state = "confirmed"
+
+    data = render_report_pdf(snapshot)
+
+    with pymupdf.open(stream=data, filetype="pdf") as pdf:
+        front = _compact(pdf[0].get_text())
+    for name in names:
+        assert name in front
+    for expected in [
+        "Listed methods & draft pricing · 5",
+        "USD 50 per panel",
+        "USD 25.00 per panel",
+        "Quantity / estimate",
+        "Lab: scope confirmed",
+        "Lab: confirm scope",
+        "Source: check details",
+        "Source: confirmed",
+        "Not supplied",
+        "Not priced",
+        "Automatic method matching is not lab approval",
+    ]:
+        assert expected in front
+    assert "USD 0" not in front
+    text = _compact(_pdf_text(data))
+    assert text.index("Listed methods — customer requirements") < text.index("Needs clarification")
+    assert "Coating check [048]" in text
+
+
+def test_overview_bounds_large_catalog_preview_without_omitting_full_details() -> None:
+    snapshot = _snapshot(count=12)
+    for line in snapshot.lines:
+        line.status = "in_house"
+
+    text = _compact(_pdf_text(render_report_pdf(snapshot)))
+
+    assert "First 8 of 12 listed / priced requirements shown" in text
+    for index, line in enumerate(snapshot.lines):
+        assert text.count(line.requirement.original_test_name) == (2 if index < 8 else 1)
+
+
+def test_front_overview_keeps_explicit_quantity_and_estimate_precision() -> None:
+    snapshot = _snapshot(count=1)
+    snapshot.lines[0].quote = QuoteLine(
+        quantity=Decimal("3.25"),
+        unit_price=Decimal("0.12345678"),
+        currency="USD",
+        pricing_basis="per panel",
+        subtotal=Decimal("0.4012345350"),
+        note="Supplied, explicitly scoped quantity",
+    )
+    snapshot.totals_by_currency = {"USD": Decimal("0.4012345350")}
+
+    with pymupdf.open(stream=render_report_pdf(snapshot), filetype="pdf") as pdf:
+        front = _compact(pdf[0].get_text())
+
+    assert "USD 0.12345678 per panel" in front
+    assert "3.25" in front
+    assert "USD 0.4012345350" in front
+    assert "Not supplied" not in front
+    assert "0.40 per panel" not in front
+
+
+def test_long_unicode_name_has_a_small_preview_but_its_full_detail_survives() -> None:
+    snapshot = _snapshot(count=1)
+    name = ("划格附着力 ΔE résistance — extended customer test name; " * 8) + "NAME_END"
+    snapshot.lines[0].requirement.original_test_name = name
+
+    data = render_report_pdf(snapshot)
+    text = _compact(_pdf_text(data))
+
+    assert _compact(name) in text
+    assert text.count("NAME_END") == 1
+    assert "\ufffd" not in text
+    with pymupdf.open(stream=data, filetype="pdf") as pdf:
+        for page in pdf:
+            assert all(word[2] <= page.rect.width - 39.8 for word in page.get_text("words"))
+
+
+def test_overview_does_not_treat_unknown_tests_as_unavailable_or_expose_other_method_rate() -> None:
+    snapshot = _snapshot(count=2)
+    snapshot.lines[0].status = "method_gap"
+    snapshot.lines[1].status = "needs_review"
+
+    text = _compact(_pdf_text(render_report_pdf(snapshot)))
+
+    assert "No requested methods are currently matched to a lab declaration" in text
+    assert "availability is not yet confirmed" in text
+    assert "not classified as available or unavailable yet" in text
+    assert "USD 35.00" not in text
 
 
 def test_unicode_chinese_greek_inequality_accents_and_raw_values_survive() -> None:
@@ -498,8 +616,9 @@ def test_zero_price_and_multiple_currencies_remain_separate_with_explicit_quanti
 
     assert "USD 0.00" in text
     assert "EUR 240.00" in text
-    assert "2 × USD 0.00 / per panel = USD 0.00" in text
-    assert "2 × EUR 120.00 / per panel = EUR 240.00" in text
+    assert "2 × USD 0.00 per panel = USD 0.00" in text
+    assert "2 × EUR 120.00 per panel = EUR 240.00" in text
+    assert "/ per panel" not in text
     assert "Engineer explicitly scoped pair 0" in text
     assert "Engineer explicitly scoped pair 1" in text
     assert "Draft pricing" in text

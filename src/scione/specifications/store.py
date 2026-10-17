@@ -12,7 +12,7 @@ import os
 import re
 import stat
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -363,20 +363,61 @@ class FileSpecStore:
     ) -> RequirementReviewSet:
         """Save an explicit decision separately; stale editors cannot overwrite reviews."""
 
+        return self.save_reviews(
+            document_id,
+            run_id,
+            [requirement_id],
+            decision,
+            note,
+            expected_version=expected_version,
+            require_latest=False,
+        )
+
+    def save_reviews(
+        self,
+        document_id: str,
+        run_id: str,
+        requirement_ids: Sequence[str],
+        decision: Literal["confirmed", "needs_review", "excluded"],
+        note: str = "",
+        *,
+        expected_version: int | None = None,
+        require_latest: bool = True,
+    ) -> RequirementReviewSet:
+        """Atomically apply one explicit action to the selected run's original rows.
+
+        The complete selection is validated under the write lock before any change.
+        A batch advances the review version once, not once per selected record.
+        Historical single-record callers retain their existing behavior; UI actions
+        use this latest-run guard inside the same critical section as the write.
+        """
+
         try:
             with self._locked():
                 run = self.load_extraction(document_id, run_id)
-                if requirement_id not in {item.id for item in run.extraction.requirements}:
+                if require_latest:
+                    latest = self.load_latest_extraction(document_id)
+                    if latest is None or latest.run_id != run_id:
+                        raise SpecStoreError(
+                            "Extraction changed since you viewed it. Review the new result first."
+                        )
+                selected = list(requirement_ids)
+                if not selected or len(set(selected)) != len(selected):
+                    raise SpecStoreError("Select one or more distinct requirements to review.")
+                if not set(selected) <= {item.id for item in run.extraction.requirements}:
                     raise SpecStoreError("Unknown requirement in this extraction run.")
                 review = self.load_review(document_id, run_id)
                 if expected_version is not None and review.version != expected_version:
                     raise SpecVersionConflict("Review changed. Reload before saving again.")
-                review.decisions[requirement_id] = RequirementReview(
-                    requirement_id=requirement_id,
-                    status=decision,
-                    note=note,
-                    updated_at=datetime.now(UTC),
-                )
+                now = datetime.now(UTC)
+                # Construct all validated decisions before mutating the in-memory set.
+                decisions = {
+                    identifier: RequirementReview(
+                        requirement_id=identifier, status=decision, note=note, updated_at=now
+                    )
+                    for identifier in selected
+                }
+                review.decisions.update(decisions)
                 review.version += 1
                 self._write_model(self._run_directory(document_id, run_id) / "review.json", review)
                 return review

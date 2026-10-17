@@ -412,6 +412,107 @@ def test_wrong_doc_traversal_unknown_requirement_and_stale_review_are_rejected(
     assert store.load_review(saved.document_id, run.run_id) == first
 
 
+def _save_two_requirement_run(store: FileSpecStore):
+    saved = store.import_pdf("spec.pdf", make_pdf())
+    run = make_run(saved.document_id)
+    second = run.extraction.requirements[0].model_copy(
+        update={"id": "req_second", "original_test_name": "Second source requirement"}
+    )
+    run.extraction.requirements.append(second)
+    store.save_extraction(saved.document_id, run)
+    return saved, run
+
+
+def test_batch_review_is_one_atomic_version_and_preserves_source(tmp_path: Path) -> None:
+    store = FileSpecStore(tmp_path)
+    saved, run = _save_two_requirement_run(store)
+    before_pdf = store.read_pdf(saved.document_id)
+    before_run = store.load_extraction(saved.document_id, run.run_id).model_dump_json()
+    review = store.save_reviews(
+        saved.document_id,
+        run.run_id,
+        ["req_pencil", "req_second"],
+        "confirmed",
+        "Both checked against the original source.",
+        expected_version=0,
+    )
+    assert review.version == 1
+    assert set(review.decisions) == {"req_pencil", "req_second"}
+    assert {item.status for item in review.decisions.values()} == {"confirmed"}
+    assert len({item.updated_at for item in review.decisions.values()}) == 1
+    assert FileSpecStore(tmp_path).load_review(saved.document_id, run.run_id) == review
+    assert store.read_pdf(saved.document_id) == before_pdf
+    assert store.load_extraction(saved.document_id, run.run_id).model_dump_json() == before_run
+
+
+@pytest.mark.parametrize("selection", [[], ["req_pencil", "unknown"], ["req_pencil", "req_pencil"]])
+def test_invalid_batch_selection_cannot_partially_save(
+    tmp_path: Path, selection: list[str]
+) -> None:
+    store = FileSpecStore(tmp_path)
+    saved, run = _save_two_requirement_run(store)
+    with pytest.raises(SpecStoreError):
+        store.save_reviews(
+            saved.document_id, run.run_id, selection, "confirmed", expected_version=0
+        )
+    assert store.load_review(saved.document_id, run.run_id).version == 0
+    assert not store.load_review(saved.document_id, run.run_id).decisions
+
+
+def test_stale_batch_cannot_overwrite_any_decision(tmp_path: Path) -> None:
+    store = FileSpecStore(tmp_path)
+    saved, run = _save_two_requirement_run(store)
+    original = store.save_review(saved.document_id, run.run_id, "req_second", "needs_review")
+    with pytest.raises(SpecVersionConflict):
+        store.save_reviews(
+            saved.document_id,
+            run.run_id,
+            ["req_pencil", "req_second"],
+            "confirmed",
+            expected_version=0,
+        )
+    assert store.load_review(saved.document_id, run.run_id) == original
+
+
+def test_batch_guard_rejects_old_run_but_historical_single_review_still_works(
+    tmp_path: Path,
+) -> None:
+    store = FileSpecStore(tmp_path)
+    saved, run = _save_two_requirement_run(store)
+    newer = make_run(saved.document_id, "run_two")
+    store.save_extraction(saved.document_id, newer)
+    with pytest.raises(SpecStoreError, match="Extraction changed"):
+        store.save_reviews(
+            saved.document_id, run.run_id, ["req_pencil"], "confirmed", expected_version=0
+        )
+    assert store.load_review(saved.document_id, run.run_id).version == 0
+    historical = store.save_review(saved.document_id, run.run_id, "req_pencil", "confirmed")
+    assert historical.version == 1
+    assert store.load_review(saved.document_id, newer.run_id).version == 0
+
+
+def test_failed_batch_write_preserves_every_prior_decision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = FileSpecStore(tmp_path)
+    saved, run = _save_two_requirement_run(store)
+    original = store.save_review(saved.document_id, run.run_id, "req_second", "needs_review")
+
+    def fail_replace(source: Path, destination: Path) -> None:
+        raise OSError("simulated batch failure")
+
+    monkeypatch.setattr("scione.specifications.store.os.replace", fail_replace)
+    with pytest.raises(SpecStoreError, match="simulated batch failure"):
+        store.save_reviews(
+            saved.document_id,
+            run.run_id,
+            ["req_pencil", "req_second"],
+            "confirmed",
+            expected_version=1,
+        )
+    assert store.load_review(saved.document_id, run.run_id) == original
+
+
 def test_corrupt_latest_pointer_and_review_are_not_reset(tmp_path: Path) -> None:
     store = FileSpecStore(tmp_path)
     saved = store.import_pdf("spec.pdf", make_pdf())

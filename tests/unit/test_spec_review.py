@@ -342,3 +342,104 @@ def test_pdf_location_failure_is_not_treated_as_validation_success(monkeypatch) 
 
     assert assessment.state == "needs_attention"
     assert any("quoted text was not found" in reason for reason in assessment.reasons)
+
+
+def _table_document() -> tuple[bytes, IngestedDocument]:
+    rows = [
+        ("Test", "Method", "Criterion", "Section"),
+        ("Adhesion", "ISO 2409", "GT <= 1", "3.2"),
+        ("Hardness", "ISO 15184", "GT <= 1", "3.2"),
+    ]
+    xs = (30, 180, 310, 450, 550)
+    ys = (40, 80, 120, 160)
+    with pymupdf.open() as pdf:
+        page = pdf.new_page(width=600, height=400)
+        for x in xs:
+            page.draw_line((x, ys[0]), (x, ys[-1]))
+        for y in ys:
+            page.draw_line((xs[0], y), (xs[-1], y))
+        # Native text is column-ordered, but the ruled row still anchors cells.
+        for col in range(4):
+            for row in range(len(rows)):
+                page.insert_text((xs[col] + 5, ys[row] + 25), rows[row][col])
+        text = page.get_text()
+        data = pdf.tobytes()
+    document = _document().model_copy(
+        update={
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "pages": [
+                DocumentPage(
+                    page_number=1,
+                    text=text,
+                    character_count=len(text),
+                    non_whitespace_character_count=len("".join(text.split())),
+                )
+            ],
+        }
+    )
+    return data, document
+
+
+def test_repeated_cells_within_one_exact_table_row_are_not_false_review_flags() -> None:
+    pdf, document = _table_document()
+    row = _requirement()
+    row.evidence[0].quote = "Adhesion | ISO 2409 | GT <= 1 | 3.2"
+    run = _run(rows=[row])
+    run.extraction.review_issues.extend(validate_customer_sources(run.extraction, document))
+    unchanged_run = run.model_dump_json()
+
+    assert assess_requirements(run, document)[row.id].state == "needs_attention"
+    assert assess_requirements(run, document, pdf_bytes=pdf)[row.id].state == "ready"
+    assert run.model_dump_json() == unchanged_run
+
+
+@pytest.mark.parametrize(
+    ("quote", "page"),
+    [
+        ("Adhesion | ISO 15184 | GT <= 1 | 3.2", 1),
+        ("Adhesion | ISO 2409 | GT <= 2 | 3.2", 1),
+        ("Adhesion | ISO 2409 | GT >= 1 | 3.2", 1),
+        ("Adhesion | ISO 2409 | GT <= 1 | 3.2", 2),
+    ],
+)
+def test_table_row_clearance_never_hides_wrong_values_methods_or_pages(
+    quote: str, page: int
+) -> None:
+    pdf, document = _table_document()
+    row = _requirement()
+    row.evidence = [RequirementEvidence(page=page, quote=quote)]
+
+    assessed = assess_requirements(_run(rows=[row]), document, pdf_bytes=pdf)[row.id]
+    assert assessed.state == "needs_attention"
+    assert len(assessed.reasons) == 1
+
+
+def test_valid_table_row_cannot_clear_an_independent_second_citation() -> None:
+    pdf, document = _table_document()
+    row = _requirement()
+    row.evidence = [
+        RequirementEvidence(page=1, quote="Adhesion | ISO 2409 | GT <= 1 | 3.2"),
+        RequirementEvidence(page=1, quote="Hardness | ISO 15184 | GT <= 0 | 3.2"),
+    ]
+
+    assessed = assess_requirements(_run(rows=[row]), document, pdf_bytes=pdf)[row.id]
+    assert assessed.state == "needs_attention"
+    assert len(assessed.reasons) == 1
+    assert "evidence 2" in assessed.reasons[0]
+
+
+def test_exact_table_row_does_not_clear_model_caution_or_explicit_human_review() -> None:
+    pdf, document = _table_document()
+    row = _requirement()
+    row.evidence[0].quote = "Adhesion | ISO 2409 | GT <= 1 | 3.2"
+    issue = "req_001: model could not determine applicability to the selected panels."
+    run = _run(rows=[row], issues=[issue])
+
+    assessed = assess_requirements(run, document, pdf_bytes=pdf)[row.id]
+    assert assessed.state == "needs_attention"
+    assert assessed.reasons == (issue,)
+    assessed = assess_requirements(
+        _run(rows=[row]), document, _review("needs_review"), pdf_bytes=pdf
+    )[row.id]
+    assert assessed.state == "needs_attention"
+    assert assessed.reasons == ("Marked for review by a user.",)

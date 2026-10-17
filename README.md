@@ -42,6 +42,9 @@ A content confirmation does not approve a catalog match or lab support.
 ## Create a lab-gap report
 
 1. In **Specifications**, check the extracted text against the original PDF.
+   **Confirm & next** / **Exclude & next** advance in source order; details scroll
+   above a stable action row. **Batch review** requires explicit selection and
+   acknowledgment; exclusion also requires a reason. One batch is saved atomically.
    **Continue to lab review** opens the same document in **Reports**. Confirming
    source text does not approve the matched test or the lab's capability.
 2. **Review & confirm** opens a pending test automatically. Compare **Customer
@@ -52,7 +55,11 @@ A content confirmation does not approve a catalog match or lab support.
 3. Use **Change test or method / record a gap** when the identity or method needs
    correction. Decisions remain separate from extracted source text; **Check
    extracted text** returns to the corresponding highlighted item in Specifications.
-   Confirmed support is shown explicitly, with decision changes collapsed.
+   The action row stays in place while details scroll. **Next pending item after
+   saving** controls continuous lab review. **Batch lab review** applies only to
+   explicitly selected, resolved test/method matches, never unknown identities.
+   Source checks, catalog matching and lab scope checks are counted separately;
+   they overlap and are not a model error rate.
 4. Pricing is optional. A declared catalog rate remains a reference rate until
    lab support, applicable scope and quantity/pricing basis are explicitly
    confirmed. Quote subtotals include only manually selected eligible lines and
@@ -72,6 +79,15 @@ acceptance criteria, lab methods/limits, gaps, pending decisions, source pages a
 available pricing. It does not print model diagnostics, internal IDs, full source
 quotations, hashes, or an audit appendix. Those remain in Developer / the full JSON
 snapshot. Excluded items are summarized as outside scope, not priced as active tests.
+The front overview surfaces listed methods, separate source/lab review states,
+reference rates and supplied quantities/estimates before unresolved details.
+Missing prices or quantities are explicitly unpriced, never treated as zero.
+
+Source quotations reconstructed from tables can pass location checks only when
+complete cells match one unique source row. Wrong values, pages, cross-row snippets
+and unresolved ambiguity remain flagged. A source-location match is not a correctness
+score or human confirmation. Review-policy changes invalidate cached assessments
+and mark earlier reports as historical; original model output is not rewritten.
 
 JSON snapshots preserve the extraction run, original requirement fields/evidence,
 content review, lab/catalog versions and matching/quantity decisions. Unknown partner

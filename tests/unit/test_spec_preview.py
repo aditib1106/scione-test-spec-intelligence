@@ -206,3 +206,99 @@ def test_no_text_and_empty_quotes_give_no_highlights() -> None:
     result = inspect_pdf_highlights(data, quotes=["Requested test", " | \n | "])
     assert result.unmatched_count == 2
     assert result.rectangles == ()
+
+
+def ruled_table_pdf_bytes(*, duplicate_row: bool = False, column_order: bool = False) -> bytes:
+    rows = [
+        ("Test item", "Method", "Requirement", "Section"),
+        ("Adhesion", "ISO 2409", "GT <= 1", "3.2"),
+        ("Hardness", "ISO 15184", "GT <= 1", "3.2"),
+    ]
+    if duplicate_row:
+        rows.append(rows[1])
+    xs = (30, 180, 310, 450, 550)
+    ys = [40 + 40 * index for index in range(len(rows) + 1)]
+    with pymupdf.open() as pdf:
+        page = pdf.new_page(width=600, height=400)
+        for x in xs:
+            page.draw_line((x, ys[0]), (x, ys[-1]))
+        for y in ys:
+            page.draw_line((xs[0], y), (xs[-1], y))
+        indices = [(row, col) for row in range(len(rows)) for col in range(4)]
+        if column_order:
+            indices.sort(key=lambda value: (value[1], value[0]))
+        for row, col in indices:
+            page.insert_text((xs[col] + 5, ys[row] + 25), rows[row][col])
+        pdf.new_page().insert_text((30, 50), "Another physical page")
+        return pdf.tobytes()
+
+
+@pytest.mark.parametrize("column_order", [False, True])
+def test_unique_table_row_resolves_repeated_cells_without_guessing(column_order: bool) -> None:
+    result = inspect_pdf_highlights(
+        ruled_table_pdf_bytes(column_order=column_order),
+        quotes=["Adhesion | ISO 2409 | GT <= 1 | 3.2"],
+    )
+    match = result.matches[0]
+    assert match.status == "matched"
+    assert match.matched_segments == match.total_segments == 4
+    assert match.ambiguous_segments == 0
+    assert len(match.rectangles) == 4
+    assert all(80 < rectangle[1] < rectangle[3] < 120 for rectangle in match.rectangles)
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        "Adhesion | ISO 2409 | GT <= 2 | 3.2",  # Invented number.
+        "Adhesion | ISO 2409 | GT >= 1 | 3.2",  # Reversed inequality.
+        "Adhesion | ISO 15184 | GT <= 1 | 3.2",  # Another row's method.
+        "ISO 2409 | Adhesion | GT <= 1 | 3.2",  # Reordered columns.
+        "Adhesion | ISO 2409 | 3.2",  # Omitted criterion cell.
+        "GT <= 1 | 3.2 | Hardness | ISO 15184",  # Native-consecutive cross-row pieces.
+    ],
+)
+def test_table_row_anchor_rejects_changed_or_cross_row_fragments(quote: str) -> None:
+    result = inspect_pdf_highlights(ruled_table_pdf_bytes(), quotes=[quote])
+    assert result.matches[0].status != "matched"
+
+
+def test_duplicate_complete_table_rows_remain_ambiguous() -> None:
+    result = inspect_pdf_highlights(
+        ruled_table_pdf_bytes(duplicate_row=True),
+        quotes=["Adhesion | ISO 2409 | GT <= 1 | 3.2"],
+    )
+    assert result.matches[0].status == "ambiguous"
+    assert result.rectangles == ()
+
+
+def test_exact_table_row_on_another_page_cannot_clear_the_citation() -> None:
+    result = inspect_pdf_highlights(
+        ruled_table_pdf_bytes(),
+        page_number=2,
+        quotes=["Adhesion | ISO 2409 | GT <= 1 | 3.2"],
+    )
+    assert result.matches[0].status == "unmatched"
+    assert result.rectangles == ()
+
+
+def test_unique_page_fragments_without_a_common_source_span_are_not_a_quote() -> None:
+    with pymupdf.open() as pdf:
+        page = pdf.new_page()
+        page.insert_text((30, 50), "Adhesion ISO 2409 criterion GT 0")
+        page.insert_text((30, 150), "Hardness ISO 15184 criterion F")
+        data = pdf.tobytes()
+    result = inspect_pdf_highlights(data, quotes=["Adhesion | ISO 15184 | F"])
+    assert result.matches[0].status != "matched"
+
+
+def test_unavailable_table_inspection_cannot_clear_reconstructed_quotes(monkeypatch) -> None:
+    def unavailable_tables(*args, **kwargs):
+        raise ValueError("Table layout unavailable")
+
+    monkeypatch.setattr(pymupdf.Page, "find_tables", unavailable_tables)
+    result = inspect_pdf_highlights(
+        table_pdf_bytes(),
+        quotes=["Cross-cut adhesion | ISO 2409, 2 mm spacing, all bake conditions, all substrates"],
+    )
+    assert result.matches[0].status != "matched"

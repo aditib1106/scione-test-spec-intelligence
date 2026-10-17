@@ -19,6 +19,8 @@ from scione.specifications.models import CustomerExtractionRun
 from scione.specifications.pdf_preview import PDFPreviewError, inspect_pdf_highlights
 from scione.specifications.store import RequirementReviewSet
 
+REVIEW_POLICY_VERSION = "0.2"
+
 RequirementState = Literal["needs_attention", "ready", "confirmed", "excluded"]
 _REQUIREMENT_ID = re.compile(
     r"(?<![A-Za-z0-9_-])req_[A-Za-z0-9][A-Za-z0-9_-]{0,63}(?![A-Za-z0-9_-])"
@@ -44,7 +46,8 @@ def assess_requirements(
 
     Source citations are checked again so historical runs receive the same checks
     as new ones. Optional matching PDF bytes allow a formatting-only literal-source
-    warning to be resolved when every quotation segment is located uniquely. This
+    warning to be resolved when quotation segments form one exact source span or
+    identify a unique detected table row, including repeated values in its cells. This
     is source location, not validation that an extracted value is semantically right.
     Model issues naming exact requirement IDs affect only those rows;
     unscoped or unrouteable issues conservatively flag every row. An explicit human
@@ -114,20 +117,28 @@ def _located_source_issues(
 
     if pdf_bytes is None or not source_issues:
         return set()
-    located = set()
+    located: set[str] = set()
+    by_page: dict[int, list[tuple[str, list[str]]]] = {}
     for requirement in run.extraction.requirements:
         for index, evidence in enumerate(requirement.evidence, start=1):
             prefix = f"{requirement.id} evidence {index}: quoted text was not found "
             matching_issues = [issue for issue in source_issues if issue.startswith(prefix)]
             if not matching_issues:
                 continue
+            by_page.setdefault(evidence.page, []).append((evidence.quote, matching_issues))
+    for page, entries in by_page.items():
+        for offset in range(0, len(entries), 100):
+            batch = entries[offset : offset + 100]
             try:
                 result = inspect_pdf_highlights(
-                    pdf_bytes, page_number=evidence.page, quotes=(evidence.quote,)
+                    pdf_bytes, page_number=page, quotes=tuple(quote for quote, _ in batch)
                 )
             except PDFPreviewError:
                 # Rendering/locator limitations are never evidence of a good row.
                 continue
-            if len(result.matches) == 1 and result.matches[0].status == "matched":
-                located.update(matching_issues)
+            if len(result.matches) != len(batch):
+                continue
+            for match, (_, matching_issues) in zip(result.matches, batch, strict=True):
+                if match.status == "matched":
+                    located.update(matching_issues)
     return located

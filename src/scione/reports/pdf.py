@@ -39,6 +39,11 @@ p { margin: 2pt 0 3pt; }
 .item { border-bottom: 0.4pt solid #dce7df; padding-bottom: 4pt; }
 .itemhead { page-break-inside: avoid; }
 .summary { margin-bottom: 6pt; }
+.overview { width: 100%; border-collapse: collapse; font-size: 8pt; margin: 5pt 0; }
+.overview th { background: #eaf2ed; color: #234b3c; text-align: left; font-size: 7.8pt; }
+.overview td, .overview th { border-bottom: 0.5pt solid #dce7df; padding: 5pt 4pt;
+                            vertical-align: top; }
+.overview .sub { font-size: 7.3pt; color: #526c62; }
 """
 
 
@@ -67,6 +72,17 @@ def _paragraph(label: str, value: object, *, css_class: str = "") -> str:
 def _money(value: Decimal) -> str:
     # Supplied precision is retained. Rounding a reference rate could alter it.
     return format(value, "f")
+
+
+def _rate(currency: str, amount: Decimal, basis: str | None) -> str:
+    """Keep a supplied billing basis readable without writing '/ per panel'."""
+
+    price = f"{currency} {_money(amount)}"
+    if not basis:
+        return price
+    if basis.casefold().startswith("per "):
+        return f"{price} {basis}"
+    return f"{price} / {basis}"
 
 
 def _scope_confirmed(line: GapLine, current_lab: str) -> bool:
@@ -132,19 +148,111 @@ def _pricing(line: GapLine) -> str:
         quote = line.quote
         return _paragraph(
             "Draft line estimate",
-            f"{_money(quote.quantity)} × {quote.currency} {_money(quote.unit_price)} "
-            f"/ {quote.pricing_basis} = {quote.currency} {_money(quote.subtotal)}",
+            f"{_money(quote.quantity)} × "
+            f"{_rate(quote.currency, quote.unit_price, quote.pricing_basis)} "
+            f"= {quote.currency} {_money(quote.subtotal)}",
         ) + _paragraph("Quantity / scope note", quote.note)
     capability = line.capability
     if line.status == "in_house" and capability is not None and capability.price is not None:
         return _paragraph(
             "Reference rate",
-            f"{capability.currency} {_money(capability.price)} / {capability.pricing_basis} "
+            f"{_rate(capability.currency, capability.price, capability.pricing_basis)} "
             "(not a quote; quantity and scope not priced)",
         )
     # The summary makes unpriced scope explicit once; repeating the same empty
     # pricing field for every requirement obscures the actual customer details.
     return ""
+
+
+def _listed_overview(active: list[GapLine], current_lab: str) -> str:
+    """Surface available declarations and real prices before unresolved records.
+
+    This is a short business overview, not a duplicate index of every extracted
+    row. Full customer conditions and all remaining requirements follow below.
+    A bounded preview avoids turning a long catalog into a second full report.
+    """
+
+    listed = [line for line in active if line.status == "in_house" or line.quote is not None]
+    if not listed:
+        return (
+            "<h2>Listed methods &amp; draft pricing</h2>"
+            "<p>No requested methods are currently matched to a lab declaration. "
+            "See the gap and clarification details below; availability is not yet confirmed.</p>"
+        )
+    # Put supplied prices where they can be found immediately. Stable sorting
+    # retains source order within equally priced/unpriced groups.
+    listed.sort(
+        key=lambda line: (
+            line.quote is None,
+            line.capability is None or line.capability.price is None,
+        )
+    )
+    parts = [
+        f"<h2>Listed methods &amp; draft pricing · {len(listed)}</h2>",
+        "<table class='overview'><tr>",
+        "<th width='31%'>Test / requested method</th>",
+        "<th width='27%'>Review status</th>",
+        "<th width='22%'>Reference rate</th>",
+        "<th width='20%'>Quantity / estimate</th></tr>",
+    ]
+    source_labels = {
+        "ready": "Source: no row flags",
+        "confirmed": "Source: confirmed",
+        "needs_attention": "Source: check details",
+        "excluded": "Source: excluded",
+    }
+    for line in listed[:8]:
+        # An unusually long name remains complete in its detail record, while
+        # this compact preview must stay small enough to be useful at the front.
+        name = line.requirement.original_test_name
+        short_name = name if len(name) <= 100 else name[:97] + "…"
+        methods = "; ".join(method.code for method in line.requirement.requested_methods)
+        if len(methods) > 90:
+            methods = methods[:87] + "…"
+        if _scope_confirmed(line, current_lab):
+            lab_status = "Lab: scope confirmed"
+        elif line.status == "in_house":
+            lab_status = "Lab: confirm scope"
+        else:
+            lab_status = _status_label(line, current_lab)
+        quote = line.quote
+        capability = line.capability
+        if quote is not None:
+            rate = _rate(quote.currency, quote.unit_price, quote.pricing_basis)
+            quantity = (
+                f"{_money(quote.quantity)}<br>"
+                f"<b>{_text(quote.currency)} {_text(_money(quote.subtotal))}</b>"
+            )
+        else:
+            rate = (
+                _rate(capability.currency, capability.price, capability.pricing_basis)
+                if capability is not None and capability.price is not None
+                else "Not supplied"
+            )
+            quantity = "Not supplied<br><span class='sub'>Not priced</span>"
+        source_status = source_labels[line.extraction_review_state]
+        parts.extend(
+            [
+                "<tr>",
+                f"<td><b>{_text(short_name)}</b><br>"
+                f"<span class='sub'>{_text(methods or 'Method not stated')}</span></td>",
+                f"<td>{_text(lab_status)}<br><span class='sub'>{_text(source_status)}</span></td>",
+                f"<td>{_text(rate)}</td><td>{quantity}</td>",
+                "</tr>",
+            ]
+        )
+    parts.append("</table>")
+    if len(listed) > 8:
+        parts.append(
+            f"<p class='meta'>First 8 of {len(listed)} listed / priced requirements shown. "
+            "All test details follow below.</p>"
+        )
+    parts.append(
+        "<p class='meta'>Automatic method matching is not lab approval. Reference rates "
+        "are not line estimates; blank quantities and prices are not zero. "
+        "Other requirements are listed in the gap and clarification sections below.</p>"
+    )
+    return "".join(parts)
 
 
 def _line_html(line: GapLine, number: int, current_lab: str, content_review_note: str = "") -> str:
@@ -275,12 +383,13 @@ def _report_html(snapshot: ReportSnapshot) -> str:
             "<p class='pending'>Check the source specification for potentially missing "
             "requirements before relying on this draft.</p>"
         )
+    parts.append(_listed_overview(active, current_lab))
     parts.append(_pricing_summary(snapshot, active))
     parts.append("</div>")
     groups = (
+        ("Listed methods — customer requirements", {"in_house"}),
         ("Gaps to resolve", {"method_gap", "test_gap", "condition_gap"}),
         ("Needs clarification", {"needs_review"}),
-        ("Listed methods", {"in_house"}),
     )
     number = 0
     for title, statuses in groups:

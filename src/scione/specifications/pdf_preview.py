@@ -26,8 +26,9 @@ class QuoteHighlight:
     """What can actually be located on the requested physical source page.
 
     A table quotation may add pipes between cells. Each cell must still match
-    consecutive source tokens. Duplicate occurrences are deliberately not chosen
-    arbitrarily, and an unmatched cell is never replaced with a fuzzy guess.
+    consecutive source tokens. Repeated cells can be resolved only by one exact
+    detected table row; fragments from separate rows cannot form a matched quote.
+    An unmatched cell is never replaced with a fuzzy guess.
     """
 
     quote: str
@@ -67,6 +68,12 @@ class PDFHighlightResult:
 class _SourceWord:
     rectangle: Rectangle
     line: tuple[int, int]
+
+
+@dataclass(frozen=True)
+class _SourceTableRow:
+    table_bounds: Rectangle
+    cells: tuple[tuple[Rectangle, tuple[str, ...]], ...]
 
 
 # Preserve numerical signs and inequalities: normalization must not turn
@@ -136,6 +143,69 @@ def _merge_word_rectangles(words: Sequence[_SourceWord]) -> tuple[Rectangle, ...
     return tuple(rectangles)
 
 
+def _detected_table_rows(page: pymupdf.Page) -> tuple[_SourceTableRow, ...] | None:
+    """Read layout once per page; ``None`` distinguishes a failed inspection."""
+
+    rows: list[_SourceTableRow] = []
+    try:
+        for table in page.find_tables().tables:
+            if table.col_count < 2:
+                continue
+            for row, values in zip(table.rows, table.extract(), strict=True):
+                cells = tuple(
+                    (rectangle, tuple(tokens))
+                    for rectangle, value in zip(row.cells, values, strict=True)
+                    if rectangle is not None and (tokens := _tokens(value or ""))
+                )
+                rows.append(_SourceTableRow(table.bbox, cells))
+    except (RuntimeError, ValueError, TypeError, AttributeError):
+        return None
+    return tuple(rows)
+
+
+def _table_row_locations(
+    rows: tuple[_SourceTableRow, ...] | None,
+    segments: Sequence[list[str]],
+    words: Sequence[_SourceWord],
+    quote_words: Sequence[_SourceWord],
+) -> tuple[tuple[Rectangle, ...], int, bool]:
+    """Locate complete quoted cells within exactly one ruled-table row.
+
+    This is deliberately not fuzzy layout reconstruction. Every nonempty source
+    cell must be quoted in its original column order, preserving numbers, signs
+    and units. An identical row elsewhere on the page remains ambiguous. Failure
+    to detect a table never proves that a citation is correct.
+    """
+
+    if rows is None:
+        # An unavailable layout check must not turn a reconstructed table quote
+        # into a validated continuous span by default.
+        return (), 0, True
+    candidates: list[tuple[Rectangle, ...]] = []
+    overlaps_table = False
+    for row in rows:
+        x0, y0, x1, y1 = row.table_bounds
+        overlaps_table = overlaps_table or any(
+            x0 <= (word.rectangle[0] + word.rectangle[2]) / 2 <= x1
+            and y0 <= (word.rectangle[1] + word.rectangle[3]) / 2 <= y1
+            for word in quote_words
+        )
+        if tuple(tokens for _, tokens in row.cells) != tuple(tuple(tokens) for tokens in segments):
+            continue
+        selected = [
+            word
+            for word in words
+            if any(
+                x0 <= (word.rectangle[0] + word.rectangle[2]) / 2 <= x1
+                and y0 <= (word.rectangle[1] + word.rectangle[3]) / 2 <= y1
+                for (x0, y0, x1, y1), _ in row.cells
+            )
+        ]
+        if selected:
+            candidates.append(_merge_word_rectangles(selected))
+    return (candidates[0] if len(candidates) == 1 else ()), len(candidates), overlaps_table
+
+
 def _inspect_page_highlights(page: pymupdf.Page, quotes: Sequence[str]) -> PDFHighlightResult:
     if isinstance(quotes, (str, bytes)) or len(quotes) > 100:
         raise PDFPreviewError("Highlight quotes must be a sequence of at most 100 strings.")
@@ -159,9 +229,11 @@ def _inspect_page_highlights(page: pymupdf.Page, quotes: Sequence[str]) -> PDFHi
             source_words.append(word)
 
     matches: list[QuoteHighlight] = []
+    table_rows = _detected_table_rows(page) if any("|" in quote for quote in quotes) else ()
     for quote in quotes:
         segments = [tokens for part in quote.split("|") if (tokens := _tokens(part))]
         selected: list[_SourceWord] = []
+        spans: list[tuple[int, int]] = []
         matched_segments = ambiguous_segments = 0
         for needle in segments:
             occurrences: list[int] = []
@@ -174,11 +246,31 @@ def _inspect_page_highlights(page: pymupdf.Page, quotes: Sequence[str]) -> PDFHi
             if len(occurrences) == 1:
                 start = occurrences[0]
                 selected.extend(source_words[start : start + len(needle)])
+                spans.append((start, start + len(needle)))
                 matched_segments += 1
             elif len(occurrences) > 1:
                 ambiguous_segments += 1
 
-        if matched_segments and matched_segments == len(segments):
+        complete = bool(segments) and matched_segments == len(segments)
+        # Unique fragments scattered around the page are not a single citation.
+        # Native order may interleave table text, so use a detected exact row as
+        # the only fallback; never concatenate unrelated row/cell fragments.
+        coherent = complete and all(
+            previous[1] == following[0]
+            for previous, following in zip(spans, spans[1:], strict=False)
+        )
+        table_rectangles: tuple[Rectangle, ...] = ()
+        table_candidates = 0
+        overlaps_table = False
+        if len(segments) > 1:
+            table_rectangles, table_candidates, overlaps_table = _table_row_locations(
+                table_rows, segments, source_words, selected
+            )
+        if table_candidates == 1:
+            status = "matched"
+            matched_segments = len(segments)
+            ambiguous_segments = 0
+        elif coherent and not overlaps_table:
             status = "matched"
         elif matched_segments:
             status = "partial"
@@ -190,7 +282,7 @@ def _inspect_page_highlights(page: pymupdf.Page, quotes: Sequence[str]) -> PDFHi
             QuoteHighlight(
                 quote=quote,
                 status=status,
-                rectangles=_merge_word_rectangles(selected),
+                rectangles=table_rectangles or _merge_word_rectangles(selected),
                 matched_segments=matched_segments,
                 total_segments=len(segments),
                 ambiguous_segments=ambiguous_segments,
@@ -206,9 +298,10 @@ def inspect_pdf_highlights(
 ) -> PDFHighlightResult:
     """Locate evidence without altering the PDF or guessing approximate matches.
 
-    Case, Unicode typography, whitespace, and table pipes are normalized. All
-    remaining tokens must appear consecutively in the PDF's native text order.
-    This is source location, not a claim that a model's extracted fact is correct.
+    Case, Unicode typography, whitespace, and table pipes are normalized. Tokens
+    must appear consecutively in native order, or complete cells must identify
+    exactly one detected table row. This is source location, not a claim that a
+    model's extracted fact is correct.
     """
 
     with _open_page(data, page_number) as page:

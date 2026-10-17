@@ -30,6 +30,7 @@ from scione.schemas import IngestedDocument
 from scione.specifications.extraction import coverage_issues
 from scione.specifications.models import CustomerExtractionRun
 from scione.specifications.pdf_preview import PDFPreviewError, render_pdf_page
+from scione.specifications.review import REVIEW_POLICY_VERSION
 from scione.specifications.store import (
     FileSpecStore,
     RequirementReviewSet,
@@ -56,7 +57,9 @@ def _draft(
     catalog_json: str,
     workspace_json: str,
     pdf: bytes,
+    policy_version: str,
 ) -> ReportSnapshot:
+    """Cache separately for source-review policy changes, even with the same input PDF."""
     document = IngestedDocument.model_validate_json(document_json)
     stored = StoredSpecification(document, original_name, imported_at, Path("unused.pdf"))
     return build_report(
@@ -99,9 +102,15 @@ def _show_report() -> None:
     st.session_state["report_view_tabs"] = "Report"
 
 
-def _save_workspace(store: FileReportStore, workspace: ReportWorkspace) -> None:
+def _save_workspace(
+    store: FileReportStore, workspace: ReportWorkspace, *, next_item: str | None = None
+) -> None:
     store.save_workspace(workspace, expected_version=st.session_state["_report_editor_version"])
     _reset_editor()
+    if not st.session_state.get("report_bulk_items"):
+        _reset_bulk()
+    if next_item:
+        st.session_state["_report_next_item"] = next_item
     st.session_state["_report_notice"] = "Review saved. The report will use your updated decision."
     st.rerun()
 
@@ -245,47 +254,44 @@ def _scope_actions(
     """Confirm the displayed, persisted match, never an unsaved identity edit."""
 
     eligible = line.status in {"in_house", "condition_gap"} and line.capability is not None
-    if not eligible:
+    with st.container(height=90, border=False, key="report_scope_status"):
         if line.status == "needs_review":
             st.info("Choose the correct test and method below before confirming lab support.")
         elif line.status in {"test_gap", "method_gap"}:
             st.info(
                 "This test or requested method is not listed in your lab catalog. "
-                "It will appear as a gap in the report. Correct the match below if needed."
+                "It stays a gap unless the matching is corrected."
             )
-        return
-    confirmed = _lab_scope_review(report, line) == "Confirmed by lab reviewer"
-    if confirmed:
-        st.success("Lab support confirmed for this requirement.")
-    elif line.status == "condition_gap":
-        st.warning("Your review records that the lab cannot meet this scope.")
-    else:
-        st.info("The method is listed. Please check the requirements before confirming support.")
-    action_area = st.expander("Change lab support decision") if confirmed else st.container()
-    with action_area:
-        st.caption(
-            "Confirm only if your lab can meet the displayed conditions, acceptance criteria and "
-            "applicable scope. This is not quote approval."
-        )
-        with st.expander("Add a review note"):
-            st.text_area(
-                "Review note (required when recording a limitation)",
-                key="report_scope_note",
-                max_chars=4000,
-                placeholder="Explain any limitations or add context…",
+        elif _lab_scope_review(report, line) == "Confirmed by lab reviewer":
+            st.success("Lab support confirmed for this requirement.")
+        elif line.status == "condition_gap":
+            st.warning("Your review records that the lab cannot meet this scope.")
+        else:
+            st.info(
+                "Check the displayed requirements, then confirm whether your lab can meet them."
             )
-        confirm, gap = st.columns(2)
-        supported = confirm.button(
-            "Confirm lab support",
-            key="report_confirm_scope",
-            type="primary",
-            disabled=stale,
-            width="stretch",
+    confirm, gap = st.columns(2)
+    supported = confirm.button(
+        "Confirm lab support",
+        key="report_confirm_scope",
+        type="primary",
+        disabled=stale or not eligible,
+        width="stretch",
+    )
+    unsupported = gap.button(
+        "Cannot meet this scope",
+        key="report_decline_scope",
+        disabled=stale or not eligible,
+        width="stretch",
+    )
+    with st.expander("Add a review note"):
+        st.text_area(
+            "Review note (required when recording a limitation)",
+            key="report_scope_note",
+            max_chars=4000,
+            placeholder="Explain any limitations or add context…",
         )
-        unsupported = gap.button(
-            "Cannot meet this scope", key="report_decline_scope", disabled=stale, width="stretch"
-        )
-    if supported or unsupported:
+    if (supported or unsupported) and eligible and not stale:
         note = st.session_state["report_scope_note"].strip()
         if unsupported and not note:
             st.error("Add a review note explaining the limitation before recording this gap.")
@@ -303,7 +309,25 @@ def _scope_actions(
                 "and applicable scope for this requirement."
             ),
         )
-        _save_workspace(store, candidate)
+        next_item = None
+        if st.session_state.get("report_advance_after_save", True):
+            visible = _visible_lines(report, st.session_state.get("report_group", "All active"))
+            ordered = [item.requirement.id for item in visible]
+            position = ordered.index(line.requirement.id) if line.requirement.id in ordered else -1
+            pending = {
+                item.requirement.id
+                for item in visible
+                if item.requirement.id != line.requirement.id and _needs_review(report, item)
+            }
+            next_item = next(
+                (
+                    identifier
+                    for identifier in ordered[position + 1 :] + ordered[: position + 1]
+                    if identifier in pending
+                ),
+                None,
+            )
+        _save_workspace(store, candidate, next_item=next_item)
 
 
 def _quote_editor(
@@ -364,7 +388,7 @@ def _quote_editor(
                 _save_workspace(store, candidate)
 
 
-def _line_detail(
+def _requirement_details(
     report: ReportSnapshot, line: GapLine, store: FileReportStore, page_count: int
 ) -> None:
     st.subheader(line.requirement.original_test_name)
@@ -435,6 +459,15 @@ def _line_detail(
     if line.status == "excluded":
         st.info("Excluded in Specifications. This item is not included in the quote.")
         return
+
+
+def _line_detail(
+    report: ReportSnapshot, line: GapLine, store: FileReportStore, page_count: int
+) -> None:
+    with st.container(height=540, border=False, key="report_requirement_details"):
+        _requirement_details(report, line, store, page_count)
+    if line.status == "excluded":
+        return
     stale = _prepare_editor(report, line)
     _scope_actions(report, line, store, stale)
     _mapping_editor(report, line, store, stale)
@@ -485,11 +518,168 @@ def _item_status(report: ReportSnapshot, line: GapLine) -> str:
             if _lab_scope_review(report, line) == "Confirmed by lab reviewer"
             else "Confirm lab support"
         ),
-        "needs_review": "Choose the correct test / method",
+        "needs_review": (
+            "No catalog match yet"
+            if not line.candidate_test_ids
+            else "Choose the correct test / method"
+        ),
         "test_gap": "Gap · test not listed by your lab",
         "method_gap": "Gap · requested method not listed",
         "condition_gap": "Gap · outside your lab's scope",
     }[line.status]
+
+
+def _reset_bulk() -> None:
+    st.session_state.pop("_report_bulk_context", None)
+
+
+def _reset_bulk_acknowledgement() -> None:
+    st.session_state["report_bulk_ack"] = False
+
+
+def _bulk_scope_review(report: ReportSnapshot, store: FileReportStore) -> None:
+    """A selected batch is one lab decision, never a source review or quote."""
+
+    context = (report.document_id, report.source_run.run_id)
+    if (
+        st.session_state.get("_report_bulk_context") != context
+        or "report_bulk_note" not in st.session_state
+    ):
+        st.session_state.update(
+            {
+                "_report_bulk_context": context,
+                "_report_bulk_fingerprint": report.input_fingerprint,
+                "_report_bulk_version": report.workspace.version,
+                "report_bulk_items": [],
+                "report_bulk_ack": False,
+                "report_bulk_note": "",
+            }
+        )
+    by_id = {line.requirement.id: line for line in report.lines}
+    eligible = {
+        identifier: line
+        for identifier, line in by_id.items()
+        if line.status in {"in_house", "condition_gap"} and line.capability is not None
+    }
+    options = list(
+        dict.fromkeys(
+            [
+                *eligible,
+                *(key for key in st.session_state.get("report_bulk_items", []) if key in by_id),
+            ]
+        )
+    )
+    with st.popover("Batch lab review", icon=":material/checklist:", width="stretch"):
+        st.caption(
+            "Select only tests whose displayed requirements you have checked. "
+            "This confirms lab support, not extracted text or a quote."
+        )
+        if not options:
+            st.info("Resolve a test and method match before adding it to a lab-review batch.")
+            return
+        selected = st.multiselect(
+            "Tests to review together",
+            options,
+            key="report_bulk_items",
+            format_func=lambda value: (
+                by_id[value].requirement.original_test_name
+                + " · "
+                + (", ".join(by_id[value].considered_method_codes) or "Method not stated")
+            ),
+            on_change=_reset_bulk_acknowledgement,
+        )
+        st.caption(f"{len(selected)} selected · no tests selected automatically")
+        for identifier in selected:
+            line = by_id[identifier]
+            st.write(line.requirement.original_test_name)
+            st.caption(
+                "Conditions: "
+                + (
+                    "; ".join(item.raw_value for item in line.requirement.conditions)
+                    or "Not stated"
+                )
+                + " · Criteria: "
+                + (
+                    "; ".join(item.raw_value for item in line.requirement.acceptance_criteria)
+                    or "Not stated"
+                )
+                + " · Scope: "
+                + ("; ".join(line.requirement.applicability) or "Not stated")
+            )
+            if line.capability:
+                st.caption(
+                    "Lab limits: " + (line.capability.declared_constraints or "Not declared")
+                )
+        source_pending = sum(
+            by_id[identifier].extraction_review_state == "needs_attention"
+            for identifier in selected
+        )
+        if source_pending:
+            st.warning(
+                f"{source_pending} selected items still need a source check. "
+                "A lab decision will not clear those checks or make them quotable."
+            )
+        stale = st.session_state["_report_bulk_fingerprint"] != report.input_fingerprint
+        if stale:
+            st.warning("Source, lab or review data changed. Reload the batch and check it again.")
+        st.checkbox(
+            "I checked the conditions, criteria and applicable scope for every selected test",
+            key="report_bulk_ack",
+        )
+        st.text_area("Batch review note / limitation", key="report_bulk_note", max_chars=4000)
+        disabled = stale or not selected or not st.session_state["report_bulk_ack"]
+        support, decline = st.columns(2)
+        supported = support.button(
+            "Confirm selected", key="report_bulk_confirm", type="primary", disabled=disabled
+        )
+        unsupported = decline.button(
+            "Cannot meet selected", key="report_bulk_decline", disabled=disabled
+        )
+        st.button("Clear / reload batch", key="report_bulk_reload", on_click=_reset_bulk)
+        if (supported or unsupported) and not disabled:
+            if any(identifier not in eligible for identifier in selected):
+                st.error("A selected test no longer has a resolved method and lab declaration.")
+                return
+            note = st.session_state["report_bulk_note"].strip()
+            if unsupported and not note:
+                st.error("Explain the limitation before marking the selected scopes unsupported.")
+                return
+            workspace = report.workspace.model_copy(deep=True)
+            for identifier in selected:
+                line = eligible[identifier]
+                workspace.mappings[identifier] = MappingChoice(
+                    canonical_test_id=line.canonical_test_id,
+                    selected_method_codes=list(line.considered_method_codes),
+                    capability_id=line.capability.id,
+                    capability_verdict="supported" if supported else "unsupported",
+                    lab_fingerprint=lab_fingerprint(report.lab),
+                    note=note
+                    or "Lab reviewer checked and confirmed this request's conditions, "
+                    "acceptance criteria and applicable scope in a selected batch review.",
+                )
+            store.save_workspace(
+                workspace, expected_version=st.session_state["_report_bulk_version"]
+            )
+            _reset_bulk()
+            _reset_editor()
+            st.session_state["_report_notice"] = (
+                f"Lab review saved for {len(selected)} selected tests."
+            )
+            st.rerun()
+
+
+def _visible_lines(report: ReportSnapshot, selected: str) -> list[GapLine]:
+    return [
+        line
+        for line in report.lines
+        if (
+            (selected == "All active" and line.status != "excluded")
+            or (selected == "Methods listed" and line.status == "in_house")
+            or (selected == "Gaps" and line.status in {"test_gap", "method_gap", "condition_gap"})
+            or (selected == "Needs review" and _needs_review(report, line))
+            or (selected == "Excluded" and line.status == "excluded")
+        )
+    ]
 
 
 def _capability_review(report: ReportSnapshot, store: FileReportStore, page_count: int) -> None:
@@ -512,23 +702,25 @@ def _capability_review(report: ReportSnapshot, store: FileReportStore, page_coun
     st.caption(
         "Check each request below. Missing catalog entries remain gaps, not proof of impossibility."
     )
+    active = [line for line in report.lines if line.status != "excluded"]
+    source_checks = sum(line.extraction_review_state == "needs_attention" for line in active)
+    scope_checks = sum(_lab_scope_review(report, line) == "Pending lab review" for line in active)
+    st.caption(
+        f"Source text checks: {source_checks}"
+        f" · Catalog matching: {counts['needs_review']}"
+        f" · Lab scope checks: {scope_checks}"
+        ". These overlap; they are not a model error rate."
+    )
     navigation, detail = st.columns([1, 2.4], gap="large")
     groups = ["All active", "Methods listed", "Gaps", "Needs review", "Excluded"]
     with navigation:
         st.subheader("Choose a test")
         selected = st.selectbox("Show", groups, key="report_group")
-    lines = [
-        line
-        for line in report.lines
-        if (
-            (selected == "All active" and line.status != "excluded")
-            or (selected == "Methods listed" and line.status == "in_house")
-            or (selected == "Gaps" and line.status in {"test_gap", "method_gap", "condition_gap"})
-            or (selected == "Needs review" and _needs_review(report, line))
-            or (selected == "Excluded" and line.status == "excluded")
-        )
-    ]
+    lines = _visible_lines(report, selected)
     by_id = {line.requirement.id: line for line in lines}
+    next_item = st.session_state.pop("_report_next_item", None)
+    if next_item in by_id:
+        st.session_state["report_item"] = next_item
     if st.session_state.get("report_item") not in by_id:
         st.session_state["report_item"] = next(
             (line.requirement.id for line in lines if _needs_review(report, line)),
@@ -544,6 +736,7 @@ def _capability_review(report: ReportSnapshot, store: FileReportStore, page_coun
             format_func=lambda value: by_id[value].requirement.original_test_name,
         )
         st.caption(f"{len(lines)} items in this group")
+        st.checkbox("Next pending item after saving", value=True, key="report_advance_after_save")
         if identifier:
             st.write(_item_status(report, by_id[identifier]))
             other_pending = [
@@ -572,6 +765,7 @@ def _capability_review(report: ReportSnapshot, store: FileReportStore, page_coun
             icon=":material/description:",
         )
         st.caption("Unresolved items stay visible in the draft report.")
+        _bulk_scope_review(report, store)
     with detail:
         if identifier:
             with st.container(border=True):
@@ -738,6 +932,7 @@ def _developer(current: ReportSnapshot, reports: list[ReportSnapshot]) -> None:
                 "lab_version": current.lab.version,
                 "catalog_version": current.catalog.version,
                 "workspace_version": current.workspace.version,
+                "review_policy": REVIEW_POLICY_VERSION,
             }
         )
         for warning in current.warnings:
@@ -790,7 +985,7 @@ def render_reports(settings: Settings) -> None:
     try:
         notice = st.session_state.pop("_report_notice", None)
         if notice:
-            st.success(notice)
+            st.toast(notice, icon=":material/check_circle:")
         summaries = spec_store.list_documents()
         if not summaries:
             st.info("No specifications saved yet. Add and analyze a PDF in Specifications first.")
@@ -829,6 +1024,7 @@ def render_reports(settings: Settings) -> None:
             catalog.model_dump_json(),
             workspace.model_dump_json(),
             spec_store.read_pdf(document_id),
+            REVIEW_POLICY_VERSION,
         )
         st.caption(f"{lab.name} · Confirm test matching and lab support, then create your report.")
         if coverage_issues(run.extraction, stored.document):

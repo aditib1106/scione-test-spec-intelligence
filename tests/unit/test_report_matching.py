@@ -444,6 +444,15 @@ def test_build_does_not_mutate_sources_and_snapshot_does_not_share_mutable_data(
     assert report.lines[0].capability.price == Decimal("35.00")
 
 
+def test_review_policy_changes_invalidate_the_current_report_fingerprint(monkeypatch):
+    import scione.reports.matching as matching
+
+    inputs = _inputs()
+    before = input_fingerprint(*inputs)
+    monkeypatch.setattr(matching, "REVIEW_POLICY_VERSION", "future-test-policy")
+    assert input_fingerprint(*inputs) != before
+
+
 @pytest.mark.parametrize("index", [1, 2, 5])
 def test_cross_document_or_run_inputs_rejected(index):
     inputs = list(_inputs())

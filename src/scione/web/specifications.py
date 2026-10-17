@@ -19,7 +19,7 @@ from scione.specifications.pdf_preview import (
     inspect_pdf_highlights,
     render_pdf_page,
 )
-from scione.specifications.review import assess_requirements
+from scione.specifications.review import REVIEW_POLICY_VERSION, assess_requirements
 from scione.specifications.store import (
     ExtractionFailure,
     FileSpecStore,
@@ -40,7 +40,10 @@ def _preview_image(pdf: bytes, page: int, quotes: tuple[str, ...] = ()) -> bytes
 
 
 @st.cache_data(show_spinner=False, max_entries=24)
-def _cached_assessments(run_json: str, document_json: str, review_json: str, pdf: bytes) -> dict:
+def _cached_assessments(
+    run_json: str, document_json: str, review_json: str, pdf: bytes, policy_version: str
+) -> dict:
+    """Include the review policy in the cache key, not just immutable source bytes."""
     return assess_requirements(
         CustomerExtractionRun.model_validate_json(run_json),
         IngestedDocument.model_validate_json(document_json),
@@ -60,6 +63,7 @@ def _assess_review(
         stored.document.model_dump_json(exclude_computed_fields=True),
         review.model_dump_json(),
         store.read_pdf(stored.document_id),
+        REVIEW_POLICY_VERSION,
     )
 
 
@@ -465,10 +469,10 @@ def _save_review(
             raise SpecStoreError(
                 "Extraction changed since you viewed it. Review the new result first."
             )
-        updated = store.save_review(
+        updated = store.save_reviews(
             document_id,
             run_id,
-            requirement_id,
+            [requirement_id],
             decision=status,
             note=st.session_state.get("spec_review_note", ""),
             expected_version=expected_version,
@@ -486,17 +490,153 @@ def _save_review(
     label = {"confirmed": "Confirmed", "excluded": "Excluded", "needs_review": "Reopened"}[status]
     st.session_state["_spec_notice"] = f"{label}: {name}."
     assessments = _assess_review(store, store.load_document(document_id), latest, updated)
-    next_id = next(
+    next_id = _next_attention(latest, assessments, requirement_id)
+    # Keep the detail region open after the last action; don't collapse the page.
+    st.session_state["spec_requirement_choice"] = next_id or requirement_id
+    _clear_bulk_review()
+    if next_id is not None:
+        _focus_requirement(store.load_document(document_id), latest)
+
+
+def _next_attention(
+    run: CustomerExtractionRun, assessments: dict, current_id: str | None
+) -> str | None:
+    """Advance in source/extraction order, wrapping only after the final record."""
+
+    identifiers = [item.id for item in run.extraction.requirements]
+    offset = identifiers.index(current_id) + 1 if current_id in identifiers else 0
+    ordered = identifiers[offset:] + identifiers[:offset]
+    return next(
         (
-            key
-            for key, item in assessments.items()
-            if key != requirement_id and item.state == "needs_attention"
+            identifier
+            for identifier in ordered
+            if assessments[identifier].state == "needs_attention"
         ),
         None,
     )
-    st.session_state["spec_requirement_choice"] = next_id
+
+
+def _clear_bulk_review() -> None:
+    for key in (
+        "_spec_bulk_context",
+        "_spec_bulk_version",
+        "spec_bulk_selection",
+        "spec_bulk_acknowledge",
+        "spec_bulk_note",
+    ):
+        st.session_state.pop(key, None)
+
+
+def _reset_bulk_acknowledgement() -> None:
+    st.session_state["spec_bulk_acknowledge"] = False
+
+
+def _save_bulk_review(
+    store: FileSpecStore,
+    stored: StoredSpecification,
+    run: CustomerExtractionRun,
+    expected_version: int,
+    status: str,
+) -> None:
+    selected = list(st.session_state.get("spec_bulk_selection", []))
+    try:
+        if not selected or not st.session_state.get("spec_bulk_acknowledge"):
+            raise SpecStoreError(
+                "Select items and acknowledge that you checked each against the PDF."
+            )
+        if st.session_state.get("_spec_bulk_context") != (stored.document_id, run.run_id):
+            raise SpecStoreError("The selection belongs to another extraction. Select items again.")
+        note = st.session_state.get("spec_bulk_note", "").strip()
+        if status == "excluded" and not note:
+            raise SpecStoreError("Explain why the selected items are outside this request.")
+        updated = store.save_reviews(
+            stored.document_id,
+            run.run_id,
+            selected,
+            decision=status,
+            note=note,
+            expected_version=expected_version,
+        )
+    except SpecStoreError as exc:
+        st.session_state["_spec_action_error"] = str(exc)
+        return
+    current = st.session_state.get("spec_requirement_choice")
+    assessments = _assess_review(store, stored, run, updated)
+    next_id = _next_attention(run, assessments, current)
+    st.session_state["spec_requirement_choice"] = next_id or current
+    st.session_state.pop("_spec_review_context", None)
+    st.session_state.pop("_spec_manual_review", None)
+    _clear_bulk_review()
+    label = "Confirmed" if status == "confirmed" else "Excluded"
+    st.session_state["_spec_notice"] = f"{label} {len(selected)} selected source records."
     if next_id:
-        _focus_requirement(store.load_document(document_id), latest)
+        _focus_requirement(stored, run)
+
+
+def _render_bulk_review(
+    store: FileSpecStore,
+    stored: StoredSpecification,
+    run: CustomerExtractionRun,
+    review: RequirementReviewSet,
+) -> None:
+    context = (stored.document_id, run.run_id)
+    if st.session_state.get("_spec_bulk_context") != context:
+        _clear_bulk_review()
+        st.session_state["_spec_bulk_context"] = context
+        st.session_state["_spec_bulk_version"] = review.version
+    stale = st.session_state["_spec_bulk_version"] != review.version
+    with st.popover("Batch review", icon=":material/checklist:", width="stretch"):
+        st.caption(
+            "Select only records you have checked against the PDF. "
+            "This does not approve lab support."
+        )
+        by_id = {item.id: item for item in run.extraction.requirements}
+        selected = st.multiselect(
+            "Source records",
+            list(by_id),
+            format_func=lambda identifier: by_id[identifier].original_test_name,
+            key="spec_bulk_selection",
+            disabled=stale,
+            on_change=_reset_bulk_acknowledgement,
+        )
+        st.caption(f"{len(selected)} selected")
+        for identifier in selected:
+            st.text(by_id[identifier].original_test_name)
+        st.text_area(
+            "Review note / reason for exclusion",
+            key="spec_bulk_note",
+            max_chars=4000,
+            help=(
+                "A reason is required to exclude selected records. "
+                "The original extraction is preserved."
+            ),
+        )
+        acknowledged = st.checkbox(
+            "I checked every selected record against the PDF",
+            key="spec_bulk_acknowledge",
+        )
+        if stale:
+            st.warning("Reviews changed. Clear this selection and check the current records first.")
+            st.button("Clear stale selection", key="spec_bulk_reload", on_click=_clear_bulk_review)
+        version = st.session_state["_spec_bulk_version"]
+        st.button(
+            "Confirm selected content",
+            key="spec_bulk_confirm",
+            type="primary",
+            disabled=stale or not selected or not acknowledged,
+            on_click=_save_bulk_review,
+            args=(store, stored, run, version, "confirmed"),
+        )
+        st.button(
+            "Exclude selected from request",
+            key="spec_bulk_exclude",
+            disabled=stale
+            or not selected
+            or not acknowledged
+            or not st.session_state.get("spec_bulk_note", "").strip(),
+            on_click=_save_bulk_review,
+            args=(store, stored, run, version, "excluded"),
+        )
 
 
 def _allow_manual_review(requirement_id: str) -> None:
@@ -632,14 +772,39 @@ def _render_requirement_review(
         if st.button("Reload saved review (discard note draft)"):
             st.session_state.pop("_spec_review_context", None)
             st.rerun()
+    action_error = st.session_state.pop("_spec_action_error", None)
+    if action_error:
+        st.error(action_error)
+
+
+def _render_review_actions(
+    store: FileSpecStore,
+    stored: StoredSpecification,
+    run: CustomerExtractionRun,
+    review: RequirementReviewSet,
+    assessments: dict,
+) -> None:
+    """A fixed-height detail scroller above keeps these controls in one position."""
+
+    requirement_id = st.session_state.get("spec_requirement_choice")
+    assessment = assessments.get(requirement_id)
     manual_review = st.session_state.get("_spec_manual_review") == requirement_id
+    labels = {
+        "ready": "Extracted — no automatic checks flagged this item.",
+        "confirmed": "Confirmed by you.",
+        "excluded": "Excluded from this request.",
+        "needs_attention": "Check the source, then confirm or exclude this record.",
+    }
+    with st.container(height=38, border=False, key="spec_review_action_status"):
+        st.caption(
+            labels[assessment.state]
+            if assessment is not None
+            else "Select a record above to review its extracted content."
+        )
+    if assessment is None:
+        return
+    stale = st.session_state.get("_spec_review_version") != review.version
     if assessment.state != "needs_attention" and not manual_review:
-        label = {
-            "ready": "Extracted — no automatic checks flagged this item.",
-            "confirmed": "Confirmed by you.",
-            "excluded": "Excluded from this request.",
-        }
-        st.caption(label[assessment.state])
         st.button(
             "Review this item",
             key="spec_review_item",
@@ -651,32 +816,34 @@ def _render_requirement_review(
     confirm, flag = st.columns([1, 1])
     with confirm:
         st.button(
-            "Confirm",
+            "Confirm & next",
             key="spec_confirm_requirement",
             type="primary",
             icon=":material/check:",
             width="content",
+            disabled=stale,
             on_click=_save_review,
             args=(
                 store,
                 stored.document_id,
                 run.run_id,
-                requirement.id,
+                requirement_id,
                 "confirmed",
                 st.session_state["_spec_review_version"],
             ),
         )
     with flag:
         st.button(
-            "Exclude this item",
+            "Exclude & next",
             key="spec_exclude_requirement",
             width="content",
+            disabled=stale,
             on_click=_save_review,
             args=(
                 store,
                 stored.document_id,
                 run.run_id,
-                requirement.id,
+                requirement_id,
                 "excluded",
                 st.session_state["_spec_review_version"],
             ),
@@ -699,42 +866,40 @@ def _render_review_panel(
     attention = [key for key, item in assessments.items() if item.state == "needs_attention"]
     st.caption(f"{len(assessments)} extracted · {len(attention)} need your review")
     coverage = coverage_issues(run.extraction, stored.document)
-    if coverage:
-        st.warning("Draft: some tests may still be missing.")
     selected = st.session_state.get("spec_requirement_choice")
-    if selected:
+    back, batch = st.columns([1, 1], vertical_alignment="center")
+    with back:
         st.button(
             "Back to list",
             key="spec_back_to_list",
             type="tertiary",
             icon=":material/arrow_back:",
             on_click=_back_to_list,
+            disabled=not selected,
         )
-        _render_requirement_review(store, stored, run, review)
-    elif attention:
-        st.markdown(f"##### Needs your review · {len(attention)}")
-        st.caption("Select an item to check it against the document.")
-        _requirement_list(
-            attention,
-            stored,
-            run,
-            assessments,
-            show_reason=True,
-        )
-    else:
-        st.caption("No open item reviews. You can still inspect or review any item below.")
-    with st.expander(
-        f"All extracted tests · {len(assessments)}", expanded=not attention and not selected
-    ):
-        _requirement_list(
-            list(assessments),
-            stored,
-            run,
-            assessments,
-        )
-        st.caption("Extracted ≠ human-confirmed. Only flagged items request your review.")
-    if not selected:
-        st.caption("Select a test to see its details and highlighted source.")
+    with batch:
+        _render_bulk_review(store, stored, run, review)
+    with st.container(height=650, border=False, key="spec_review_details"):
+        if coverage:
+            st.warning("Draft: some tests may still be missing.")
+        if selected:
+            _render_requirement_review(store, stored, run, review)
+        elif attention:
+            st.markdown(f"##### Needs your review · {len(attention)}")
+            st.caption("Select an item to check it against the document.")
+            _requirement_list(attention, stored, run, assessments, show_reason=True)
+        else:
+            st.caption("No open item reviews. You can still inspect or review any item below.")
+        with st.expander(
+            f"All extracted tests · {len(assessments)}", expanded=not attention and not selected
+        ):
+            _requirement_list(list(assessments), stored, run, assessments)
+            st.caption("Extracted ≠ human-confirmed. Only flagged items request your review.")
+        if not selected:
+            action_error = st.session_state.pop("_spec_action_error", None)
+            if action_error:
+                st.error(action_error)
+    _render_review_actions(store, stored, run, review, assessments)
 
 
 def _open_lab_review(document_id: str) -> None:
@@ -753,10 +918,7 @@ def render_specifications(settings: Settings) -> None:
     try:
         notice = st.session_state.pop("_spec_notice", None)
         if notice:
-            st.success(notice)
-        action_error = st.session_state.pop("_spec_action_error", None)
-        if action_error:
-            st.error(action_error)
+            st.toast(notice, icon=":material/check_circle:")
         documents = store.list_documents()
         if not documents:
             _render_intake(store)

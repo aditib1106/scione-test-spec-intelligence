@@ -328,7 +328,7 @@ def test_back_to_list_clears_focused_details_without_confirming_or_changing_pdf_
     assert app.button(key="spec_attention_open_req_pencil")
     assert app.button(key="spec_attention_open_req_panels")
     assert not any(button.key == "spec_confirm_requirement" for button in app.button)
-    assert not any(button.key == "spec_back_to_list" for button in app.button)
+    assert app.button(key="spec_back_to_list").disabled
     assert seeded_store.load_review(document_id, run.run_id).version == 0
 
     app = app.button(key="spec_attention_open_req_pencil").click().run()
@@ -391,7 +391,8 @@ def test_confirm_advances_to_next_attention_item_and_does_not_look_stuck(
     app = select_requirement(open_specifications(), seeded_store, "req_pencil", attention=True)
     app = app.button(key="spec_confirm_requirement").click().run()
     assert not app.exception
-    assert app.success
+    assert app.get("toast")
+    assert not app.success  # Feedback must not insert a new block above the workspace.
     assert app.session_state["spec_requirement_choice"] == "req_panels"
     assert app.number_input(key="spec_pdf_page").value == 2
     assert (
@@ -400,7 +401,7 @@ def test_confirm_advances_to_next_attention_item_and_does_not_look_stuck(
     )
     app = app.button(key="spec_confirm_requirement").click().run()
     assert not app.exception
-    assert app.session_state["spec_requirement_choice"] is None
+    assert app.session_state["spec_requirement_choice"] == "req_panels"
     assert not any(button.key == "spec_confirm_requirement" for button in app.button)
     assert (
         seeded_store.load_extraction(document_id, run.run_id).extraction.model_dump_json()
@@ -417,7 +418,7 @@ def test_exclusion_persists_without_deleting_extracted_row(seeded_store: FileSpe
     app.text_area(key="spec_review_note").set_value("Not an applicable customer request.")
     app = app.button(key="spec_exclude_requirement").click().run()
     assert not app.exception
-    assert app.session_state["spec_requirement_choice"] is None
+    assert app.session_state["spec_requirement_choice"] == "req_pencil"
     assert not any(button.key == "spec_confirm_requirement" for button in app.button)
     review = seeded_store.load_review(document_id, run.run_id)
     assert review.decisions["req_pencil"].status == "excluded"
@@ -429,6 +430,136 @@ def test_exclusion_persists_without_deleting_extracted_row(seeded_store: FileSpe
         seeded_store.load_latest_extraction(document_id).extraction.requirements[0].id
         == "req_pencil"
     )
+
+
+def test_continuous_review_advances_after_current_record_before_wrapping(
+    seeded_store: FileSpecStore,
+) -> None:
+    document_id = seeded_store.list_documents()[0].document_id
+    payload = customer_payload(needs_attention=True, second_item=True)
+    third = dict(payload["requirements"][1])
+    third.update(id="req_third", original_test_name="Third applicability check")
+    payload["requirements"].append(third)
+    run = save_static_extraction(seeded_store, document_id, payload=payload)
+    app = select_requirement(open_specifications(), seeded_store, "req_panels", attention=True)
+    app = app.button(key="spec_confirm_requirement").click().run()
+    assert not app.exception
+    assert app.session_state["spec_requirement_choice"] == "req_third"
+    assert app.button(key="spec_confirm_requirement").label == "Confirm & next"
+    assert not app.success
+    app = app.button(key="spec_confirm_requirement").click().run()
+    assert app.session_state["spec_requirement_choice"] == "req_pencil"
+    assert seeded_store.load_review(document_id, run.run_id).version == 2
+
+
+def test_bulk_source_confirmation_requires_ack_and_is_one_atomic_action(
+    seeded_store: FileSpecStore,
+) -> None:
+    from scione.reports.store import FileReportStore
+
+    document_id = seeded_store.list_documents()[0].document_id
+    run = save_static_extraction(
+        seeded_store, document_id, payload=customer_payload(needs_attention=True, second_item=True)
+    )
+    original = run.model_dump_json()
+    app = open_specifications()
+    assert app.button(key="spec_bulk_confirm").disabled
+    app = app.multiselect(key="spec_bulk_selection").set_value(["req_pencil", "req_panels"]).run()
+    assert app.button(key="spec_bulk_confirm").disabled
+    app = app.checkbox(key="spec_bulk_acknowledge").check().run()
+    app = app.button(key="spec_bulk_confirm").click().run()
+    assert not app.exception
+    assert app.get("toast")
+    assert not app.success
+    assert app.multiselect(key="spec_bulk_selection").value == []
+    review = seeded_store.load_review(document_id, run.run_id)
+    assert review.version == 1
+    assert {item.status for item in review.decisions.values()} == {"confirmed"}
+    assert seeded_store.load_extraction(document_id, run.run_id).model_dump_json() == original
+    assert (
+        FileReportStore(seeded_store.root.parent).load_workspace(document_id, run.run_id).version
+        == 0
+    )
+
+
+def test_bulk_exclusion_requires_reason_and_preserves_original_records(
+    seeded_store: FileSpecStore,
+) -> None:
+    document_id = seeded_store.list_documents()[0].document_id
+    run = save_static_extraction(
+        seeded_store, document_id, payload=customer_payload(needs_attention=True, second_item=True)
+    )
+    app = open_specifications()
+    app = app.multiselect(key="spec_bulk_selection").set_value(["req_pencil", "req_panels"]).run()
+    app = app.checkbox(key="spec_bulk_acknowledge").check().run()
+    assert app.button(key="spec_bulk_exclude").disabled
+    app = (
+        app.text_area(key="spec_bulk_note").set_value("Outside the present customer request.").run()
+    )
+    app = app.button(key="spec_bulk_exclude").click().run()
+    assert not app.exception
+    review = seeded_store.load_review(document_id, run.run_id)
+    assert review.version == 1
+    assert len(review.decisions) == 2
+    assert {item.status for item in review.decisions.values()} == {"excluded"}
+    assert {item.note for item in review.decisions.values()} == {
+        "Outside the present customer request."
+    }
+    assert len(seeded_store.load_extraction(document_id, run.run_id).extraction.requirements) == 2
+
+
+def test_bulk_selection_change_resets_acknowledgement(seeded_store: FileSpecStore) -> None:
+    document_id = seeded_store.list_documents()[0].document_id
+    save_static_extraction(
+        seeded_store, document_id, payload=customer_payload(needs_attention=True, second_item=True)
+    )
+    app = open_specifications()
+    app = app.multiselect(key="spec_bulk_selection").set_value(["req_pencil"]).run()
+    app = app.checkbox(key="spec_bulk_acknowledge").check().run()
+    assert not app.button(key="spec_bulk_confirm").disabled
+    app = app.multiselect(key="spec_bulk_selection").set_value(["req_pencil", "req_panels"]).run()
+    assert not app.checkbox(key="spec_bulk_acknowledge").value
+    assert app.button(key="spec_bulk_confirm").disabled
+
+
+def test_stale_bulk_cannot_overwrite_another_review(seeded_store: FileSpecStore) -> None:
+    document_id = seeded_store.list_documents()[0].document_id
+    run = save_static_extraction(
+        seeded_store, document_id, payload=customer_payload(needs_attention=True, second_item=True)
+    )
+    app = open_specifications()
+    app = app.multiselect(key="spec_bulk_selection").set_value(["req_pencil", "req_panels"]).run()
+    app = app.checkbox(key="spec_bulk_acknowledge").check().run()
+    other = seeded_store.save_review(
+        document_id, run.run_id, "req_panels", "needs_review", "Another reviewer."
+    )
+    app = app.button(key="spec_bulk_confirm").click().run()
+    assert not app.exception
+    assert any("review changed" in error.value.lower() for error in app.error)
+    assert app.button(key="spec_bulk_confirm").disabled
+    assert seeded_store.load_review(document_id, run.run_id) == other
+    app = app.button(key="spec_bulk_reload").click().run()
+    assert app.multiselect(key="spec_bulk_selection").value == []
+    assert not app.checkbox(key="spec_bulk_acknowledge").value
+
+
+def test_new_extraction_invalidates_entire_bulk_selection(seeded_store: FileSpecStore) -> None:
+    document_id = seeded_store.list_documents()[0].document_id
+    old = save_static_extraction(
+        seeded_store, document_id, payload=customer_payload(needs_attention=True, second_item=True)
+    )
+    app = open_specifications()
+    app = app.multiselect(key="spec_bulk_selection").set_value(["req_pencil", "req_panels"]).run()
+    app = app.checkbox(key="spec_bulk_acknowledge").check().run()
+    payload = customer_payload(needs_attention=True, second_item=True)
+    payload["requirements"][0]["conditions"][0]["raw_value"] = "1000"
+    new = save_static_extraction(seeded_store, document_id, payload=payload)
+    app = app.button(key="spec_bulk_confirm").click().run()
+    assert not app.exception
+    assert any("extraction changed" in error.value.lower() for error in app.error)
+    assert seeded_store.load_review(document_id, old.run_id).version == 0
+    assert seeded_store.load_review(document_id, new.run_id).version == 0
+    assert app.multiselect(key="spec_bulk_selection").value == []
 
 
 def test_gemini_requires_permission_and_separate_free_tier_confirmation(

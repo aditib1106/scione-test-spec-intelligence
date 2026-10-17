@@ -238,7 +238,9 @@ def test_evidence_distinguishes_text_validation_pdf_location_and_ambiguity() -> 
 
     assert [(row["Text check"], row["Highlight"]) for row in rows] == [
         ("Found", "Located"),
-        ("Not found", "Located"),
+        # Both snippets exist, but the omitted "per" means this is neither a
+        # continuous quotation nor a reconstructed complete source-table row.
+        ("Not found", "Partly located"),
         ("Not found", "Not located"),
         ("Invalid page", "Invalid page"),
         ("Found", "Ambiguous"),

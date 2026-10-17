@@ -35,7 +35,11 @@ from scione.reports.models import (
 )
 from scione.specifications.extraction import coverage_issues
 from scione.specifications.models import CustomerExtractionRun, CustomerRequirement, RequestedMethod
-from scione.specifications.review import RequirementAssessment, assess_requirements
+from scione.specifications.review import (
+    REVIEW_POLICY_VERSION,
+    RequirementAssessment,
+    assess_requirements,
+)
 from scione.specifications.store import RequirementReviewSet, StoredSpecification
 
 _DASHES = str.maketrans({character: "-" for character in "‐‑‒–—−"})
@@ -135,6 +139,7 @@ def input_fingerprint(
     """Hash every semantic source input, excluding output ID/time and file paths."""
 
     source = {
+        "review_policy": REVIEW_POLICY_VERSION,
         "document": stored.document.model_dump(mode="json", exclude_computed_fields=True),
         "original_name": stored.original_name,
         "uploaded_at": stored.created_at.isoformat(),
