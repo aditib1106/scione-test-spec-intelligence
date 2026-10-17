@@ -227,3 +227,4 @@ docs/*.pdf
 # Local runtime data
 /runs/
 uploads/
+/local_data/

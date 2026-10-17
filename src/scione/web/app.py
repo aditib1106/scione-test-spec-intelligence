@@ -1,4 +1,4 @@
-"""Interactive review workbench for local extraction experiments."""
+"""Lab workspace with a separate developer extraction workbench."""
 
 from __future__ import annotations
 
@@ -9,12 +9,19 @@ from pathlib import Path
 import streamlit as st
 from pydantic import ValidationError
 
+from scione.catalogs import CatalogError, FileLabStore, LabStoreError, load_reference_catalog
 from scione.config import ConfigurationError, Settings
 from scione.evaluation import EvaluationReport, TestMethodEvaluator
 from scione.extraction import ExtractionError
 from scione.ingestion import IngestionError
 from scione.runs import FileRunStore, RunStoreError, StoredMethodRun
 from scione.schemas import TestMethodDefinition, TestMethodExtraction, TextReadingOrder
+from scione.web.portal import (
+    WORKSPACE_PAGES,
+    render_my_lab,
+    render_pending_page,
+    render_test_catalog,
+)
 from scione.web.presentation import (
     comparison_evaluation_rows,
     comparison_summary_rows,
@@ -659,14 +666,11 @@ def _render_extraction(stored: StoredMethodRun, store: FileRunStore) -> None:
             st.json(run.model_dump(mode="json", exclude={"raw_response", "extraction"}))
 
 
-def main() -> None:
-    st.set_page_config(
-        page_title="SciOne Extraction Workbench",
-        page_icon="🧪",
-        layout="wide",
+def _render_developer_tools(settings: Settings) -> None:
+    st.caption(
+        "Developer Tools · legacy standard-document extraction and model testing. "
+        "This is not the new customer-spec / lab-gap workflow."
     )
-    _apply_theme()
-    settings = Settings()
     store = FileRunStore(settings.scione_runs_dir)
     try:
         selected_run_id = _run_controls(settings, store)
@@ -679,6 +683,35 @@ def main() -> None:
         st.error(str(exc))
         return
     _render_extraction(stored, store)
+
+
+def main() -> None:
+    st.set_page_config(
+        page_title="SciOne Lab Workspace",
+        page_icon="🧪",
+        layout="wide",
+    )
+    _apply_theme()
+    settings = Settings()
+    st.sidebar.title("SciOne")
+    st.sidebar.caption("Lab capability prototype")
+    page = st.sidebar.radio("Workspace", WORKSPACE_PAGES, key="workspace_page")
+    st.sidebar.caption("Local demo · no account or database setup required")
+    if page == "Developer Tools":
+        _render_developer_tools(settings)
+        return
+    if page in {"Specifications", "Reports"}:
+        render_pending_page(page)
+        return
+    try:
+        catalog = load_reference_catalog()
+        if page == "My Lab":
+            render_my_lab(FileLabStore(settings.scione_workspace_dir, catalog), catalog)
+        else:
+            render_test_catalog(catalog)
+    except (CatalogError, LabStoreError, ValidationError) as exc:
+        st.error(f"Unable to open the local workspace: {exc}")
+        st.caption("Saved data has not been reset. Check the local workspace before retrying.")
 
 
 if __name__ == "__main__":

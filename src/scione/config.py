@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     gemini_thinking_level: Literal["low", "medium", "high"] = "low"
     scione_single_attempt_mode: bool = True
     scione_runs_dir: Path = Path("runs")
+    scione_workspace_dir: Path = Path("local_data")
 
     def require_groq_api_key(self) -> str:
         if self.groq_api_key is None:

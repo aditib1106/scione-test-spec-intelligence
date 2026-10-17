@@ -1,13 +1,40 @@
 # scione-test-spec-intelligence
 CMU MISM Capstone — AI Test Specification Intelligence for SciOne AI
 
-## Current scope
+## Current scope and implementation status
 
-The current vertical slice ingests digitally generated PDFs, runs provider-neutral
-structured extraction, validates the result, evaluates it against an optional answer
-key, stores reproducible local run artifacts, and exposes the result in a local review
-workbench. OCR/multimodal ingestion and multi-file or chunked strategies remain future
-pipeline stages.
+The revised product direction is customer-specification extraction, shared test/method
+identity normalization, human review, and comparison against a lab's declared
+capabilities to produce a gap report. Reading referenced standard procedures is not a
+dependency of this workflow.
+
+The first implementation step provides:
+
+- **My Lab**: a local demo-lab profile, saved capabilities, and add/edit controls for
+  test identities, declared methods, operating limits, notes, and optional pricing.
+- **Test Catalog**: a searchable pilot catalog with 15 test identities, 24 method
+  identities, and curated English/Chinese aliases. Associated methods are not declared
+  equivalent, and unknown editions remain unspecified.
+- **Developer Tools**: the existing PDF extraction, model selection, saved-run review,
+  and provisional-answer-key evaluation remain directly accessible in the sidebar.
+
+**Specifications** and **Reports** are clearly marked placeholders. Customer-spec
+extraction/review, normalization decisions, capability matching, and PDF gap reports
+are not implemented yet. Alias search in Test Catalog is browsing, not an implemented
+semantic-normalization pipeline. There is no login or production database.
+
+The pilot catalog and initial lab declarations/prices are demo fixtures, not verified
+client or laboratory data. The catalog ships in `src/scione/catalogs/seed.py`. On first
+opening My Lab, the app creates `local_data/lab.json`; changes persist across restarts.
+`SCIONE_WORKSPACE_DIR` can override that directory without database setup. Local data
+is ignored by Git. Prices include a currency and pricing basis and are not quotations.
+Invalid or corrupt lab data is reported rather than silently reset; stale edits are
+rejected until the editor is reloaded.
+
+The legacy extraction path supports digitally generated PDFs and preserves source
+pages, structured output, raw responses, and run metadata. OCR/multimodal ingestion
+and multi-file or chunked strategies remain future stages. Legacy Moon Glass scores
+are not evidence for the revised lab-gap workflow.
 
 ## Development setup
 
@@ -100,17 +127,23 @@ cannot inspect or change the project's billing status. Free-tier Gemini data may
 used by Google to improve its products, so do not send client, licensed, or confidential
 documents.
 
-## Open the review workbench
-
-The web interface loads saved runs without making another model call. A new request is
-sent only after pressing **Run extraction** in the sidebar.
+## Open the lab workspace and developer tools
 
 ```bash
 python -m streamlit run src/scione/web/app.py
 ```
 
-The workbench can run the tracked synthetic PDF or an uploaded text-based PDF. It shows
-the page text seen by the model, normalized methods and parameters, source evidence,
+Start in **My Lab**, save a capability, and reopen the app to check persistence. In
+**Test Catalog**, try `铅笔硬度` or `ISO 15184`. **Developer Tools** is a visible sidebar
+entry, not a hidden or collapsed mode. Its legacy extraction controls are independent
+of the new lab configuration.
+
+The web interface loads saved runs without making another model call. A new request is
+sent only after pressing **Run extraction** in Developer Tools. Lab/catalog page
+navigation, editing and saving do not make model requests.
+
+The developer workbench can run the tracked synthetic PDF or an uploaded text-based
+PDF. It shows the page text seen by the model, normalized methods and parameters, source evidence,
 field-level scores, and an explicit ground-truth-versus-model table for every dimension.
 New evaluated runs persist a ground-truth snapshot so later reviews remain reproducible.
 Saved-run comparisons and downloadable validated JSON remain available. Provider and
