@@ -221,8 +221,9 @@ __marimo__/
 .DS_Store
 **/.DS_Store
 
-# Client/project reference PDFs kept locally
-docs/*.pdf
+# Client/project reference PDFs stay local, except the approved simulated demo spec.
+/docs/**/*.pdf
+!/docs/samples/MS-PNT-410_demo_spec.pdf
 
 # Local runtime data
 /runs/

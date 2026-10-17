@@ -65,9 +65,11 @@ A content confirmation does not approve a catalog match or lab support.
   approval are fabricated. Pricing still needs an explicit quantity/basis and valid
   source/matching/operating support.
 
-The current saved 49-record sample can be reprocessed offline to evaluate workflow
-coverage. Reduced review counts are not an extraction-accuracy score or a guarantee
-for other specifications; ground-truth evaluation is still needed.
+Past local experiments used a 49-record extraction of the simulated demo spec.
+Saved runs and review decisions are private local data, not included in a clone.
+The demo PDF is bundled so teammates can run the same workflow with their own
+provider key; model outputs and record counts may differ. Reduced review counts
+are not an extraction-accuracy score; ground-truth evaluation is still needed.
 
 ## Create a lab-gap report
 
@@ -139,8 +141,10 @@ layout update rather than expecting an old saved PDF to change.
 1. Start in **My Lab**. Enter a capability manually, or explicitly choose **Load
    example lab** to use invented sample capabilities/prices. Nothing is preloaded
    into a new lab automatically; the shared reference catalog remains available.
-2. Upload/import a specification, run extraction, inspect the exception queue,
-   then create a draft report. The analysis button is the only step that calls a model.
+2. In **Specifications**, choose **Import supplied demo spec** to load the bundled
+   simulated PDF, or upload an authorized specification. Run extraction, inspect
+   the exception queue, then create a draft report. The analysis button is the only
+   step that calls a model; importing the PDF does not.
 3. To repeat from first use, open **Developer Tools → Reset demo workspace**,
    acknowledge the reset and click **Reset to first use**. The page clears its
    memory/session cache as well as moving saved demo state into recovery storage.
@@ -160,6 +164,10 @@ Backups may contain customer documents; keep them private and do not commit them
 
 ## Setup
 
+Use **Python 3.11 or newer** and run these commands from the repository root.
+Until this work is merged into `main`, check out `feat/lab-gap-prototype` after
+cloning; cloning the default branch alone may give you the earlier prototype.
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -169,6 +177,10 @@ cp .env.example .env
 
 Set a local provider key in `.env`; never commit that file. If it already exists,
 merge any new example settings manually instead of overwriting your credentials.
+The example selects Groq initially. If using Gemini, fill `GEMINI_API_KEY` and
+select Gemini in the analysis controls, or set `MODEL_PROVIDER=gemini`. Use a model
+available to your own account/project and confirm its billing/quota settings;
+the app cannot guarantee a free account or identical outputs.
 
 ```bash
 python -m streamlit run src/scione/web/app.py
@@ -180,8 +192,11 @@ browsing sources, reviewing records or inspecting diagnostics.
 ## Walk through a specification
 
 1. Open **Specifications**, use **Add PDF**, and save an authorized text-based PDF.
-   The owner-supplied MS-PNT-410 sample can be imported explicitly if it exists at
-   the expected repository-root path. Private local samples are not required by tests.
+   Alternatively, choose **Import supplied demo spec** to load
+   [the bundled simulated MS-PNT-410 sample](docs/samples/MS-PNT-410_demo_spec.pdf).
+   This works in a fresh clone and needs no separate PDF download or API call.
+   **My Lab → Load example lab** independently loads invented capabilities/prices;
+   it does not import a spec or supply previous extraction results.
 2. Choose **Analyze PDF** / **Analyze again**. Select the provider and grant sending
    permission. Gemini also requires an explicit Free-tier confirmation. Model IDs,
    output ceilings and reading modes are under **Advanced model settings**.
@@ -254,6 +269,7 @@ src/scione/
   specifications/  Extraction, source location, review and local artifacts
   web/             Lab workspace and current diagnostics
 tests/             Offline unit and integration tests
+docs/samples/      Shared simulated demo spec PDF
 local_data/        Private runtime data; ignored by Git
 ```
 
@@ -263,6 +279,10 @@ immutable model runs and separate human-review records under
 `local_data/specifications/<document-id>/`. Failed-attempt metadata is separate.
 For coverage passes, individual untouched responses are in `run.calls`; the
 top-level `raw_response` is explicitly a local manifest.
+
+Only `docs/samples/MS-PNT-410_demo_spec.pdf` is approved for sharing as the demo
+input. The background and meeting PDFs under `docs/` remain local and ignored,
+as do credentials, uploaded documents, saved runs, reviews and recovery backups.
 
 PDF intake is limited to 25 MB / 200 pages. Encrypted PDFs are rejected. Sparse or
 image-only PDFs may be previewed but are not accepted for text extraction without

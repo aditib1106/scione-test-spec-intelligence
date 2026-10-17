@@ -29,9 +29,7 @@ from scione.specifications.store import (
 )
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-SAMPLE_SPEC_PATH = REPOSITORY_ROOT / (
-    "(Liyang's provided SPEC) MS-PNT-410 Material Performance Standard Exterior Topcoat System.pdf"
-)
+SAMPLE_SPEC_PATH = REPOSITORY_ROOT / "docs" / "samples" / "MS-PNT-410_demo_spec.pdf"
 
 
 @st.cache_data(show_spinner=False, max_entries=24)

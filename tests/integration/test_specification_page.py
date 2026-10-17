@@ -8,9 +8,11 @@ from pytest import MonkeyPatch
 from streamlit.testing.v1 import AppTest
 
 from scione.config import Settings
+from scione.ingestion.pdf_text import PyMuPDFTextIngestor
 from scione.providers import StaticModelProvider
 from scione.providers.gemini import GeminiModelProvider
 from scione.providers.groq import GroqModelProvider
+from scione.schemas import TextExtractionStatus
 from scione.specifications import CustomerRequirementRunner
 from scione.specifications.store import FileSpecStore
 
@@ -29,7 +31,7 @@ SECOND_PAGE = (
 
 @pytest.fixture(autouse=True)
 def offline_specification_workspace(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
-    """Never read developer credentials, saved runs, or the real client document."""
+    """Never read developer credentials, saved runs, or local-only customer PDFs."""
 
     monkeypatch.setitem(Settings.model_config, "env_file", None)
     monkeypatch.setenv("MODEL_PROVIDER", "groq")
@@ -174,6 +176,45 @@ def test_demo_import_is_explicit_and_persists_across_sessions(
     assert not reopened.exception
     assert reopened.selectbox(key="spec_document_choice").value == saved[0].document_id
     assert len(store.list_documents()) == 1
+
+
+def test_bundled_demo_is_an_ingestable_text_pdf() -> None:
+    from scione.web import specifications
+
+    expected_path = REPOSITORY_ROOT / "docs" / "samples" / "MS-PNT-410_demo_spec.pdf"
+    assert specifications.SAMPLE_SPEC_PATH == expected_path
+    assert expected_path.is_file(), "Fresh clones need the bundled demonstration PDF."
+    document = PyMuPDFTextIngestor().ingest(expected_path)
+    assert document.file_name == expected_path.name
+    assert document.page_count > 0
+    assert document.extraction_status == TextExtractionStatus.READY
+    assert all(page.text.strip() for page in document.pages)
+
+
+def test_fresh_clone_can_import_bundled_demo_without_api_or_existing_documents(
+    tmp_path: Path,
+) -> None:
+    from scione.web import specifications
+
+    sample_bytes = specifications.SAMPLE_SPEC_PATH.read_bytes()
+    store = FileSpecStore(tmp_path / "workspace")
+    assert store.list_documents() == []
+    app = open_specifications()
+    assert not app.exception
+    assert app.button(key="spec_import_sample").label == "Import supplied demo spec"
+    assert store.list_documents() == [], "Opening Specifications must not import automatically."
+
+    app = app.button(key="spec_import_sample").click().run()
+
+    assert not app.exception
+    saved = store.list_documents()
+    assert len(saved) == 1
+    assert saved[0].original_name == "MS-PNT-410_demo_spec.pdf"
+    assert store.read_pdf(saved[0].document_id) == sample_bytes
+    assert saved[0].latest_run_id is None
+    assert store.load_latest_extraction(saved[0].document_id) is None
+    assert app.button(key="spec_extract_requirements").disabled
+    assert specifications.SAMPLE_SPEC_PATH.read_bytes() == sample_bytes
 
 
 def test_saved_pdf_can_be_paged_without_model_inference(seeded_store: FileSpecStore) -> None:
