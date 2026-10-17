@@ -737,11 +737,17 @@ def _render_review_panel(
         st.caption("Select a test to see its details and highlighted source.")
 
 
+def _open_lab_review(document_id: str) -> None:
+    st.session_state["workspace_page"] = "Reports"
+    st.session_state["report_document"] = document_id
+    st.session_state["report_view_tabs"] = "Review & confirm"
+
+
 def render_specifications(settings: Settings) -> None:
     st.title("Specifications")
     st.caption(
-        "Check extracted content against the original specification. Test identity and lab "
-        "capability are reviewed separately in Reports; confirming content does not approve them."
+        "First, check that AI read the tests, conditions and criteria correctly from the PDF. "
+        "Confirming here checks the extracted text, not whether your lab can perform the test."
     )
     store = FileSpecStore(settings.scione_workspace_dir)
     try:
@@ -785,6 +791,19 @@ def render_specifications(settings: Settings) -> None:
         with right:
             with st.container(height=950, border=True, key="spec_review_panel"):
                 _render_review_panel(store, stored, run)
+        if run is not None and run.extraction.requirements:
+            st.button(
+                "Continue to lab review",
+                key="spec_continue_reports",
+                type="primary",
+                icon=":material/arrow_forward:",
+                on_click=_open_lab_review,
+                args=(document_id,),
+            )
+            st.caption(
+                "Next: confirm test matching and lab support in Reports. "
+                "Any unfinished source checks will stay flagged."
+            )
     except SpecStoreError as exc:
         st.error(str(exc))
         st.caption(

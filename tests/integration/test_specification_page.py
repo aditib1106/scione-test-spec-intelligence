@@ -207,6 +207,28 @@ def test_ready_rows_are_listed_without_proactive_confirmation(seeded_store: File
     assert seeded_store.load_review(document_id, run.run_id).version == 0
 
 
+def test_continue_to_lab_review_preserves_source_checks_and_document(
+    seeded_store: FileSpecStore,
+) -> None:
+    from scione.reports.store import FileReportStore
+
+    document_id = seeded_store.list_documents()[0].document_id
+    run = save_static_extraction(
+        seeded_store, document_id, payload=customer_payload(needs_attention=True)
+    )
+    before = seeded_store.load_review(document_id, run.run_id)
+    app = open_specifications()
+    app = app.button(key="spec_continue_reports").click().run()
+    assert not app.exception
+    assert app.title[0].value == "Reports"
+    assert app.selectbox(key="report_document").value == document_id
+    assert app.session_state["report_view_tabs"] == "Review & confirm"
+    assert seeded_store.load_review(document_id, run.run_id) == before
+    assert seeded_store.load_extraction(document_id, run.run_id) == run
+    reports = FileReportStore(seeded_store.root.parent)
+    assert reports.list_reports() == []
+
+
 def test_list_selection_opens_first_evidence_page_and_relocate_returns_to_source(
     seeded_store: FileSpecStore,
 ) -> None:

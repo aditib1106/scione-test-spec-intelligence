@@ -37,7 +37,7 @@ from scione.specifications.store import (
     StoredSpecification,
 )
 
-_TABS = ["Capability review", "PDF preview", "Saved reports", "Developer"]
+_TABS = ["Review & confirm", "Report", "Developer"]
 _VERDICTS = {
     "unreviewed": "Conditions and scope not assessed",
     "supported": "Lab can meet the selected conditions and scope",
@@ -95,10 +95,14 @@ def _reset_editor() -> None:
     st.session_state.pop("_report_editor_context", None)
 
 
+def _show_report() -> None:
+    st.session_state["report_view_tabs"] = "Report"
+
+
 def _save_workspace(store: FileReportStore, workspace: ReportWorkspace) -> None:
     store.save_workspace(workspace, expected_version=st.session_state["_report_editor_version"])
     _reset_editor()
-    st.session_state["_report_notice"] = "Review choices saved. Generate a new PDF to capture them."
+    st.session_state["_report_notice"] = "Review saved. The report will use your updated decision."
     st.rerun()
 
 
@@ -135,6 +139,7 @@ def _prepare_editor(report: ReportSnapshot, line: GapLine) -> bool:
                 ),
                 "report_mapping_verdict": choice.capability_verdict if choice else "unreviewed",
                 "report_mapping_note": choice.note if choice else "",
+                "report_scope_note": "",
                 "report_quote_quantity": str(quantity.quantity) if quantity else "",
                 "report_quote_note": quantity.note if quantity else "",
                 "report_quote_confirm": False,
@@ -150,9 +155,7 @@ def _prepare_editor(report: ReportSnapshot, line: GapLine) -> bool:
 def _mapping_editor(
     report: ReportSnapshot, line: GapLine, store: FileReportStore, stale: bool
 ) -> None:
-    with st.expander(
-        "Adjust test matching / confirm lab scope", expanded=_needs_review(report, line)
-    ):
+    with st.expander("Change test or method / record a gap"):
         st.caption(
             "This is separate from confirming extracted content. Method substitutions are not "
             "automatically equivalent. A scope confirmation cannot make a missing method available."
@@ -195,11 +198,12 @@ def _mapping_editor(
             [None, *capabilities],
             key="report_mapping_capability",
             format_func=lambda value: (
-                f"{value} · "
-                + ", ".join(
+                ", ".join(
                     report.catalog.method_by_id(mid).identifier
                     for mid in capabilities[value].method_ids
                 )
+                + " · "
+                + (capabilities[value].declared_constraints or "No operating limits recorded")
                 if value
                 else "No specific declaration selected"
             ),
@@ -233,6 +237,73 @@ def _mapping_editor(
             candidate = report.workspace.model_copy(deep=True)
             candidate.mappings.pop(line.requirement.id, None)
             _save_workspace(store, candidate)
+
+
+def _scope_actions(
+    report: ReportSnapshot, line: GapLine, store: FileReportStore, stale: bool
+) -> None:
+    """Confirm the displayed, persisted match, never an unsaved identity edit."""
+
+    eligible = line.status in {"in_house", "condition_gap"} and line.capability is not None
+    if not eligible:
+        if line.status == "needs_review":
+            st.info("Choose the correct test and method below before confirming lab support.")
+        elif line.status in {"test_gap", "method_gap"}:
+            st.info(
+                "This test or requested method is not listed in your lab catalog. "
+                "It will appear as a gap in the report. Correct the match below if needed."
+            )
+        return
+    confirmed = _lab_scope_review(report, line) == "Confirmed by lab reviewer"
+    if confirmed:
+        st.success("Lab support confirmed for this requirement.")
+    elif line.status == "condition_gap":
+        st.warning("Your review records that the lab cannot meet this scope.")
+    else:
+        st.info("The method is listed. Please check the requirements before confirming support.")
+    action_area = st.expander("Change lab support decision") if confirmed else st.container()
+    with action_area:
+        st.caption(
+            "Confirm only if your lab can meet the displayed conditions, acceptance criteria and "
+            "applicable scope. This is not quote approval."
+        )
+        with st.expander("Add a review note"):
+            st.text_area(
+                "Review note (required when recording a limitation)",
+                key="report_scope_note",
+                max_chars=4000,
+                placeholder="Explain any limitations or add context…",
+            )
+        confirm, gap = st.columns(2)
+        supported = confirm.button(
+            "Confirm lab support",
+            key="report_confirm_scope",
+            type="primary",
+            disabled=stale,
+            width="stretch",
+        )
+        unsupported = gap.button(
+            "Cannot meet this scope", key="report_decline_scope", disabled=stale, width="stretch"
+        )
+    if supported or unsupported:
+        note = st.session_state["report_scope_note"].strip()
+        if unsupported and not note:
+            st.error("Add a review note explaining the limitation before recording this gap.")
+            return
+        candidate = report.workspace.model_copy(deep=True)
+        candidate.mappings[line.requirement.id] = MappingChoice(
+            canonical_test_id=line.canonical_test_id,
+            selected_method_codes=list(line.considered_method_codes),
+            capability_id=line.capability.id,
+            capability_verdict="supported" if supported else "unsupported",
+            lab_fingerprint=lab_fingerprint(report.lab),
+            note=note
+            or (
+                "Lab reviewer confirmed the displayed conditions, acceptance criteria "
+                "and applicable scope for this requirement."
+            ),
+        )
+        _save_workspace(store, candidate)
 
 
 def _quote_editor(
@@ -296,29 +367,50 @@ def _quote_editor(
 def _line_detail(
     report: ReportSnapshot, line: GapLine, store: FileReportStore, page_count: int
 ) -> None:
-    st.divider()
     st.subheader(line.requirement.original_test_name)
-    st.caption(f"{line.requirement.id} · {STATUS_LABELS[line.status]}")
+    st.caption(_item_status(report, line))
+    source_pages = sorted({item.page for item in line.requirement.evidence})
+    source_label = "Check extracted text"
+    if source_pages:
+        source_label += " · p. " + ", ".join(str(page) for page in source_pages)
+    if line.extraction_review_state == "needs_attention":
+        st.warning(
+            "The extracted text needs checking against the PDF in Specifications. "
+            "Confirming lab support here will not clear that check."
+        )
+    st.button(
+        source_label,
+        key="report_open_source",
+        icon=":material/open_in_new:",
+        on_click=_open_source,
+        args=(report.document_id, report.source_run.run_id, line, page_count),
+    )
     left, right = st.columns(2)
     with left:
-        st.markdown("**Customer requirement**")
-        st.write(
-            "Requested method: "
-            + (
+        with st.container(border=True):
+            st.markdown("**Customer asks for**")
+            st.write(
                 ", ".join(
                     method.code + (f" · revision {method.revision}" if method.revision else "")
                     for method in line.requirement.requested_methods
                 )
                 or "Not stated"
             )
-        )
+            st.caption("Requested method")
+    with right:
+        with st.container(border=True):
+            st.markdown("**Your lab lists**")
+            st.write(", ".join(line.lab_method_identifiers) or "No matching method listed")
+            st.caption(line.canonical_test_name or "Test identity needs confirmation")
+    with st.container(border=True):
+        st.markdown("**Requirements to check**")
         for label, values in [
             ("Conditions", line.requirement.conditions),
             ("Acceptance criteria", line.requirement.acceptance_criteria),
         ]:
             st.markdown(f"**{label}**")
             if not values:
-                st.caption("Not extracted")
+                st.caption("Not stated in the extracted content")
             for value in values:
                 st.text(
                     f"{value.name}: {value.raw_value}"
@@ -333,38 +425,18 @@ def _line_detail(
             st.markdown("**Special instructions**")
             for value in line.requirement.special_instructions:
                 st.text(value)
-    with right:
-        st.markdown("**Lab declaration**")
-        st.write("Catalog test: " + (line.canonical_test_name or "Unresolved"))
-        st.write(
-            "Lab methods: "
-            + (", ".join(line.lab_method_identifiers) or "None listed for this selection")
-        )
         if line.capability:
+            st.markdown("**Your lab's recorded limits**")
             st.text(line.capability.declared_constraints or "No operating limits declared.")
             if line.capability.notes:
                 st.caption(line.capability.notes)
-        for reason in line.reasons:
-            st.text(reason)
         if line.mapping_choice:
-            st.caption("Human review: " + line.mapping_choice.note)
-        if line.extraction_review_state == "needs_attention":
-            st.warning(
-                "The extracted content still needs review. A match does not resolve that review."
-            )
-        with st.expander("Source evidence / content review"):
-            for evidence in line.requirement.evidence:
-                st.caption(f"Source PDF page {evidence.page}")
-                st.text(evidence.quote)
-            for reason in line.extraction_review_reasons:
-                st.caption(reason)
-            st.button(
-                "Open item in Specifications",
-                key="report_open_source",
-                on_click=_open_source,
-                args=(report.document_id, report.source_run.run_id, line, page_count),
-            )
+            st.caption("Saved review note: " + line.mapping_choice.note)
+    if line.status == "excluded":
+        st.info("Excluded in Specifications. This item is not included in the quote.")
+        return
     stale = _prepare_editor(report, line)
+    _scope_actions(report, line, store, stale)
     _mapping_editor(report, line, store, stale)
     _quote_editor(report, line, store, stale)
 
@@ -402,32 +474,49 @@ def _needs_review(report: ReportSnapshot, line: GapLine) -> bool:
     )
 
 
+def _item_status(report: ReportSnapshot, line: GapLine) -> str:
+    if line.status == "excluded":
+        return "Excluded from this request"
+    if line.extraction_review_state == "needs_attention":
+        return "Check extracted text in Specifications"
+    return {
+        "in_house": (
+            "Lab support confirmed"
+            if _lab_scope_review(report, line) == "Confirmed by lab reviewer"
+            else "Confirm lab support"
+        ),
+        "needs_review": "Choose the correct test / method",
+        "test_gap": "Gap · test not listed by your lab",
+        "method_gap": "Gap · requested method not listed",
+        "condition_gap": "Gap · outside your lab's scope",
+    }[line.status]
+
+
 def _capability_review(report: ReportSnapshot, store: FileReportStore, page_count: int) -> None:
     counts = Counter(line.status for line in report.lines)
     pending = sum(_needs_review(report, line) for line in report.lines)
     for column, label, value in zip(
-        st.columns(4),
-        ["Requirement records", "Methods listed", "Catalog / scope gaps", "Need review"],
+        st.columns(3),
+        ["Need review", "Lab support confirmed", "Catalog / scope gaps"],
         [
-            len(report.lines),
-            counts["in_house"],
-            counts["test_gap"] + counts["method_gap"] + counts["condition_gap"],
             pending,
+            sum(
+                _lab_scope_review(report, line) == "Confirmed by lab reviewer"
+                for line in report.lines
+            ),
+            counts["test_gap"] + counts["method_gap"] + counts["condition_gap"],
         ],
         strict=True,
     ):
         column.metric(label, value)
     st.caption(
-        "Method listed ≠ all conditions verified. Not listed ≠ proven impossible. "
-        "Records may overlap or apply to different regions; they are not a billable test count."
+        "Check each request below. Missing catalog entries remain gaps, not proof of impossibility."
     )
-    st.caption(
-        "Source content is checked in Specifications. Here, review the test identity and "
-        "whether the lab can meet this request's conditions. Clear matches do not need "
-        "another identity decision; unresolved matches and lab scope remain visible below."
-    )
+    navigation, detail = st.columns([1, 2.4], gap="large")
     groups = ["All active", "Methods listed", "Gaps", "Needs review", "Excluded"]
-    selected = st.selectbox("Show requirements", groups, key="report_group")
+    with navigation:
+        st.subheader("Choose a test")
+        selected = st.selectbox("Show", groups, key="report_group")
     lines = [
         line
         for line in report.lines
@@ -439,6 +528,63 @@ def _capability_review(report: ReportSnapshot, store: FileReportStore, page_coun
             or (selected == "Excluded" and line.status == "excluded")
         )
     ]
+    by_id = {line.requirement.id: line for line in lines}
+    if st.session_state.get("report_item") not in by_id:
+        st.session_state["report_item"] = next(
+            (line.requirement.id for line in lines if _needs_review(report, line)),
+            next(iter(by_id), None),
+        )
+    with navigation:
+        identifier = st.selectbox(
+            "Selected test",
+            list(by_id),
+            key="report_item",
+            index=None,
+            placeholder="No tests in this group",
+            format_func=lambda value: by_id[value].requirement.original_test_name,
+        )
+        st.caption(f"{len(lines)} items in this group")
+        if identifier:
+            st.write(_item_status(report, by_id[identifier]))
+            other_pending = [
+                item.requirement.id
+                for item in lines
+                if item.requirement.id != identifier and _needs_review(report, item)
+            ]
+            if other_pending:
+                position = list(by_id).index(identifier)
+                following = [
+                    value for value in other_pending if list(by_id).index(value) > position
+                ]
+                st.button(
+                    "Next item to review",
+                    key="report_next_pending",
+                    on_click=_select_item,
+                    args=((following or other_pending)[0],),
+                    icon=":material/arrow_forward:",
+                )
+        st.divider()
+        st.button(
+            "Continue to report",
+            key="report_continue",
+            width="stretch",
+            on_click=_show_report,
+            icon=":material/description:",
+        )
+        st.caption("Unresolved items stay visible in the draft report.")
+    with detail:
+        if identifier:
+            with st.container(border=True):
+                _line_detail(report, by_id[identifier], store, page_count)
+        else:
+            st.info("No items in this group. Choose another group or continue to your report.")
+
+
+def _select_item(identifier: str) -> None:
+    st.session_state["report_item"] = identifier
+
+
+def _diagnostic_table(report: ReportSnapshot) -> None:
     st.dataframe(
         [
             {
@@ -457,7 +603,7 @@ def _capability_review(report: ReportSnapshot, store: FileReportStore, page_coun
                 }[line.extraction_review_state],
                 "Lab scope review": _lab_scope_review(report, line),
             }
-            for line in lines
+            for line in report.lines
         ],
         hide_index=True,
         width="stretch",
@@ -472,40 +618,19 @@ def _capability_review(report: ReportSnapshot, store: FileReportStore, page_coun
             "ID",
         ],
     )
-    by_id = {line.requirement.id: line for line in lines}
-    if st.session_state.get("report_item") not in by_id:
-        st.session_state["report_item"] = None
-    identifier = st.selectbox(
-        "Inspect a requirement",
-        list(by_id),
-        index=None,
-        key="report_item",
-        placeholder="Choose a test to see the requirement, lab declaration and review options",
-        format_func=lambda value: f"{value} · {by_id[value].requirement.original_test_name}",
-    )
-    if identifier:
-        _line_detail(report, by_id[identifier], store, page_count)
-    else:
-        st.info("Select a requirement above to inspect its details or adjust the matching.")
-    if report.totals_by_currency:
-        st.markdown("**Partial quote subtotal · manually selected lines only**")
-        for currency, value in report.totals_by_currency.items():
-            st.write(f"{currency} {value:,f}")
-    st.caption(
-        "Draft amounts use exact decimal arithmetic without currency-specific rounding. "
-        "Partner sourcing, unknown rates, preparation costs and lead time are not estimated."
-    )
 
 
 def _saved_label(report: ReportSnapshot) -> str:
-    return f"{report.created_at:%b %d %H:%M} · {report.lab.name} · {report.report_id[:8]} · Draft"
+    return f"{report.created_at:%b %d, %H:%M:%S} UTC · {report.lab.name} · Draft"
 
 
 def _pdf_preview(
     store: FileReportStore, reports: list[ReportSnapshot], current: ReportSnapshot
 ) -> None:
     if not reports:
-        st.info("No report saved for this specification. Use Generate PDF + JSON above.")
+        st.info(
+            "No report saved for this specification. Create a draft report above to preview it."
+        )
         return
     by_id = {report.report_id: report for report in reports}
     if st.session_state.get("report_snapshot") not in by_id:
@@ -524,22 +649,13 @@ def _pdf_preview(
         )
     st.caption("Draft for engineer review · not an approved quote or proof of capability.")
     pdf = store.read_pdf(identifier)
-    downloads = st.columns(2)
-    downloads[0].download_button(
+    st.download_button(
         "Download PDF",
         pdf,
         file_name=f"scione-gap-{identifier[:8]}.pdf",
         mime="application/pdf",
         key="report_download_pdf",
-        width="stretch",
-    )
-    downloads[1].download_button(
-        "Download JSON",
-        report.model_dump_json(indent=2),
-        file_name=f"scione-gap-{identifier[:8]}.json",
-        mime="application/json",
-        key="report_download_json",
-        width="stretch",
+        type="primary",
     )
     with pymupdf.open(stream=pdf, filetype="pdf") as document:
         page_count = len(document)
@@ -552,12 +668,123 @@ def _pdf_preview(
         st.image(_preview(pdf, page), width="stretch")
 
 
+def _report_output(
+    current: ReportSnapshot, store: FileReportStore, reports: list[ReportSnapshot]
+) -> None:
+    st.subheader("Create your draft report")
+    pending = sum(_needs_review(current, line) for line in current.lines)
+    if pending:
+        st.info(
+            f"{pending} items still need review. You can create a draft now; "
+            "unresolved items will be clearly marked, not treated as confirmed."
+        )
+    else:
+        st.success("No open item reviews. Recorded gaps will remain in the report.")
+    st.caption(
+        "Includes requested tests, conditions, lab coverage and gaps. "
+        "This draft is not a final approved quote."
+    )
+    if current.totals_by_currency:
+        st.markdown("**Partial quote subtotal · manually selected lines only**")
+        for currency, value in current.totals_by_currency.items():
+            st.write(f"{currency} {value:,f}")
+    with st.expander("Pricing included in this draft"):
+        quoted = [line for line in current.lines if line.quote]
+        if not quoted:
+            st.write("No quote quantities have been confirmed. No job total is estimated.")
+        for line in quoted:
+            quote = line.quote
+            st.write(
+                f"{line.requirement.original_test_name}: {quote.quantity:f} × "
+                f"{quote.currency} {quote.unit_price:f} / {quote.pricing_basis} = "
+                f"{quote.currency} {quote.subtotal:f}"
+            )
+        st.caption(
+            "Add quantities within a test's optional pricing section after confirming lab support. "
+            "Records may overlap and are not a billable test count. "
+            "Unknown rates, partner costs and lead times are not estimated."
+        )
+    if st.button(
+        "Create draft report", type="primary", key="report_generate", icon=":material/description:"
+    ):
+        snapshot = current.model_copy(
+            update={"report_id": str(uuid4()), "created_at": datetime.now(UTC)}
+        )
+        with st.spinner("Preparing your PDF…"):
+            pdf = render_report_pdf(snapshot)
+            store.save_report(snapshot, pdf)
+        st.session_state["report_snapshot"] = snapshot.report_id
+        st.session_state["_report_open_after_generate"] = True
+        st.session_state["_report_notice"] = "Draft report saved. Preview or download it below."
+        st.rerun()
+    st.divider()
+    st.subheader("Preview & download")
+    _pdf_preview(store, reports, current)
+
+
+def _developer(current: ReportSnapshot, reports: list[ReportSnapshot]) -> None:
+    st.caption(
+        "Local deterministic aliases / identifier matching, "
+        "not LLM confidence or standard-content comparison. No model call is needed for export."
+    )
+    st.subheader("Matching & review diagnostics")
+    _diagnostic_table(current)
+    with st.expander("Input versions & report warnings"):
+        st.json(
+            {
+                "fingerprint": current.input_fingerprint,
+                "run": current.source_run.run_id,
+                "review_version": current.source_review.version,
+                "lab_version": current.lab.version,
+                "catalog_version": current.catalog.version,
+                "workspace_version": current.workspace.version,
+            }
+        )
+        for warning in current.warnings:
+            st.text(warning)
+    with st.expander("Matching decisions / source fields"):
+        st.json([line.model_dump(mode="json") for line in current.lines], expanded=False)
+    if reports:
+        st.subheader("Saved report data")
+        selected = next(
+            (item for item in reports if item.report_id == st.session_state.get("report_snapshot")),
+            reports[0],
+        )
+        st.caption(
+            "JSON corresponds to the saved report selected in the Report tab, not unsaved edits."
+        )
+        st.download_button(
+            "Download JSON",
+            selected.model_dump_json(indent=2),
+            file_name=f"scione-gap-{selected.report_id[:8]}.json",
+            mime="application/json",
+            key="report_download_json",
+        )
+        with st.expander("Saved report history"):
+            st.dataframe(
+                [
+                    {
+                        "Report": item.report_id[:8],
+                        "Created (UTC)": item.created_at.isoformat(),
+                        "Lab version": item.lab.version,
+                        "Run": item.source_run.run_id[:8],
+                        "Records": len(item.lines),
+                        "State": "Current inputs"
+                        if item.input_fingerprint == current.input_fingerprint
+                        else "Historical snapshot",
+                    }
+                    for item in reports
+                ],
+                hide_index=True,
+                width="stretch",
+            )
+    st.caption(
+        "Saved PDFs and their JSON are immutable snapshots. Matching edits do not change them."
+    )
+
+
 def render_reports(settings: Settings) -> None:
     st.title("Reports")
-    st.caption(
-        "Compare the customer request with your lab catalog, review gaps, "
-        "then save a PDF + JSON snapshot."
-    )
     spec_store = FileSpecStore(settings.scione_workspace_dir)
     report_store = FileReportStore(settings.scione_workspace_dir)
     try:
@@ -571,14 +798,12 @@ def render_reports(settings: Settings) -> None:
         by_id = {item.document_id: item for item in summaries}
         if st.session_state.get("report_document") not in by_id:
             st.session_state["report_document"] = next(iter(by_id))
-        doc_column, action = st.columns([4, 1], vertical_alignment="bottom")
-        with doc_column:
-            document_id = st.selectbox(
-                "Customer specification",
-                list(by_id),
-                key="report_document",
-                format_func=lambda value: by_id[value].original_name,
-            )
+        document_id = st.selectbox(
+            "Customer specification",
+            list(by_id),
+            key="report_document",
+            format_func=lambda value: by_id[value].original_name,
+        )
         stored = spec_store.load_document(document_id)
         run = spec_store.load_latest_extraction(document_id)
         if run is None or not run.extraction.requirements:
@@ -605,85 +830,24 @@ def render_reports(settings: Settings) -> None:
             workspace.model_dump_json(),
             spec_store.read_pdf(document_id),
         )
-        with action:
-            if st.button(
-                "Generate PDF + JSON", type="primary", key="report_generate", width="stretch"
-            ):
-                snapshot = current.model_copy(
-                    update={"report_id": str(uuid4()), "created_at": datetime.now(UTC)}
-                )
-                with st.spinner("Building the report locally…"):
-                    pdf = render_report_pdf(snapshot)
-                    report_store.save_report(snapshot, pdf)
-                st.session_state["report_snapshot"] = snapshot.report_id
-                st.session_state["report_view_tabs"] = "PDF preview"
-                st.session_state["_report_notice"] = (
-                    "Draft report saved. PDF and JSON describe the same snapshot."
-                )
-                st.rerun()
-        st.caption(
-            f"Lab: {lab.name} · latest analysis: {run.run_id[:8]} · "
-            "No model call is needed for matching or export."
-        )
+        st.caption(f"{lab.name} · Confirm test matching and lab support, then create your report.")
         if coverage_issues(run.extraction, stored.document):
             st.warning(
-                "Some source method references may not be represented in the extraction. "
-                "Check the original specification for omissions before relying on this draft."
+                "Some tests may be missing from the extraction. Check the original PDF "
+                "for omissions before sharing the report."
             )
         reports = report_store.list_reports(document_id)
-        capability, preview, history, developer = st.tabs(
-            _TABS, key="report_view_tabs", on_change="rerun"
-        )
+        if st.session_state.pop("_report_open_after_generate", False):
+            st.session_state["report_view_tabs"] = "Report"
+        if st.session_state.get("report_view_tabs") not in _TABS:
+            st.session_state["report_view_tabs"] = _TABS[0]
+        capability, output, developer = st.tabs(_TABS, key="report_view_tabs", on_change="rerun")
         with capability:
             _capability_review(current, report_store, stored.document.page_count)
-        with preview:
-            _pdf_preview(report_store, reports, current)
-        with history:
-            if not reports:
-                st.info("No saved reports for this specification.")
-            else:
-                st.dataframe(
-                    [
-                        {
-                            "Report": item.report_id[:8],
-                            "Created (UTC)": item.created_at.isoformat(),
-                            "Lab": item.lab.name,
-                            "Lab version": item.lab.version,
-                            "Run": item.source_run.run_id[:8],
-                            "Records": len(item.lines),
-                            "State": "Current inputs"
-                            if item.input_fingerprint == current.input_fingerprint
-                            else "Historical snapshot",
-                        }
-                        for item in reports
-                    ],
-                    hide_index=True,
-                    width="stretch",
-                )
-                st.caption(
-                    "Saved reports are immutable. Choose a saved report in PDF preview "
-                    "to view or download it."
-                )
+        with output:
+            _report_output(current, report_store, reports)
         with developer:
-            st.caption(
-                "Local deterministic aliases / identifier matching, "
-                "not LLM confidence or standard-content comparison."
-            )
-            st.json(
-                {
-                    "fingerprint": current.input_fingerprint,
-                    "run": run.run_id,
-                    "review_version": review.version,
-                    "lab_version": lab.version,
-                    "catalog_version": catalog.version,
-                    "workspace_version": workspace.version,
-                }
-            )
-            with st.expander("Report warnings"):
-                for warning in current.warnings:
-                    st.text(warning)
-            with st.expander("Matching decisions / source fields"):
-                st.json([line.model_dump(mode="json") for line in current.lines], expanded=False)
+            _developer(current, reports)
     except (
         SpecStoreError,
         LabStoreError,

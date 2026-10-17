@@ -41,19 +41,18 @@ A content confirmation does not approve a catalog match or lab support.
 
 ## Create a lab-gap report
 
-1. Open **Reports** and choose an analyzed specification. Matching is local and
-   does not call a model or interpret standard procedures.
-2. Inspect **Capability review**: method listed in-house, method gap, test not
-   listed, condition/scope gap, matching review needed, or excluded. A method
-   match does not establish condition coverage, accreditation or test success.
-   An absent catalog entry does not prove a lab cannot perform a test.
-3. Select a requirement to compare its source-stated conditions, criteria and
-   scope with the lab's declaration. **Adjust test matching / confirm lab scope**
-   records a separate human decision, with an explanation. Resolve content flags
-   in **Specifications**; matching confirmation does not clear content flags.
-   **Needs review** includes unclear identities, source-content flags, and listed
-   methods whose conditions/scope still need a lab reviewer. The table separates
-   content review from lab scope review; relevant review controls open automatically.
+1. In **Specifications**, check the extracted text against the original PDF.
+   **Continue to lab review** opens the same document in **Reports**. Confirming
+   source text does not approve the matched test or the lab's capability.
+2. **Review & confirm** opens a pending test automatically. Compare **Customer
+   asks for** with **Your lab lists**, check conditions, criteria and scope, then
+   **Confirm lab support**, or record why the lab **Cannot meet this scope**.
+   A method match alone is not condition coverage, accreditation or test success.
+   Missing catalog entries remain gaps, not proof a lab cannot perform a test.
+3. Use **Change test or method / record a gap** when the identity or method needs
+   correction. Decisions remain separate from extracted source text; **Check
+   extracted text** returns to the corresponding highlighted item in Specifications.
+   Confirmed support is shown explicitly, with decision changes collapsed.
 4. Pricing is optional. A declared catalog rate remains a reference rate until
    lab support, applicable scope and quantity/pricing basis are explicitly
    confirmed. Quote subtotals include only manually selected eligible lines and
@@ -61,10 +60,12 @@ A content confirmation does not approve a catalog match or lab support.
    Changes to lab declarations or prices require scope and quantity reconfirmation.
    Overlapping overview/detail records and regional
    alternatives must not be counted as independent chargeable tests.
-5. **Generate PDF + JSON** saves a draft snapshot. **PDF preview** shows the exact
-   downloadable PDF with page navigation. **Saved reports** retains history;
-   changed inputs mark older snapshots as historical instead of rewriting them.
-   **Developer** is the last tab for matching provenance and structured fields.
+5. **Continue to report** opens **Report**. **Create draft report** saves the PDF
+   and its JSON snapshot locally, without calling a model. Pending reviews remain
+   marked in the draft. Preview, download or choose an earlier saved PDF here.
+   Changed inputs mark older snapshots as historical instead of rewriting them.
+   **Developer**, the last tab, holds the diagnostic matrix, technical provenance,
+   structured fields, history details and the saved report's JSON download.
 
 The PDF is a lab-facing business report: test requests, customer conditions and
 acceptance criteria, lab methods/limits, gaps, pending decisions, source pages and

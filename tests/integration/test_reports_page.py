@@ -16,6 +16,7 @@ from scione.catalogs import FileLabStore, LabCapability, load_reference_catalog
 from scione.config import Settings
 from scione.providers.gemini import GeminiModelProvider
 from scione.providers.groq import GroqModelProvider
+from scione.reports.matching import lab_fingerprint
 from scione.reports.models import MappingChoice
 from scione.reports.store import FileReportStore
 from scione.specifications.models import CustomerExtractionRun
@@ -25,7 +26,7 @@ APP = Path(__file__).parents[2] / "src" / "scione" / "web" / "app.py"
 PENCIL_QUOTE = "Pencil hardness: ISO 15184, 750 g load; at least F."
 ADHESION_QUOTE = "Cross-cut adhesion: ISO 2409, 2 mm spacing; GT 0 to 1."
 PULL_QUOTE = "Pull-off adhesion: ISO 4624, 20 mm dolly; at least 5 MPa."
-TABS = ["Capability review", "PDF preview", "Saved reports", "Developer"]
+TABS = ["Review & confirm", "Report", "Developer"]
 
 
 @pytest.fixture(autouse=True)
@@ -168,7 +169,28 @@ def quote_submit(app: AppTest):
 
 
 def pending_review_count(app: AppTest) -> int:
-    return int(next(metric.value for metric in app.metric if metric.label == "Need review"))
+    return int(
+        next(
+            metric.value
+            for metric in app.metric
+            if metric.label in {"Need review", "Needs review", "To review", "Need your review"}
+        )
+    )
+
+
+def requirement_matrix(app: AppTest):
+    """The full diagnostic comparison belongs only in the Developer tab."""
+
+    return next(
+        table.value
+        for table in app.tabs[-1].dataframe
+        if "ID" in table.value.columns and "Lab scope review" in table.value.columns
+    )
+
+
+def requirement_choices(app: AppTest) -> list[str]:
+    selector = next((item for item in app.selectbox if item.key == "report_item"), None)
+    return selector.options if selector is not None else []
 
 
 def test_empty_reports_provide_next_step_without_saving_fake_report(stores) -> None:
@@ -204,7 +226,7 @@ def test_current_comparison_distinguishes_method_match_wrong_method_and_missing_
     app = open_reports()
     assert not app.exception
     assert [tab.label for tab in app.tabs] == TABS
-    table = app.tabs[0].dataframe[0].value.set_index("ID")
+    table = requirement_matrix(app).set_index("ID")
     assert table.loc["req_pencil", "Result"] == "Method listed in-house"
     assert table.loc["req_adhesion", "Result"] == "Method gap"
     assert table.loc["req_pull", "Result"] == "Not in lab catalog"
@@ -219,25 +241,181 @@ def test_current_comparison_distinguishes_method_match_wrong_method_and_missing_
     assert not reports.root.exists()
 
 
+def test_user_review_opens_first_pending_item_without_a_diagnostic_matrix(stores) -> None:
+    seed(stores)
+    app = open_reports()
+    assert not app.exception
+    assert [tab.label for tab in app.tabs] == TABS
+    assert app.selectbox(key="report_item").value == "req_pencil"
+    assert app.button(key="report_confirm_scope").label == "Confirm lab support"
+    assert not app.button(key="report_confirm_scope").disabled
+    assert not app.tabs[0].dataframe
+    assert not app.tabs[0].json
+    assert not app.tabs[1].json
+    assert requirement_matrix(app).shape[0] == 3
+    assert any(button.key == "report_generate" for button in app.tabs[1].button)
+    assert not any(button.key == "report_generate" for button in app.tabs[0].button)
+    assert app.button(key="report_open_source")
+    editor = next(
+        expander
+        for expander in app.expander
+        if expander.label == "Change test or method / record a gap"
+    )
+    assert not editor.proto.expanded
+
+
+def test_direct_support_confirmation_uses_displayed_match_not_unsaved_advanced_edits(
+    stores,
+) -> None:
+    document, run = seed(stores, count=1)
+    specs, reports, labs = stores
+    source_review = specs.load_review(document.document_id, run.run_id)
+    app = open_reports()
+    app.selectbox(key="report_mapping_test").set_value(None)
+    app.selectbox(key="report_mapping_capability").set_value(None)
+    app.multiselect(key="report_mapping_methods").set_value([])
+    app.selectbox(key="report_mapping_verdict").set_value("unsupported")
+    app.text_area(key="report_mapping_note").set_value("Unsaved advanced draft.")
+    app = app.button(key="report_confirm_scope").click().run()
+    assert not app.exception
+    saved = reports.load_workspace(document.document_id, run.run_id)
+    choice = saved.mappings["req_pencil"]
+    assert choice.canonical_test_id == "pencil_hardness"
+    assert choice.selected_method_codes == ["ISO 15184"]
+    assert choice.capability_id == "cap_pencil"
+    assert choice.capability_verdict == "supported"
+    assert choice.lab_fingerprint == lab_fingerprint(labs.load_or_create())
+    assert "confirmed the displayed conditions" in choice.note
+    assert "Unsaved advanced draft" not in choice.note
+    assert not saved.quantities
+    assert pending_review_count(app) == 0
+    assert specs.load_review(document.document_id, run.run_id) == source_review
+    assert specs.load_extraction(document.document_id, run.run_id) == run
+
+
+def test_user_can_continue_to_report_without_saving_or_confirming_pending_items(stores) -> None:
+    document, run = seed(stores, count=1)
+    specs, reports, _ = stores
+    app = open_reports().button(key="report_continue").click().run()
+    assert not app.exception
+    assert app.session_state["report_view_tabs"] == "Report"
+    assert pending_review_count(app) == 1
+    assert reports.list_reports(document.document_id) == []
+    assert reports.load_workspace(document.document_id, run.run_id).version == 0
+    assert not specs.load_review(document.document_id, run.run_id).decisions
+
+
+def test_reopening_review_selects_a_pending_item_instead_of_an_already_supported_one(
+    stores,
+) -> None:
+    document, run = seed(stores, count=2)
+    specs, reports, labs = stores
+    changed = run.model_copy(deep=True)
+    changed.run_id = str(uuid4())
+    changed.extraction.review_issues = ["req_adhesion: check this customer scope."]
+    specs.save_extraction(document.document_id, changed)
+    workspace = reports.load_workspace(document.document_id, changed.run_id)
+    workspace.mappings["req_pencil"] = MappingChoice(
+        canonical_test_id="pencil_hardness",
+        selected_method_codes=["ISO 15184"],
+        capability_id="cap_pencil",
+        capability_verdict="supported",
+        lab_fingerprint=lab_fingerprint(labs.load_or_create()),
+        note="Lab reviewer checked the pencil hardness conditions.",
+    )
+    reports.save_workspace(workspace, expected_version=0)
+    app = open_reports()
+    assert not app.exception
+    assert app.selectbox(key="report_item").value == "req_adhesion"
+    assert pending_review_count(app) == 1
+
+
+def test_direct_support_confirmation_keeps_source_flags_and_quote_block(stores) -> None:
+    document, run = seed(stores, count=1)
+    specs, reports, _ = stores
+    changed = run.model_copy(deep=True)
+    changed.run_id = str(uuid4())
+    changed.extraction.review_issues = ["req_pencil: source conditions require checking."]
+    specs.save_extraction(document.document_id, changed)
+    source_review = specs.load_review(document.document_id, changed.run_id)
+    app = open_reports().button(key="report_confirm_scope").click().run()
+    assert not app.exception
+    assert pending_review_count(app) == 1
+    assert quote_submit(app).disabled
+    row = requirement_matrix(app).set_index("ID").loc["req_pencil"]
+    assert row["Content review"] == "Needs review"
+    assert row["Lab scope review"] == "Confirmed by lab reviewer"
+    assert specs.load_review(document.document_id, changed.run_id) == source_review
+    assert specs.load_extraction(document.document_id, changed.run_id) == changed
+    assert reports.load_workspace(document.document_id, changed.run_id).version == 1
+
+
+def test_direct_support_action_cannot_promote_a_method_gap(stores) -> None:
+    document, run = seed(stores)
+    _, reports, _ = stores
+    app = open_reports().selectbox(key="report_item").set_value("req_adhesion").run()
+    assert not app.exception
+    direct = next((button for button in app.button if button.key == "report_confirm_scope"), None)
+    assert direct is None or direct.disabled
+    assert reports.load_workspace(document.document_id, run.run_id).version == 0
+    assert quote_submit(app).disabled
+
+
+def test_direct_support_action_cannot_overwrite_a_stale_matching_editor(stores) -> None:
+    document, run = seed(stores, count=1)
+    _, reports, _ = stores
+    app = open_reports()
+    candidate = reports.load_workspace(document.document_id, run.run_id)
+    candidate.mappings["req_pencil"] = MappingChoice(
+        canonical_test_id="pencil_hardness", note="Another reviewer updated this mapping."
+    )
+    saved = reports.save_workspace(candidate, expected_version=0)
+    app = app.run()
+    assert not app.exception
+    assert app.button(key="report_confirm_scope").disabled
+    assert "changed" in all_text(app).lower()
+    assert reports.load_workspace(document.document_id, run.run_id) == saved
+
+
+def test_direct_scope_gap_requires_a_note_and_keeps_original_source(stores) -> None:
+    document, run = seed(stores, count=1)
+    specs, reports, _ = stores
+    app = open_reports().button(key="report_decline_scope").click().run()
+    assert not app.exception
+    assert "Add a review note" in all_text(app)
+    assert reports.load_workspace(document.document_id, run.run_id).version == 0
+    app.text_area(key="report_scope_note").set_value("Our fixture cannot hold this customer part.")
+    app = app.button(key="report_decline_scope").click().run()
+    assert not app.exception
+    saved = reports.load_workspace(document.document_id, run.run_id)
+    assert saved.mappings["req_pencil"].capability_verdict == "unsupported"
+    row = requirement_matrix(app).set_index("ID").loc["req_pencil"]
+    assert row["Lab scope review"] == "Outside lab scope"
+    assert quote_submit(app).disabled
+    assert specs.load_extraction(document.document_id, run.run_id) == run
+    assert not specs.load_review(document.document_id, run.run_id).decisions
+
+
 def test_method_match_without_source_flags_still_needs_lab_scope_review(stores) -> None:
     seed(stores, count=1)
     app = open_reports()
     assert not app.exception
     assert pending_review_count(app) == 1
-    row = app.tabs[0].dataframe[0].value.set_index("ID").loc["req_pencil"]
+    row = requirement_matrix(app).set_index("ID").loc["req_pencil"]
     assert row["Result"] == "Method listed in-house"
     assert row["Content review"] == "No row flags"
     assert row["Lab scope review"] == "Pending lab review"
     app = app.selectbox(key="report_group").set_value("Needs review").run()
     assert not app.exception
-    assert list(app.tabs[0].dataframe[0].value["ID"]) == ["req_pencil"]
+    assert len(requirement_choices(app)) == 1
+    assert "Pencil hardness" in requirement_choices(app)[0]
     app = inspect_pencil(app)
     editor = next(
         expander
         for expander in app.expander
-        if expander.label == "Adjust test matching / confirm lab scope"
+        if expander.label == "Change test or method / record a gap"
     )
-    assert editor.proto.expanded
+    assert not editor.proto.expanded
     assert "Test identity" in all_text(app)
     assert "Lab capability for this request" in all_text(app)
 
@@ -249,12 +427,12 @@ def test_current_lab_scope_confirmation_removes_ready_row_from_pending_review(st
     app = save_support(inspect_pencil(open_reports()))
     assert not app.exception
     assert pending_review_count(app) == 0
-    row = app.tabs[0].dataframe[0].value.set_index("ID").loc["req_pencil"]
+    row = requirement_matrix(app).set_index("ID").loc["req_pencil"]
     assert row["Content review"] == "No row flags"
     assert row["Lab scope review"] == "Confirmed by lab reviewer"
     app = app.selectbox(key="report_group").set_value("Needs review").run()
     assert not app.exception
-    assert app.tabs[0].dataframe[0].value.empty
+    assert not requirement_choices(app)
     assert specs.load_review(document.document_id, run.run_id) == source_review
 
 
@@ -269,12 +447,13 @@ def test_lab_scope_confirmation_does_not_clear_unresolved_source_review(stores) 
     app = save_support(inspect_pencil(open_reports()))
     assert not app.exception
     assert pending_review_count(app) == 1
-    row = app.tabs[0].dataframe[0].value.set_index("ID").loc["req_pencil"]
+    row = requirement_matrix(app).set_index("ID").loc["req_pencil"]
     assert row["Content review"] == "Needs review"
     assert row["Lab scope review"] == "Confirmed by lab reviewer"
     assert quote_submit(app).disabled
     app = app.selectbox(key="report_group").set_value("Needs review").run()
-    assert list(app.tabs[0].dataframe[0].value["ID"]) == ["req_pencil"]
+    assert len(requirement_choices(app)) == 1
+    assert "Pencil hardness" in requirement_choices(app)[0]
     assert specs.load_review(document.document_id, changed.run_id) == source_review
     assert specs.load_extraction(document.document_id, changed.run_id) == changed
     assert (
@@ -298,10 +477,11 @@ def test_lab_declaration_change_returns_previously_confirmed_scope_to_pending(st
     app = app.run()
     assert not app.exception
     assert pending_review_count(app) == 1
-    row = app.tabs[0].dataframe[0].value.set_index("ID").loc["req_pencil"]
+    row = requirement_matrix(app).set_index("ID").loc["req_pencil"]
     assert row["Lab scope review"] == "Pending lab review"
     app = app.selectbox(key="report_group").set_value("Needs review").run()
-    assert list(app.tabs[0].dataframe[0].value["ID"]) == ["req_pencil"]
+    assert len(requirement_choices(app)) == 1
+    assert "Pencil hardness" in requirement_choices(app)[0]
     assert reports.load_workspace(document.document_id, run.run_id) == workspace_before
     assert specs.load_review(document.document_id, run.run_id) == source_review
 
@@ -313,7 +493,7 @@ def test_reviewer_can_mark_method_listed_requirement_outside_lab_scope(stores) -
     app.text_area(key="report_mapping_note").set_value("Lab cannot handle this customer scope.")
     app = app.button(key="report_save_mapping").click().run()
     assert not app.exception
-    row = app.tabs[0].dataframe[0].value.set_index("ID").loc["req_pencil"]
+    row = requirement_matrix(app).set_index("ID").loc["req_pencil"]
     assert row["Result"] == "Condition / scope gap"
     assert row["Lab scope review"] == "Outside lab scope"
     assert quote_submit(app).disabled
@@ -324,11 +504,14 @@ def test_groups_filter_table_and_clear_inspected_item_when_outside_group(stores)
     app = inspect_pencil(open_reports())
     app = app.selectbox(key="report_group").set_value("Gaps").run()
     assert not app.exception
-    assert set(app.tabs[0].dataframe[0].value["ID"]) == {"req_adhesion", "req_pull"}
-    assert app.selectbox(key="report_item").value is None
+    choices = "\n".join(requirement_choices(app))
+    assert "Cross-cut adhesion" in choices
+    assert "Pull-off adhesion" in choices
+    assert "Pencil hardness" not in choices
+    assert app.selectbox(key="report_item").value != "req_pencil"
     app = app.selectbox(key="report_group").set_value("Excluded").run()
     assert not app.exception
-    assert not app.tabs[0].dataframe[0].value.shape[0]
+    assert not requirement_choices(app)
 
 
 def test_matching_requires_note_and_remains_separate_from_source_review(stores) -> None:
@@ -388,7 +571,7 @@ def test_scope_confirmation_cannot_promote_wrong_method_to_support_or_quote(stor
     app.text_area(key="report_mapping_note").set_value("User claims support; wrong method remains.")
     app = app.button(key="report_save_mapping").click().run()
     assert not app.exception
-    row = app.tabs[0].dataframe[0].value.set_index("ID").loc["req_adhesion"]
+    row = requirement_matrix(app).set_index("ID").loc["req_adhesion"]
     assert row["Result"] == "Method gap"
     assert quote_submit(app).disabled
 
@@ -403,6 +586,7 @@ def test_generate_saves_consistent_pdf_json_and_exact_download_preview(
     downloads: dict[str, Any] = {}
     previews: list[tuple[bytes, int]] = []
     original_download = DeltaGenerator.download_button
+    original_top_download = reports_page.st.download_button
     original_preview = reports_page._preview
 
     def capture_download(self, label, data, *args, **kwargs):
@@ -413,7 +597,12 @@ def test_generate_saves_consistent_pdf_json_and_exact_download_preview(
         previews.append((pdf, page))
         return original_preview(pdf, page)
 
+    def capture_top_download(label, data, *args, **kwargs):
+        downloads[kwargs.get("key", label)] = data
+        return original_top_download(label, data, *args, **kwargs)
+
     monkeypatch.setattr(DeltaGenerator, "download_button", capture_download)
+    monkeypatch.setattr(reports_page.st, "download_button", capture_top_download)
     monkeypatch.setattr(reports_page, "_preview", capture_preview)
     app = open_reports()
     app = app.button(key="report_generate").click().run()
@@ -425,11 +614,16 @@ def test_generate_saves_consistent_pdf_json_and_exact_download_preview(
     assert snapshot.source_run == run
     assert len(snapshot.lines) == 3
     assert not snapshot.totals_by_currency
-    assert app.session_state["report_view_tabs"] == "PDF preview"
+    assert app.session_state["report_view_tabs"] == "Report"
     assert app.selectbox(key="report_snapshot").value == snapshot.report_id
     assert app.number_input(key="report_pdf_page").value == 1
     assert downloads["report_download_pdf"] == reports.read_pdf(snapshot.report_id)
     assert type(snapshot).model_validate_json(downloads["report_download_json"]) == snapshot
+    report_downloads = {item.proto.label for item in app.tabs[1].get("download_button")}
+    developer_downloads = {item.proto.label for item in app.tabs[2].get("download_button")}
+    assert "Download PDF" in report_downloads
+    assert "Download JSON" not in report_downloads
+    assert "Download JSON" in developer_downloads
     with pymupdf.open(stream=downloads["report_download_pdf"], filetype="pdf") as pdf:
         text = "\n".join(page.get_text() for page in pdf)
         assert "Draft" in text or "DRAFT" in text
@@ -553,7 +747,7 @@ def test_explicit_quote_enters_saved_snapshot_but_excluded_source_is_never_bille
     )
     app = app.run()
     assert not app.exception
-    assert not app.tabs[0].dataframe[0].value.shape[0]
+    assert not requirement_choices(app)
     app = app.button(key="report_generate").click().run()
     assert not app.exception
     after = reports.list_reports(document.document_id)[0]
@@ -608,7 +802,7 @@ def test_lab_pricing_change_requires_scope_then_quantity_reconfirmation(stores) 
     assert quote_submit(app).disabled
     app = app.selectbox(key="report_group").set_value("Needs review").run()
     assert not app.exception
-    row = app.tabs[0].dataframe[0].value.set_index("ID").loc["req_pencil"]
+    row = requirement_matrix(app).set_index("ID").loc["req_pencil"]
     assert row["Result"] == "Method listed in-house"
     assert "saved quantity was not priced" in all_text(app)
     app = app.button(key="report_reload_editor").click().run()
