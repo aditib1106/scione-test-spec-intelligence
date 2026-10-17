@@ -10,10 +10,10 @@ from scione.config import Settings
 from scione.web.developer import render_developer_diagnostics
 from scione.web.portal import (
     render_my_lab,
-    render_pending_page,
     render_test_catalog,
     render_workspace_navigation,
 )
+from scione.web.reports import render_reports
 from scione.web.specifications import render_specifications
 
 
@@ -165,7 +165,7 @@ def main() -> None:
         render_specifications(settings)
         return
     if page == "Reports":
-        render_pending_page(page)
+        render_reports(settings)
         return
     try:
         catalog = load_reference_catalog()

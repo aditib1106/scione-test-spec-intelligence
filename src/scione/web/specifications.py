@@ -739,7 +739,10 @@ def _render_review_panel(
 
 def render_specifications(settings: Settings) -> None:
     st.title("Specifications")
-    st.caption("Upload a specification, then review only the items that need your attention.")
+    st.caption(
+        "Check extracted content against the original specification. Test identity and lab "
+        "capability are reviewed separately in Reports; confirming content does not approve them."
+    )
     store = FileSpecStore(settings.scione_workspace_dir)
     try:
         notice = st.session_state.pop("_spec_notice", None)

@@ -108,12 +108,12 @@ def test_workspace_navigation_does_not_create_model_runs(tmp_path: Path) -> None
     assert not list(store.root.rglob("run.json"))
 
 
-def test_reports_are_marked_as_unimplemented() -> None:
+def test_reports_explain_that_a_specification_is_needed() -> None:
     app = AppTest.from_file(str(APP), default_timeout=10).run()
     app = open_workspace_page(app, "Reports")
 
     assert not app.exception
-    assert any("Not implemented yet" in info.value for info in app.info)
+    assert any("No specifications saved yet" in info.value for info in app.info)
     assert not app.get("download_button")
 
 

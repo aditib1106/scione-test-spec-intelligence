@@ -29,12 +29,56 @@ Implemented:
   review decisions. Compare model/prompt metadata and output differences, inspect
   source highlights, and download expanded predictions or untouched provider text.
   Counts and local checks are not accuracy scores; neither run is ground truth.
+- **Reports**: local test/alias and method-identifier matching against the lab's
+  declarations, separate human matching/scope decisions, optional manual quote
+  quantities, and immutable draft PDF/JSON snapshots with paged PDF previews.
 
-Canonical mapping decisions, interactive AI chat, lab matching and gap-report
-generation are not implemented yet. **Reports** is a clearly labeled placeholder.
+Interactive AI chat, partner inventories, automatic quantity/lead-time estimates
+and formal quote approval are not implemented.
 There is no production database or authentication. Demo lab entries/catalog/prices
 are synthetic declarations, not verified capability, accreditation or quotations.
 A content confirmation does not approve a catalog match or lab support.
+
+## Create a lab-gap report
+
+1. Open **Reports** and choose an analyzed specification. Matching is local and
+   does not call a model or interpret standard procedures.
+2. Inspect **Capability review**: method listed in-house, method gap, test not
+   listed, condition/scope gap, matching review needed, or excluded. A method
+   match does not establish condition coverage, accreditation or test success.
+   An absent catalog entry does not prove a lab cannot perform a test.
+3. Select a requirement to compare its source-stated conditions, criteria and
+   scope with the lab's declaration. **Adjust test matching / confirm lab scope**
+   records a separate human decision, with an explanation. Resolve content flags
+   in **Specifications**; matching confirmation does not clear content flags.
+   **Needs review** includes unclear identities, source-content flags, and listed
+   methods whose conditions/scope still need a lab reviewer. The table separates
+   content review from lab scope review; relevant review controls open automatically.
+4. Pricing is optional. A declared catalog rate remains a reference rate until
+   lab support, applicable scope and quantity/pricing basis are explicitly
+   confirmed. Quote subtotals include only manually selected eligible lines and
+   stay separate by currency, without applying currency-specific rounding.
+   Changes to lab declarations or prices require scope and quantity reconfirmation.
+   Overlapping overview/detail records and regional
+   alternatives must not be counted as independent chargeable tests.
+5. **Generate PDF + JSON** saves a draft snapshot. **PDF preview** shows the exact
+   downloadable PDF with page navigation. **Saved reports** retains history;
+   changed inputs mark older snapshots as historical instead of rewriting them.
+   **Developer** is the last tab for matching provenance and structured fields.
+
+The PDF is a lab-facing business report: test requests, customer conditions and
+acceptance criteria, lab methods/limits, gaps, pending decisions, source pages and
+available pricing. It does not print model diagnostics, internal IDs, full source
+quotations, hashes, or an audit appendix. Those remain in Developer / the full JSON
+snapshot. Excluded items are summarized as outside scope, not priced as active tests.
+
+JSON snapshots preserve the extraction run, original requirement fields/evidence,
+content review, lab/catalog versions and matching/quantity decisions. Unknown partner
+costs, sample preparation, missing rates and lead times are not fabricated.
+All exports are drafts for engineer review, not approved quotations or capability
+certifications. Local reports/working decisions live under ignored `local_data/`.
+Existing PDF snapshots stay immutable: generate a new report after an application
+layout update rather than expecting an old saved PDF to change.
 
 ## Setup
 

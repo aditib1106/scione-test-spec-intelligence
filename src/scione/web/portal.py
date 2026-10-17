@@ -381,13 +381,3 @@ def render_test_catalog(catalog: ReferenceCatalog) -> None:
             width="stretch",
             hide_index=True,
         )
-
-
-def render_pending_page(page: str) -> None:
-    st.title(page)
-    st.info(
-        "Not implemented yet: reviewed requirements will be matched against this lab's "
-        "declared capabilities to generate a PDF gap report and JSON "
-        "from the same saved results."
-    )
-    st.caption("No report, model accuracy or capability-match result is being simulated here.")
