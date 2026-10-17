@@ -228,3 +228,11 @@ docs/*.pdf
 /runs/
 uploads/
 /local_data/
+
+# Additional local secrets and client reference
+.env.*
+!.env.example
+/key.md
+/credentials*.json
+/service-account*.json
+/(Liyang's provided SPEC) MS-PNT-410 Material Performance Standard Exterior Topcoat System.pdf

@@ -70,12 +70,30 @@ def _safe_api_error_message(exc: groq.APIError) -> str:
                 )
                 if quota:
                     kind, limit, requested = quota.groups()
+                    if kind == "OTPM":
+                        explanation = (
+                            "This is a per-minute output allowance, not the context-window "
+                            "size. Check the requested output-token ceiling; lowering it "
+                            "can truncate extraction. Waiting alone will not fix a request "
+                            "that exceeds the whole minute's allowance."
+                        )
+                    elif kind in {"TPM", "ITPM"}:
+                        explanation = (
+                            "This is a per-minute token allowance, not proof that the model's "
+                            "context window is full. Check input and reserved output tokens. "
+                            "Full-context coverage passes do not reduce input tokens."
+                        )
+                    else:
+                        explanation = "Check this account's quota and reset time before retrying."
                     return (
-                        "Groq rate limit exceeded: "
+                        "HTTP 429 — Groq rate limit exceeded: "
                         f"{kind} limit {limit}, this request needs {requested}. "
-                        "The current full-document output is too large for this limit."
+                        f"{explanation}"
                     )
-                return "Groq rate limit exceeded. Try again after the limit resets."
+                return (
+                    "HTTP 429 — Groq rate limit exceeded. Check the account quota and "
+                    "reset time; the response did not identify a usable token limit."
+                )
 
             for key in ("type", "code", "param"):
                 value = error.get(key)
@@ -164,7 +182,29 @@ class GroqModelProvider(ModelProvider):
             ) from exc
 
         latency_ms = (perf_counter() - started) * 1000
-        content = completion.choices[0].message.content
+        if not completion.choices:
+            raise ProviderError("Groq returned no structured response candidates.")
+        choice = completion.choices[0]
+        finish_reason = getattr(choice, "finish_reason", None)
+        if finish_reason is not None and finish_reason != "stop":
+            # Only echo documented metadata, never arbitrary provider text.
+            safe_reason = (
+                finish_reason
+                if isinstance(finish_reason, str)
+                and finish_reason in {"length", "tool_calls", "function_call", "content_filter"}
+                else "unknown"
+            )
+            raise ProviderError(
+                "Groq did not complete structured generation "
+                f"(finish_reason={safe_reason}). No structured result was accepted."
+                + (
+                    " The output-token ceiling was reached; reducing it further will not "
+                    "fix completeness. Use a narrower extraction scope or a suitable quota."
+                    if safe_reason == "length"
+                    else ""
+                )
+            )
+        content = choice.message.content
         if not content:
             raise ProviderError("Groq returned an empty structured response.")
 
