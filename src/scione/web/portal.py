@@ -19,6 +19,41 @@ WORKSPACE_PAGES = ["My Lab", "Test Catalog", "Specifications", "Reports", "Devel
 NEW_CAPABILITY = "__new__"
 
 
+def _select_workspace(page: str) -> None:
+    st.session_state["workspace_page"] = page
+
+
+def render_workspace_navigation() -> str:
+    """Use real menu buttons instead of disguising a single-choice input as navigation."""
+
+    if st.session_state.get("workspace_page") not in WORKSPACE_PAGES:
+        st.session_state["workspace_page"] = WORKSPACE_PAGES[0]
+    with st.sidebar.container(key="workspace_navigation"):
+        for page in WORKSPACE_PAGES[:-1]:
+            st.button(
+                page,
+                key="nav_" + page.lower().replace(" ", "_"),
+                width="stretch",
+                type="primary" if st.session_state["workspace_page"] == page else "secondary",
+                on_click=_select_workspace,
+                args=(page,),
+            )
+        with st.expander("Developer tools"):
+            st.button(
+                "Developer Tools",
+                key="nav_developer_tools",
+                width="stretch",
+                type=(
+                    "primary"
+                    if st.session_state["workspace_page"] == "Developer Tools"
+                    else "secondary"
+                ),
+                on_click=_select_workspace,
+                args=("Developer Tools",),
+            )
+    return st.session_state["workspace_page"]
+
+
 def _method_label(catalog: ReferenceCatalog, method_id: str) -> str:
     method = catalog.method_by_id(method_id)
     return method.identifier + (f" · {method.edition}" if method.edition else "")
@@ -27,13 +62,24 @@ def _method_label(catalog: ReferenceCatalog, method_id: str) -> str:
 def _capability_label(catalog: ReferenceCatalog, capability: LabCapability) -> str:
     name = catalog.test_by_id(capability.canonical_test_id).name
     methods = ", ".join(_method_label(catalog, item) for item in capability.method_ids)
-    return f"{name} · {methods or 'method not specified'} · {capability.id[-6:]}"
+    return f"{name} · {methods or 'method not specified'}"
 
 
 def _price_label(capability: LabCapability) -> str:
     if capability.price is None:
         return "Not supplied"
     return f"{capability.currency} {capability.price:f} / {capability.pricing_basis}"
+
+
+def _open_capability_editor(choice: str) -> None:
+    st.session_state["capability_editor_choice"] = choice
+    st.session_state["_capability_editor_open"] = True
+    st.session_state.pop("_capability_editor_signature", None)
+
+
+def _close_capability_editor() -> None:
+    st.session_state["_capability_editor_open"] = False
+    st.session_state.pop("_capability_editor_signature", None)
 
 
 def _initial_editor_values(lab: LabProfile, catalog: ReferenceCatalog, choice: str) -> None:
@@ -116,29 +162,20 @@ def _save_capability(
     if st.session_state.get("_lab_details_version") == lab.version:
         st.session_state["_lab_details_version"] = lab.version + 1
     st.session_state.pop("_capability_editor_signature", None)
-    st.session_state["_capability_open_after_save"] = capability.id
-    st.session_state["_workspace_notice"] = "Capability saved locally. No model request was made."
+    st.session_state["_capability_editor_open"] = False
+    st.session_state["_workspace_notice"] = "Test saved. Your lab's list is up to date."
     st.rerun()
 
 
 def _render_capability_editor(
     store: FileLabStore, lab: LabProfile, catalog: ReferenceCatalog
 ) -> None:
-    st.subheader("Add or edit a capability")
-    by_id = {item.id: item for item in lab.capabilities}
-    pending = st.session_state.pop("_capability_open_after_save", None)
-    if pending in by_id:
-        st.session_state["capability_editor_choice"] = pending
-    choice = st.selectbox(
-        "Capability to edit",
-        [NEW_CAPABILITY, *by_id],
-        key="capability_editor_choice",
-        format_func=lambda value: (
-            "Add new capability"
-            if value == NEW_CAPABILITY
-            else _capability_label(catalog, by_id[value])
-        ),
-    )
+    choice = st.session_state["capability_editor_choice"]
+    if choice != NEW_CAPABILITY and not any(item.id == choice for item in lab.capabilities):
+        st.warning("This test is no longer in your lab's list. Choose another test to edit.")
+        _close_capability_editor()
+        return
+    st.subheader("Add a test" if choice == NEW_CAPABILITY else "Edit test")
     _initial_editor_values(lab, catalog, choice)
     if st.session_state["_capability_editor_version"] != lab.version:
         st.warning("The saved lab changed after this draft loaded. Reload before saving.")
@@ -146,7 +183,7 @@ def _render_capability_editor(
             st.session_state.pop("_capability_editor_signature", None)
             _initial_editor_values(lab, catalog, choice)
     test_id = st.selectbox(
-        "Test from the shared catalog",
+        "Test",
         [item.id for item in catalog.tests],
         key="capability_test_id",
         format_func=lambda value: catalog.test_by_id(value).name,
@@ -155,23 +192,26 @@ def _render_capability_editor(
     if st.session_state.get("_capability_editor_test") != test_id:
         st.session_state["capability_method_ids"] = test.method_ids[:1]
         st.session_state["_capability_editor_test"] = test_id
-    st.caption(test.description)
     method_ids = st.multiselect(
-        "Methods this lab declares it can perform",
+        "Methods your lab offers",
         test.method_ids,
         key="capability_method_ids",
         format_func=lambda value: _method_label(catalog, value),
-        help="Listed methods are choices, not interchangeable procedures or verified capabilities.",
+        help=(
+            "Choose the procedures your lab uses. "
+            "Different methods are not automatically equivalent."
+        ),
     )
     if not method_ids:
-        st.info("No method declared. Future spec matching will need method review.")
+        st.caption("No method selected. You can add one later; matching will need a review.")
     st.text_area(
-        "Declared operating limits / conditions",
+        "Operating conditions or limits",
         key="capability_constraints",
         placeholder="For example: 23 °C only; minimum panel size; instrument limits.",
     )
-    st.text_area("Notes", key="capability_notes")
-    has_price = st.checkbox("Record an optional demo price", key="capability_has_price")
+    with st.expander("Additional notes"):
+        st.text_area("Notes", key="capability_notes")
+    has_price = st.checkbox("Include a price", key="capability_has_price")
     if has_price:
         if not st.session_state.get("_capability_pricing_visible", False):
             for key, value in st.session_state["_capability_pricing_draft"].items():
@@ -187,23 +227,17 @@ def _render_capability_editor(
             key: st.session_state[key]
             for key in ("capability_price", "capability_currency", "capability_pricing_basis")
         }
-        st.caption("Demo metadata only. A stored price is not a complete customer quotation.")
+        st.caption("Reference price only, not a customer quotation.")
     st.session_state["_capability_pricing_visible"] = has_price
-    if st.button("Save capability", type="primary"):
-        _save_capability(store, lab, choice, test_id, method_ids)
+    save_column, cancel_column = st.columns([1, 1])
+    with save_column:
+        if st.button("Save test", key="save_capability", type="primary", width="stretch"):
+            _save_capability(store, lab, choice, test_id, method_ids)
+    with cancel_column:
+        st.button("Cancel", key="cancel_capability", on_click=_close_capability_editor)
 
 
-def render_my_lab(store: FileLabStore, catalog: ReferenceCatalog) -> None:
-    st.title("My Lab")
-    st.caption("A local demo workspace, not a login or multi-user account system.")
-    st.warning(
-        "The initial lab, its capabilities and prices are synthetic demo data. "
-        "Entries are lab declarations, not independently verified support or accreditation."
-    )
-    lab = store.load_or_create()
-    notice = st.session_state.pop("_workspace_notice", None)
-    if notice:
-        st.success(notice)
+def _render_lab_details(store: FileLabStore, lab: LabProfile) -> LabProfile:
     if "lab_name" not in st.session_state:
         st.session_state["lab_name"] = lab.name
         st.session_state["lab_description"] = lab.description
@@ -215,7 +249,6 @@ def render_my_lab(store: FileLabStore, catalog: ReferenceCatalog) -> None:
             st.session_state["lab_description"] = lab.description
             st.session_state["_lab_details_version"] = lab.version
     with st.form("lab_details"):
-        st.subheader("Lab details")
         name = st.text_input("Lab name", key="lab_name")
         description = st.text_area("About this lab", key="lab_description")
         if st.form_submit_button("Save lab details"):
@@ -238,30 +271,69 @@ def render_my_lab(store: FileLabStore, catalog: ReferenceCatalog) -> None:
             except (ValidationError, LabStoreError) as exc:
                 st.error(f"Lab details were not saved: {exc}")
 
-    # Show the current list after a save, rather than a stale pre-submit table.
-    _render_capability_editor(store, lab, catalog)
-    current = store.load_or_create()
-    st.subheader("Saved capabilities")
+    return lab
+
+
+def render_my_lab(store: FileLabStore, catalog: ReferenceCatalog) -> None:
+    st.title("My Lab")
+    st.caption("Manage the tests, methods and reference prices your lab offers.")
+    lab = store.load_or_create()
+    notice = st.session_state.pop("_workspace_notice", None)
+    if notice:
+        st.success(notice)
+    st.subheader(lab.name)
     st.caption(
-        f"{len(current.capabilities)} entries · local revision {current.version}. "
-        "Switch pages or reopen the app to verify persistence."
+        "Demo workspace · initial entries and prices are synthetic. "
+        "Lab declarations are not independently verified."
     )
+    with st.expander("Lab details"):
+        lab = _render_lab_details(store, lab)
+
+    heading_column, add_column = st.columns([3, 1])
+    with heading_column:
+        st.subheader("Tests your lab offers")
+        st.caption(f"{len(lab.capabilities)} saved tests")
+    with add_column:
+        st.button(
+            "Add a test",
+            key="add_capability",
+            type="primary",
+            width="stretch",
+            on_click=_open_capability_editor,
+            args=(NEW_CAPABILITY,),
+        )
     rows = [
         {
             "Test": catalog.test_by_id(item.canonical_test_id).name,
-            "Declared methods": ", ".join(_method_label(catalog, key) for key in item.method_ids)
+            "Methods": ", ".join(_method_label(catalog, key) for key in item.method_ids)
             or "Not specified",
-            "Declared conditions": item.declared_constraints or "Not specified",
+            "Conditions": item.declared_constraints or "Not specified",
             "Price": _price_label(item),
-            "Notes": item.notes or "",
         }
-        for item in current.capabilities
+        for item in lab.capabilities
     ]
     if rows:
         st.dataframe(rows, width="stretch", hide_index=True)
     else:
-        st.info("No capabilities saved yet. Add a test using the form above.")
-    st.caption("Data is saved to the local workspace, not a database or cloud service.")
+        st.info("Your list is empty. Choose Add a test to record your first capability.")
+    if lab.capabilities:
+        by_id = {item.id: item for item in lab.capabilities}
+        with st.expander("Edit a saved test"):
+            choice = st.selectbox(
+                "Choose a test",
+                list(by_id),
+                key="capability_to_edit",
+                format_func=lambda value: _capability_label(catalog, by_id[value]),
+            )
+            st.button(
+                "Edit test",
+                key="edit_capability",
+                on_click=_open_capability_editor,
+                args=(choice,),
+            )
+    if st.session_state.get("_capability_editor_open", False):
+        with st.container(border=True):
+            _render_capability_editor(store, lab, catalog)
 
 
 def render_test_catalog(catalog: ReferenceCatalog) -> None:
@@ -313,16 +385,9 @@ def render_test_catalog(catalog: ReferenceCatalog) -> None:
 
 def render_pending_page(page: str) -> None:
     st.title(page)
-    if page == "Specifications":
-        st.info(
-            "Not implemented yet: customer-spec upload, saved documents and "
-            "side-by-side PDF / requirement review are the next implementation step."
-        )
-        st.caption("Use Developer Tools for the existing legacy PDF extraction experiments.")
-    else:
-        st.info(
-            "Not implemented yet: reviewed requirements will be matched against this lab's "
-            "declared capabilities to generate a PDF gap report and JSON "
-            "from the same saved results."
-        )
-        st.caption("No report, model accuracy or capability-match result is being simulated here.")
+    st.info(
+        "Not implemented yet: reviewed requirements will be matched against this lab's "
+        "declared capabilities to generate a PDF gap report and JSON "
+        "from the same saved results."
+    )
+    st.caption("No report, model accuracy or capability-match result is being simulated here.")

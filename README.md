@@ -1,169 +1,176 @@
-# scione-test-spec-intelligence
-CMU MISM Capstone — AI Test Specification Intelligence for SciOne AI
+# SciOne Test Specification Intelligence
 
-## Current scope and implementation status
+CMU Heinz Capstone — customer-specification review and lab-gap prototype.
 
-The revised product direction is customer-specification extraction, shared test/method
-identity normalization, human review, and comparison against a lab's declared
-capabilities to produce a gap report. Reading referenced standard procedures is not a
-dependency of this workflow.
+## Scope and current status
 
-The first implementation step provides:
+The current journey is:
 
-- **My Lab**: a local demo-lab profile, saved capabilities, and add/edit controls for
-  test identities, declared methods, operating limits, notes, and optional pricing.
-- **Test Catalog**: a searchable pilot catalog with 15 test identities, 24 method
-  identities, and curated English/Chinese aliases. Associated methods are not declared
-  equivalent, and unknown editions remain unspecified.
-- **Developer Tools**: the existing PDF extraction, model selection, saved-run review,
-  and provisional-answer-key evaluation remain directly accessible in the sidebar.
+Customer specification → extract test requirements → review flagged items →
+normalize test/method identities → compare with a lab's declared capabilities →
+gap report.
 
-**Specifications** and **Reports** are clearly marked placeholders. Customer-spec
-extraction/review, normalization decisions, capability matching, and PDF gap reports
-are not implemented yet. Alias search in Test Catalog is browsing, not an implemented
-semantic-normalization pipeline. There is no login or production database.
+Reading or interpreting the full text of referenced standards is not part of the
+MVP. The catalog holds test identities, method identifiers and aliases, not a
+library of standard procedures.
 
-The pilot catalog and initial lab declarations/prices are demo fixtures, not verified
-client or laboratory data. The catalog ships in `src/scione/catalogs/seed.py`. On first
-opening My Lab, the app creates `local_data/lab.json`; changes persist across restarts.
-`SCIONE_WORKSPACE_DIR` can override that directory without database setup. Local data
-is ignored by Git. Prices include a currency and pricing basis and are not quotations.
-Invalid or corrupt lab data is reported rather than silently reset; stale edits are
-rejected until the editor is reloaded.
+Implemented:
 
-The legacy extraction path supports digitally generated PDFs and preserves source
-pages, structured output, raw responses, and run metadata. OCR/multimodal ingestion
-and multi-file or chunked strategies remain future stages. Legacy Moon Glass scores
-are not evidence for the revised lab-gap workflow.
+- **My Lab**: persisted lab profile, capabilities, operating limits, notes and
+  optional prices with currency/pricing basis. The list opens first; Add/Edit opens
+  a form and a successful save closes it.
+- **Test Catalog**: a searchable pilot catalog of 15 test identities, 24 methods
+  and curated English/Chinese aliases. Association does not imply method equivalence.
+- **Specifications**: saved PDFs, local page previews/highlights, model extraction
+  and separate, versioned human-review decisions.
+- **Developer tools**: a collapsed sidebar entry for the current customer-spec
+  JSON, original responses, source text, run metadata and failed-attempt diagnostics.
 
-## Development setup
+Canonical mapping decisions, interactive AI chat, lab matching and gap-report
+generation are not implemented yet. **Reports** is a clearly labeled placeholder.
+There is no production database or authentication. Demo lab entries/catalog/prices
+are synthetic declarations, not verified capability, accreditation or quotations.
+A content confirmation does not approve a catalog match or lab support.
+
+## Setup
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"
-```
-
-Create local configuration before using a hosted model provider:
-
-```bash
 cp .env.example .env
 ```
 
-Then replace the placeholder API key in `.env`. The real `.env` file is ignored by
-Git and must never be committed.
-
-## Inspect a text PDF
-
-```bash
-python -m scione ingest \
-  "docs/samples/Fictional_Test_Method_Moon_Glass_ASTM_D3359_Style.pdf"
-```
-
-The JSON output preserves page boundaries and reports whether the document appears to
-need a future OCR or multimodal ingestion adapter. Text defaults to PDF content-stream
-order because it preserves the columns in the current synthetic sample; the adapter also
-supports geometric ordering for later comparison across document layouts.
-
-Use `--reading-order geometric` to compare PyMuPDF's coordinate-based ordering
-when a document's internal content-stream order is not usable.
-
-## Evaluate structured output
-
-The tracked Moon Glass answer key is a provisional infrastructure fixture. It must be
-reviewed by the Data team before its scores are presented as benchmark results.
-
-```bash
-python -m scione evaluate \
-  benchmark/cases/moon_glass_standard/ground_truth.json \
-  benchmark/cases/moon_glass_standard/ground_truth.json
-```
-
-The evaluator reports separate precision/recall/F1 values for document identity, test
-items, methods, exposures, conditions, parameters, classifications, references, and
-acceptance criteria. It normalizes non-semantic formatting differences, reports model
-extras separately from missed truth values, and verifies that cited evidence occurs on
-the claimed physical PDF page. A mean F1 is displayed only as a diagnostic summary;
-the field-level results remain the source of truth.
-
-## Test the extraction pipeline without an API
-
-The static provider exercises prompt construction, provider orchestration, schema
-validation, and run metadata without making a network request:
-
-```bash
-python -m scione extract-method-static \
-  "docs/samples/Fictional_Test_Method_Moon_Glass_ASTM_D3359_Style.pdf" \
-  benchmark/cases/moon_glass_standard/ground_truth.json
-```
-
-This adapter is only a deterministic pipeline fixture. It is not an extraction model and
-its output must not be reported as model accuracy.
-
-## Run the synthetic sample with a hosted provider
-
-Only use documents you are authorized to send to an external provider. The tracked Moon
-Glass document is fully synthetic and safe for this prototype call.
-
-```bash
-python -m scione extract-method-groq \
-  "docs/samples/Fictional_Test_Method_Moon_Glass_ASTM_D3359_Style.pdf" \
-  --ground-truth benchmark/cases/moon_glass_standard/ground_truth.json
-```
-
-The command prints a small summary and saves the complete, reproducible artifacts under
-the ignored `runs/<run-id>/` directory. API keys are loaded from `.env` and are never
-written into run artifacts. The default configuration uses Groq's
-`qwen/qwen3.8-27b` in strict JSON Schema mode; provider and model choices remain
-environment configuration rather than extraction-pipeline code.
-
-The web workbench also supports Google Gemini through the official `google-genai` SDK.
-The default is `gemini-3.5-flash-lite`, which completed the full synthetic structured
-extraction more reliably than `gemini-3.8-flash` during Free-tier testing. The model ID
-remains configurable. Gemini uses the same extracted text, prompt, JSON Schema,
-evaluator, and artifact store as Groq so model results remain comparable. Keep the
-Google project on the Free tier for no-cost synthetic experiments. The application
-cannot inspect or change the project's billing status. Free-tier Gemini data may be
-used by Google to improve its products, so do not send client, licensed, or confidential
-documents.
-
-## Open the lab workspace and developer tools
+Set a local provider key in `.env`; never commit that file. If it already exists,
+merge any new example settings manually instead of overwriting your credentials.
 
 ```bash
 python -m streamlit run src/scione/web/app.py
 ```
 
-Start in **My Lab**, save a capability, and reopen the app to check persistence. In
-**Test Catalog**, try `铅笔硬度` or `ISO 15184`. **Developer Tools** is a visible sidebar
-entry, not a hidden or collapsed mode. Its legacy extraction controls are independent
-of the new lab configuration.
+No model request is made by opening a page, adding a lab capability, saving a PDF,
+browsing sources, reviewing records or inspecting diagnostics.
 
-The web interface loads saved runs without making another model call. A new request is
-sent only after pressing **Run extraction** in Developer Tools. Lab/catalog page
-navigation, editing and saving do not make model requests.
+## Walk through a specification
 
-The developer workbench can run the tracked synthetic PDF or an uploaded text-based
-PDF. It shows the page text seen by the model, normalized methods and parameters, source evidence,
-field-level scores, and an explicit ground-truth-versus-model table for every dimension.
-New evaluated runs persist a ground-truth snapshot so later reviews remain reproducible.
-Saved-run comparisons and downloadable validated JSON remain available. Provider and
-model settings in the sidebar apply only to the next run; the reviewed run's actual
-provider and model appear above the results. Comparisons read existing run artifacts and
-never make additional model calls. Do not upload documents that are not authorized for
-the configured external provider.
+1. Open **Specifications**, use **Add PDF**, and save an authorized text-based PDF.
+   The owner-supplied MS-PNT-410 sample can be imported explicitly if it exists at
+   the expected repository-root path. Private local samples are not required by tests.
+2. Choose **Analyze PDF** / **Analyze again**. Select the provider and grant sending
+   permission. Gemini also requires an explicit Free-tier confirmation. Model IDs,
+   output ceilings and reading modes are under **Advanced model settings**.
+3. **Needs your review** contains automatically flagged records. Select an entry
+   to open its details and jump to highlighted source text. **Relocate** returns
+   to its citation; a source-page selector is shown for multiple cited pages.
+4. **Confirm** or **Exclude this item** records a decision separately from model
+   output, removes it from the pending list and opens the next pending item.
+   Notes record corrections to resolve; they do not silently rewrite extracted fields.
+5. **All extracted tests** also includes unflagged, confirmed and excluded records.
+   Unflagged items do not proactively request confirmation. **Review this item**
+   allows an optional decision; **Back to list** returns to the pending overview.
 
-## Add another model provider
+Triage uses source-location checks, missing fields, stated ambiguity and human
+decisions, not a made-up model-confidence percentage. A uniquely located quotation
+is not proof that its interpretation is correct. Partial/ambiguous/unmatched
+citations remain flagged. Located typography/table-format differences alone need
+not force confirmation; original output and warnings remain unchanged.
 
-The extraction runner depends only on the `ModelProvider` contract. To add another
-vendor or a local model, implement that contract and register the adapter in
-`create_configured_provider()` in `src/scione/workbench.py`. Prompt construction,
-schema validation, evaluation, CLI behavior, run storage, and the review UI remain
-unchanged. Models available through Groq can already be changed with `GROQ_MODEL`
-without adding an adapter.
+Reference-coverage warnings are separate from item review. An absent method code
+may indicate a missing test, preparation or background reference; it is not a test
+count, recall score or proof of completeness. Confirming all displayed items does
+not resolve possible omissions. A global spec's regional and conditional cases
+must not be assumed to apply simultaneously.
 
-## Checks
+## Extraction and provider limits
+
+The provider-neutral runner supports:
+
+- **Compact extraction** (default): one full-context request with a smaller wire
+  schema, deterministically expanded into the review schema. Raw provider JSON
+  intentionally differs from expanded prediction JSON.
+- **Detailed extraction**: one full-context request with the richer schema.
+- **Detailed coverage passes**: one request per three physical pages, retaining
+  the full source in each request. The planned number is shown before execution,
+  with at most eight requests. Only exact-content duplicates are removed;
+  similarly named scoped cases are retained for review.
+
+Coverage passes are not input chunking or RAG and do not reduce input-token use.
+OCR, multimodal ingestion and multi-document workflows are not implemented.
+
+`SCIONE_CUSTOMER_INPUT_CHARACTER_LIMIT` defaults to 60000 for source, prompt and
+schema combined. It is a character guard, not a token or cost guarantee.
+`SCIONE_CUSTOMER_GEMINI_OUTPUT_TOKENS` defaults to 16000; this is a ceiling, not an
+account quota or a spending cap. The app cannot inspect provider billing. Only
+send authorized, non-sensitive samples to a suitable account/project.
+
+Customer extraction disables automatic retries. Truncated generation, invalid
+JSON/schema and empty aggregate results are rejected. Every planned call must
+succeed before a new result is saved. A failure preserves the previous result and
+review, with a distinct failure record and a visible retained-result notice.
+
+Groq diagnostics distinguish output-per-minute from input/total-token-per-minute
+limits. Lowering the output ceiling may satisfy a quota request but truncate JSON;
+it is not a completeness fix. Increasing it cannot bypass account quotas.
+
+To add another provider, implement `ModelProvider` and register it in
+[src/scione/providers/factory.py](src/scione/providers/factory.py). Groq/Gemini
+model IDs remain configurable. No real API calls are required by the test suite.
+
+## Data and repository layout
+
+```text
+src/scione/
+  catalogs/        Shared test/method aliases and local lab storage
+  ingestion/       Page-aware PDF text
+  providers/       Model adapters, factory and offline fixture provider
+  prompts/         Versioned customer-spec prompts
+  schemas/         Shared document contracts
+  specifications/  Extraction, source location, review and local artifacts
+  web/             Lab workspace and current diagnostics
+tests/             Offline unit and integration tests
+local_data/        Private runtime data; ignored by Git
+```
+
+`SCIONE_WORKSPACE_DIR` overrides the local data root. Lab entries live in
+`local_data/lab.json`. Each saved specification has its original PDF, page text,
+immutable model runs and separate human-review records under
+`local_data/specifications/<document-id>/`. Failed-attempt metadata is separate.
+For coverage passes, individual untouched responses are in `run.calls`; the
+top-level `raw_response` is explicitly a local manifest.
+
+PDF intake is limited to 25 MB / 200 pages. Encrypted PDFs are rejected. Sparse or
+image-only PDFs may be previewed but are not accepted for text extraction without
+OCR. Corrupt storage is reported, not reset; stale edits cannot overwrite newer
+reviews or lab data. Never delete `local_data` just to clear development caches.
+
+The former Moon Glass standard-extraction benchmark, scoring pipeline and
+root-level `runs/` store have been retired. Their scores are not evidence for this
+scope. Historical tracked files remain recoverable from Git. Current synthetic
+test fixtures are generated inside the tests and are not model-quality benchmarks.
+
+## Local checks
+
+Inspect a permitted text PDF without sending it to a model:
+
+```bash
+python -m scione ingest "/path/to/customer-spec.pdf"
+```
+
+Use `--reading-order geometric` to inspect coordinate ordering when appropriate;
+PDF text order depends on document layout.
 
 ```bash
 pytest
 ruff check .
 ```
+
+For checks that do not recreate repository caches:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider
+ruff check --no-cache .
+```
+
+`.pytest_cache`, `.ruff_cache` and `__pycache__` are disposable and ignored.
+`.venv` and `src/*.egg-info` are environment/editable-install metadata, not project
+data; keep them while using the installed development environment.

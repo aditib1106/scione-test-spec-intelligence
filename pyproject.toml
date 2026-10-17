@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "scione-test-spec-intelligence"
 version = "0.1.0"
-description = "A provider-agnostic workbench for extracting and evaluating structured test specifications."
+description = "A local lab workspace for extracting and reviewing customer test requirements."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
