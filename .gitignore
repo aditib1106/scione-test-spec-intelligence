@@ -228,6 +228,7 @@ docs/*.pdf
 /runs/
 uploads/
 /local_data/
+/.demo-backups/
 
 # Additional local secrets and client reference
 .env.*

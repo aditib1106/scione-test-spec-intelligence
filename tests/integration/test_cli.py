@@ -1,4 +1,4 @@
-"""The supported CLI inspects PDFs locally and never invokes an LLM provider."""
+"""The supported CLI inspects PDFs and maintains local demos without model calls."""
 
 from __future__ import annotations
 
@@ -71,9 +71,7 @@ def test_ingest_reports_invalid_input(
     assert "Ingestion failed: File does not exist:" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize(
-    "command", ["evaluate", "extract-method-static", "extract-method-groq"]
-)
+@pytest.mark.parametrize("command", ["evaluate", "extract-method-static", "extract-method-groq"])
 def test_obsolete_standard_extraction_commands_are_rejected(
     command: str,
     capsys: pytest.CaptureFixture[str],
@@ -85,9 +83,48 @@ def test_obsolete_standard_extraction_commands_are_rejected(
     assert "invalid choice" in capsys.readouterr().err
 
 
-def test_help_only_advertises_supported_offline_command() -> None:
+def test_help_only_advertises_supported_offline_commands() -> None:
     help_text = build_parser().format_help()
 
     assert "ingest" in help_text
+    assert "reset-demo" in help_text
     assert "evaluate" not in help_text
     assert "extract-method" not in help_text
+
+
+def test_reset_demo_requires_explicit_confirmation(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    workspace = tmp_path / "local_data"
+    workspace.mkdir()
+    (workspace / "lab.json").write_bytes(b"saved lab")
+
+    assert main(["reset-demo", "--workspace", str(workspace)]) == 1
+
+    assert "Reset cancelled" in capsys.readouterr().out
+    assert (workspace / "lab.json").read_bytes() == b"saved lab"
+    assert not (tmp_path / ".demo-backups").exists()
+
+
+def test_reset_demo_cli_moves_state_without_network_and_preserves_credentials(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    workspace = tmp_path / "local_data"
+    workspace.mkdir()
+    (workspace / "lab.json").write_bytes(b"saved lab")
+    (workspace / ".env").write_bytes(b"credentials must not move")
+
+    assert main(["reset-demo", "--workspace", str(workspace), "--yes"]) == 0
+
+    output = capsys.readouterr().out
+    assert "Moved 1 saved demo files" in output
+    assert ".demo-backups" in output
+    assert "credentials must not move" not in output
+    assert (workspace / ".env").read_bytes() == b"credentials must not move"
+    assert not (workspace / "lab.json").exists()
+    assert len(list((tmp_path / ".demo-backups").glob("*/lab.json"))) == 1
+
+
+def test_reset_demo_cli_rejects_repository_root(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["reset-demo", "--workspace", str(Path.cwd()), "--yes"]) == 1
+    assert "Demo reset failed" in capsys.readouterr().out
