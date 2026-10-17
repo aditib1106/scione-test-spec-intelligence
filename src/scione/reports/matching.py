@@ -24,6 +24,12 @@ from scione.catalogs.models import (
     TestMethod,
     validate_lab_references,
 )
+from scione.catalogs.normalization import (
+    is_source_defined_procedure,
+    normalized_name,
+    scoped_pilot_family,
+)
+from scione.reports.capability import CapabilityAssessment, assess_capability
 from scione.reports.models import (
     GapLine,
     MappingChoice,
@@ -44,11 +50,12 @@ from scione.specifications.store import RequirementReviewSet, StoredSpecificatio
 
 _DASHES = str.maketrans({character: "-" for character in "‐‑‒–—−"})
 _METHOD = re.compile(
-    r"(?P<authority>ISO|ASTM|GB\s*/\s*T|GB|SAE|VDA|DIN)\s*"
+    r"(?P<authority>ISO|ASTM|GB\s*/\s*T|GB|SAE|VDMA|VDA|DIN)\s*"
     r"(?P<number>[A-Z]?\s*\d+)(?P<parts>(?:\s*-\s*\d+)*)",
     re.IGNORECASE,
 )
 _REVISION = re.compile(r"^\s*:\s*(\d{4})\s*$")
+MATCHING_POLICY_VERSION = "0.4"
 
 
 @dataclass(frozen=True)
@@ -63,7 +70,7 @@ def _text(value: str) -> str:
 
 
 def _name(value: str) -> str:
-    return " ".join(_text(value).casefold().replace("-", " ").split())
+    return normalized_name(value)
 
 
 def _parse_method(value: str) -> _MethodIdentity | None:
@@ -96,6 +103,24 @@ def _method_resolution(
 ) -> tuple[str | None, str | None]:
     identity = _parse_method(requested.code)
     if identity is None:
+        # Nonstandard source procedures have their own explicit identifiers.
+        # Only exact curated strings are accepted; no phrase is stripped until
+        # a standard happens to appear, and no equipment implies equivalence.
+        exact = [
+            method
+            for method in catalog.methods
+            if _name(requested.code)
+            in {_name(method.identifier), *(_name(alias.text) for alias in method.aliases)}
+        ]
+        if len(exact) == 1:
+            if requested.revision and _revision(requested.revision) != _revision(exact[0].edition):
+                return exact[0].id, (
+                    f"Requested procedure revision {requested.revision} is not established "
+                    f"by the catalog for {requested.code}."
+                )
+            return exact[0].id, None
+        if exact:
+            return None, f"Ambiguous catalog procedure: {requested.code}."
         return None, f"Unrecognized method reference: {requested.code}."
     candidates: list[TestMethod] = []
     for method in catalog.methods:
@@ -139,6 +164,7 @@ def input_fingerprint(
     """Hash every semantic source input, excluding output ID/time and file paths."""
 
     source = {
+        "matching_policy": MATCHING_POLICY_VERSION,
         "review_policy": REVIEW_POLICY_VERSION,
         "document": stored.document.model_dump(mode="json", exclude_computed_fields=True),
         "original_name": stored.original_name,
@@ -174,6 +200,9 @@ def _canonical(
         for test in catalog.tests
         if name in {_name(test.name), *(_name(alias.text) for alias in test.aliases)}
     ]
+    scoped = scoped_pilot_family(requirement, catalog)
+    if scoped and scoped not in exact:
+        exact.append(scoped)
     method_candidates = [
         test.id for test in catalog.tests if set(method_ids) & set(test.method_ids)
     ]
@@ -204,7 +233,12 @@ def _canonical(
             )
         test_id, basis = choice.canonical_test_id, "Human-confirmed test identity"
     elif len(exact) == 1:
-        test_id, basis = exact[0], "Exact curated name / alias"
+        test_id = exact[0]
+        basis = (
+            "Scoped curated chemical / fluid family; original medium and conditions retained"
+            if scoped == test_id
+            else "Exact curated name / alias"
+        )
     else:
         reason = (
             "Test name matches multiple catalog aliases; choose the intended test."
@@ -231,12 +265,41 @@ def _selected_methods(
     requirement: CustomerRequirement, choice: MappingChoice | None
 ) -> tuple[list[RequestedMethod], list[str]]:
     if choice is None or choice.selected_method_codes is None:
+        roles = [
+            (_name(method.role) if method.role else "") for method in requirement.requested_methods
+        ]
+        # Explicit source roles can establish that references are cumulative
+        # (for example exposure + measurement). Merely seeing several known
+        # identifiers never establishes their applicability or equivalence.
+        cumulative_roles = {"exposure", "measurement", "assessment", "calculation", "preparation"}
+        explicit_cumulative = (
+            len(roles) > 1
+            and len(set(roles)) == len(roles)
+            and all(role in cumulative_roles for role in roles)
+            and not any(
+                word in _name(text)
+                for text in [*requirement.special_instructions, *requirement.applicability]
+                for word in (
+                    "alternative",
+                    "instead",
+                    "either",
+                    "regional",
+                    "optional",
+                    "unless",
+                    "except",
+                    "substitute",
+                    "replace",
+                    " only ",
+                    " or ",
+                )
+            )
+        )
         return requirement.requested_methods, (
             [
                 "Multiple method references may be alternatives or cumulative requirements; "
                 "explicitly confirm which original method reference(s) apply."
             ]
-            if len(requirement.requested_methods) > 1
+            if len(requirement.requested_methods) > 1 and not explicit_cumulative
             else []
         )
     selected = choice.selected_method_codes
@@ -324,7 +387,8 @@ def _line(
         if problem:
             unknown.append(requested.code)
             reasons.append(problem)
-    if not methods:
+    source_defined = not methods and is_source_defined_procedure(requirement, catalog)
+    if not methods and not source_defined:
         reasons.append("No requested method was extracted; no lab method has been inferred.")
     test_id, candidates, basis, identity_reasons = _canonical(
         requirement, catalog, method_ids, choice
@@ -334,22 +398,48 @@ def _line(
     lab_methods: list[str] = []
     status = "needs_review"
     if test_id is not None and not reasons:
-        capability, status, lab_methods, capability_reasons = _choose_capability(
-            test_id, method_ids, lab, choice
-        )
-        reasons.extend(capability_reasons)
-    elif test_id is not None:
-        lab_methods = list(
-            dict.fromkeys(
-                method
-                for cap in lab.capabilities
-                if cap.canonical_test_id == test_id
-                for method in cap.method_ids
+        if source_defined:
+            # Knowing the customer procedure's identity is enough to report an
+            # absent declaration, but never enough to assert a lab method match.
+            declared = [cap for cap in lab.capabilities if cap.canonical_test_id == test_id]
+            status = "needs_review" if declared else "test_gap"
+            lab_methods = list(dict.fromkeys(x for cap in declared for x in cap.method_ids))
+            reasons.append(
+                "Source-defined customer procedure identified; no standard method was inferred. "
+                + (
+                    "A lab declaration exists, but applicability to this procedure needs review."
+                    if declared
+                    else "The lab catalog has no declaration for this procedure; this is not "
+                    "proof it is impossible."
+                )
             )
-        )
-    if status == "in_house":
+        else:
+            capability, status, lab_methods, capability_reasons = _choose_capability(
+                test_id, method_ids, lab, choice
+            )
+            reasons.extend(capability_reasons)
+    elif test_id is not None:
+        declared = [cap for cap in lab.capabilities if cap.canonical_test_id == test_id]
+        lab_methods = list(dict.fromkeys(method for cap in declared for method in cap.method_ids))
+        if not identity_reasons and not declared:
+            # An absent test declaration is already a reportable catalog gap.
+            # Resolving every requested method first cannot make an undeclared
+            # test available. Keep method problems intact for later review;
+            # this neither resolves them nor establishes physical inability.
+            status = "test_gap"
+            reasons.append(
+                "The lab catalog has no declaration for this test; this is not proof "
+                "it is impossible. Unresolved method details are retained and have not "
+                "been treated as equivalent or supported."
+            )
+    operating = CapabilityAssessment()
+    if status == "in_house" and capability is not None:
+        operating = assess_capability(requirement, capability)
         scope_current = choice is not None and choice.lab_fingerprint == lab_fingerprint(lab)
-        if (
+        if operating.status == "gap":
+            status = "condition_gap"
+            reasons.extend(operating.reasons)
+        elif (
             choice is not None
             and choice.capability_verdict in {"supported", "unsupported"}
             and not scope_current
@@ -358,15 +448,17 @@ def _line(
                 "The saved conditions / scope decision is not bound to this lab declaration. "
                 "Renew the scope review after checking the current lab methods, limits and rates."
             )
-        elif choice is not None and choice.capability_verdict == "unsupported":
+        elif scope_current and choice.capability_verdict == "unsupported":
             status = "condition_gap"
             reasons.append("Human review marked the requested conditions / scope unsupported.")
-        elif choice is not None and choice.capability_verdict == "supported":
+        elif scope_current and choice.capability_verdict == "supported":
             reasons.append("Human review confirmed the requested conditions / scope for this line.")
+        elif operating.status == "supported":
+            reasons.extend(operating.reasons)
         else:
             reasons.append(
-                "Method is listed in-house. Requested conditions, acceptance criteria, scope "
-                "and accreditation have not been verified."
+                "Method is listed in-house, but some operating conditions / scope remain "
+                "unresolved. Material pass/fail and accreditation are not predicted."
             )
     if assessment.state == "excluded":
         status = "excluded"
@@ -387,7 +479,30 @@ def _line(
         extraction_review_state=assessment.state,
         extraction_review_reasons=list(assessment.reasons),
         mapping_choice=choice.model_copy(deep=True) if choice is not None else None,
+        operation_assessment=operating.status,
+        operation_checks=[
+            f"{check.label}: {check.requested} — {check.declared or 'Not declared'} "
+            f"({check.status})"
+            for check in operating.checks
+        ],
+        operation_reasons=operating.reasons,
     )
+
+
+def support_basis(line: GapLine, current_lab_fingerprint: str) -> str | None:
+    """An operating match is distinct from human approval and material pass/fail."""
+
+    if line.status != "in_house":
+        return None
+    choice = line.mapping_choice
+    if choice is not None and choice.capability_verdict != "unreviewed":
+        if (
+            choice.capability_verdict == "supported"
+            and choice.lab_fingerprint == current_lab_fingerprint
+        ):
+            return "human"
+        return None
+    return "automatic" if line.operation_assessment == "supported" else None
 
 
 def _attach_quote(
@@ -400,9 +515,7 @@ def _attach_quote(
     if not (
         line.status == "in_house"
         and line.extraction_review_state in {"ready", "confirmed"}
-        and line.mapping_choice is not None
-        and line.mapping_choice.capability_verdict == "supported"
-        and line.mapping_choice.lab_fingerprint == current_lab_fingerprint
+        and support_basis(line, current_lab_fingerprint) is not None
         and quantity.lab_fingerprint == current_lab_fingerprint
         and capability is not None
         and capability.price is not None

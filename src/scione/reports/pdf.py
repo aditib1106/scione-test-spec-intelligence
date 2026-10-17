@@ -14,7 +14,7 @@ from html import escape
 
 import pymupdf
 
-from scione.reports.matching import lab_fingerprint
+from scione.reports.matching import lab_fingerprint, support_basis
 from scione.reports.models import GapLine, ReportSnapshot
 from scione.specifications.models import RequirementValue
 
@@ -98,6 +98,8 @@ def _scope_confirmed(line: GapLine, current_lab: str) -> bool:
 def _status_label(line: GapLine, current_lab: str) -> str:
     if _scope_confirmed(line, current_lab):
         return "Scope confirmed by lab reviewer"
+    if support_basis(line, current_lab) == "automatic":
+        return "Operating conditions match declared lab limits"
     return {
         "in_house": "Method listed — scope to confirm",
         "method_gap": "Different method",
@@ -137,8 +139,12 @@ def _business_note(line: GapLine, current_lab: str) -> str:
     elif line.status == "test_gap":
         notes.append("Ask the lab about availability; no capability is declared for this test.")
     elif line.status == "condition_gap":
-        notes.append("The lab reviewer marked the requested conditions or scope unsupported.")
-    elif line.status == "in_house" and not _scope_confirmed(line, current_lab):
+        notes.append(
+            "The requested operations exceed declared lab limits."
+            if line.operation_assessment == "gap"
+            else "The lab reviewer marked the requested conditions or scope unsupported."
+        )
+    elif line.status == "in_house" and support_basis(line, current_lab) is None:
         notes.append("Lab review of customer conditions, acceptance criteria and scope is pending.")
     return " ".join(notes)
 
@@ -211,6 +217,8 @@ def _listed_overview(active: list[GapLine], current_lab: str) -> str:
             methods = methods[:87] + "…"
         if _scope_confirmed(line, current_lab):
             lab_status = "Lab: scope confirmed"
+        elif support_basis(line, current_lab) == "automatic":
+            lab_status = "Lab: operating limits matched"
         elif line.status == "in_house":
             lab_status = "Lab: confirm scope"
         else:
@@ -352,7 +360,7 @@ def _report_html(snapshot: ReportSnapshot) -> str:
     gaps = counts["test_gap"] + counts["method_gap"] + counts["condition_gap"]
     pending_content = sum(line.extraction_review_state == "needs_attention" for line in active)
     pending_scope = sum(
-        line.status == "in_house" and not _scope_confirmed(line, current_lab) for line in active
+        line.status == "in_house" and support_basis(line, current_lab) is None for line in active
     )
     parts = [
         "<html><body><div class='summary'>",

@@ -16,10 +16,11 @@ library of standard procedures.
 
 Implemented:
 
-- **My Lab**: persisted lab profile, capabilities, operating limits, notes and
+- **My Lab**: starts empty for a first-use walkthrough; persisted lab profile,
+  capabilities, structured operating limits, notes and
   optional prices with currency/pricing basis. The list opens first; Add/Edit opens
   a form and a successful save closes it.
-- **Test Catalog**: a searchable pilot catalog of 15 test identities, 24 methods
+- **Test Catalog**: a searchable synthetic pilot catalog of 38 test identities, 36 methods
   and curated English/Chinese aliases. Association does not imply method equivalence.
 - **Specifications**: saved PDFs, local page previews/highlights, model extraction
   and separate, versioned human-review decisions.
@@ -31,13 +32,42 @@ Implemented:
   Counts and local checks are not accuracy scores; neither run is ground truth.
 - **Reports**: local test/alias and method-identifier matching against the lab's
   declarations, separate human matching/scope decisions, optional manual quote
-  quantities, and immutable draft PDF/JSON snapshots with paged PDF previews.
+  quantities, automatic structured operating comparisons, and immutable draft
+  PDF/JSON snapshots with paged PDF previews. The default queue shows exceptions only.
 
 Interactive AI chat, partner inventories, automatic quantity/lead-time estimates
 and formal quote approval are not implemented.
 There is no production database or authentication. Demo lab entries/catalog/prices
 are synthetic declarations, not verified capability, accreditation or quotations.
 A content confirmation does not approve a catalog match or lab support.
+
+## Automatic decisions and their limits
+
+- The expanded catalog is explicitly curated demonstration metadata, not a universal
+  semantic matcher or an authoritative standards library. Source-defined procedures
+  and chemical-media families retain their original conditions and source context;
+  a material name alone is not a global test alias.
+- Clear test/method identities are resolved locally. Unknown editions, qualified
+  references, conflicting identities and ambiguous method alternatives remain review
+  items. No extra LLM call is made for matching or comparison.
+- Complete, independently located customer-procedure rows do not need a formal
+  standard number. Missing/partial quotations or omitted standard references still
+  request source review; original model output is never rewritten.
+- Explicit structured lab limits support conservative numeric/unit comparison.
+  Covered operating requirements need no duplicate scope confirmation; an explicit
+  limit violation becomes a gap. Unparsed clauses, unclear scope and contradictory
+  free-text/structured declarations remain unknown. Acceptance criteria are retained
+  for measuring the material, never treated as a promise that the material will pass.
+- A test absent from the lab catalog becomes a declared-availability gap, not proof
+  of physical impossibility. Once its test identity is established, missing lab
+  availability is reportable even if method details remain unresolved; those details
+  are preserved, not treated as equivalent. No quantities, partner availability or final quote
+  approval are fabricated. Pricing still needs an explicit quantity/basis and valid
+  source/matching/operating support.
+
+The current saved 49-record sample can be reprocessed offline to evaluate workflow
+coverage. Reduced review counts are not an extraction-accuracy score or a guarantee
+for other specifications; ground-truth evaluation is still needed.
 
 ## Create a lab-gap report
 
@@ -52,6 +82,11 @@ A content confirmation does not approve a catalog match or lab support.
    **Confirm lab support**, or record why the lab **Cannot meet this scope**.
    A method match alone is not condition coverage, accreditation or test success.
    Missing catalog entries remain gaps, not proof a lab cannot perform a test.
+   Already covered operating conditions are labeled as automatic matches, separately
+   from human approval. Explicit operating-limit gaps cannot be clicked into support.
+   Catalog gaps and automatic operating-limit gaps are already reportable: they show
+   their result without a pair of disabled confirmation buttons. Genuine matching
+   ambiguity opens the matching form directly. Source-text checks remain separate.
 3. Use **Change test or method / record a gap** when the identity or method needs
    correction. Decisions remain separate from extracted source text; **Check
    extracted text** returns to the corresponding highlighted item in Specifications.
@@ -60,6 +95,8 @@ A content confirmation does not approve a catalog match or lab support.
    explicitly selected, resolved test/method matches, never unknown identities.
    Source checks, catalog matching and lab scope checks are counted separately;
    they overlap and are not a model error rate.
+   Ordinary matching saves need no typed note. Removing a source method or recording
+   a lab limitation requires an explanation; missing fields get plain inline guidance.
 4. Pricing is optional. A declared catalog rate remains a reference rate until
    lab support, applicable scope and quantity/pricing basis are explicitly
    confirmed. Quote subtotals include only manually selected eligible lines and
@@ -96,6 +133,30 @@ All exports are drafts for engineer review, not approved quotations or capabilit
 certifications. Local reports/working decisions live under ignored `local_data/`.
 Existing PDF snapshots stay immutable: generate a new report after an application
 layout update rather than expecting an old saved PDF to change.
+
+## Fresh-demo walkthrough and recoverable reset
+
+1. Start in **My Lab**. Enter a capability manually, or explicitly choose **Load
+   example lab** to use invented sample capabilities/prices. Nothing is preloaded
+   into a new lab automatically; the shared reference catalog remains available.
+2. Upload/import a specification, run extraction, inspect the exception queue,
+   then create a draft report. The analysis button is the only step that calls a model.
+3. To repeat from first use, open **Developer Tools → Reset demo workspace**,
+   acknowledge the reset and click **Reset to first use**. The page clears its
+   memory/session cache as well as moving saved demo state into recovery storage.
+
+With the web app stopped, the equivalent terminal command is:
+
+```bash
+scione reset-demo --yes
+```
+
+This moves only `local_data/lab.json`, `local_data/specifications/` and
+`local_data/reports/` into an ignored private `.demo-backups/<timestamp-id>/`
+directory with a recovery manifest. `.env`, credentials, the virtual environment,
+original source PDFs and catalog/code assets are preserved. After a terminal reset,
+restart the web app and refresh the browser to clear in-memory state.
+Backups may contain customer documents; keep them private and do not commit them.
 
 ## Setup
 

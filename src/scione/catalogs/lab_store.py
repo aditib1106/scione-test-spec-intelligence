@@ -34,9 +34,12 @@ class FileLabStore:
     must verify no writer remains and remove that lock before retrying.
     """
 
-    def __init__(self, root: str | Path, catalog: ReferenceCatalog | None = None) -> None:
+    def __init__(
+        self, root: str | Path, catalog: ReferenceCatalog | None = None, *, seed_demo: bool = True
+    ) -> None:
         self.root = Path(root).absolute()
         self.catalog = catalog if catalog is not None else load_reference_catalog()
+        self.seed_demo = seed_demo
 
     @property
     def path(self) -> Path:
@@ -49,7 +52,11 @@ class FileLabStore:
             with self._locked():
                 if self.path.exists() or self.path.is_symlink():
                     return self._read()
-                lab = self._validate(default_demo_lab())
+                lab = self._validate(
+                    default_demo_lab()
+                    if self.seed_demo
+                    else LabProfile(id="demo_lab", name="My Lab", capabilities=[])
+                )
                 self._write(lab)
                 return lab
         except (OSError, ValueError) as exc:

@@ -7,7 +7,7 @@ that different methods are interchangeable or that a lab meets a customer spec.
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -84,6 +84,80 @@ class ReferenceCatalog(CatalogModel):
         raise CatalogError(f"Unknown method ID: {method_id!r}.")
 
 
+class LabOperatingLimit(CatalogModel):
+    """Explicit lab input for deterministic operating-condition comparison.
+
+    Numeric values use the named canonical unit. Qualitative declarations are
+    narrow, exact phrases, not permission to infer arbitrary semantic coverage.
+    These describe what a lab can perform, not material pass/fail guarantees.
+    """
+
+    parameter: Literal[
+        "temperature",
+        "load",
+        "spacing",
+        "duration",
+        "angle",
+        "pressure",
+        "cycles",
+        "condition",
+        "scope",
+        "instruction",
+    ]
+    minimum: Decimal | None = Field(default=None, allow_inf_nan=False)
+    maximum: Decimal | None = Field(default=None, allow_inf_nan=False)
+    values: list[Decimal] = Field(default_factory=list)
+    unit: str | None = None
+    supported_values: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def consistent_limits(self) -> Self:
+        units = {
+            "temperature": "°C",
+            "load": "g",
+            "spacing": "mm",
+            "duration": "h",
+            "angle": "°",
+            "pressure": "bar",
+            "cycles": "cycles",
+        }
+        if self.parameter in units:
+            if self.unit != units[self.parameter]:
+                raise ValueError(f"{self.parameter} limits must use {units[self.parameter]}.")
+            if self.supported_values:
+                raise ValueError("Numeric limits cannot also declare qualitative phrases.")
+            if self.values and (self.minimum is not None or self.maximum is not None):
+                raise ValueError("Choose either discrete numeric values or a numeric range.")
+            if not self.values and self.minimum is None and self.maximum is None:
+                raise ValueError("A numeric limit requires a bound or discrete values.")
+            if any(not value.is_finite() for value in self.values):
+                raise ValueError("Discrete numeric values must be finite.")
+            numeric_values = [value for value in [self.minimum, self.maximum] if value is not None]
+            if self.parameter != "temperature" and any(
+                value < 0 for value in numeric_values + self.values
+            ):
+                raise ValueError("Only temperature limits may be negative.")
+            if (
+                self.minimum is not None
+                and self.maximum is not None
+                and self.minimum > self.maximum
+            ):
+                raise ValueError("Minimum must not exceed maximum.")
+        else:
+            if (
+                self.unit is not None
+                or self.minimum is not None
+                or self.maximum is not None
+                or self.values
+            ):
+                raise ValueError("Qualitative declarations only accept supported_values.")
+            if not self.supported_values or any(
+                not value.strip() for value in self.supported_values
+            ):
+                raise ValueError("A qualitative declaration requires nonblank supported phrases.")
+        return self
+
+
 class LabCapability(CatalogModel):
     """A lab's own declaration, not verification or accreditation evidence."""
 
@@ -91,6 +165,7 @@ class LabCapability(CatalogModel):
     canonical_test_id: str = Field(min_length=1)
     method_ids: list[str] = Field(default_factory=list)
     declared_constraints: str | None = None
+    structured_limits: list[LabOperatingLimit] = Field(default_factory=list)
     notes: str | None = None
     price: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
     currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")

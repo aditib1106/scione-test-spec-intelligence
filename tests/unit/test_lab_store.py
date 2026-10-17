@@ -20,6 +20,38 @@ def test_constructor_has_no_io_and_explicit_load_creates_seed(tmp_path: Path) ->
     assert not (root / ".lab.lock").exists()
 
 
+def test_empty_first_use_constructor_has_no_io_and_never_seeds_capabilities(tmp_path: Path) -> None:
+    root = tmp_path / "prototype"
+    store = FileLabStore(root, seed_demo=False)
+
+    assert not root.exists()
+    lab = store.load_or_create()
+
+    assert lab.name == "My Lab"
+    assert lab.capabilities == []
+    assert lab.version == 1
+    assert FileLabStore(root).load_or_create() == lab
+    assert FileLabStore(root, seed_demo=False).load_or_create() == lab
+    assert not (root / ".lab.lock").exists()
+
+
+def test_empty_first_use_mode_preserves_existing_lab_exactly(tmp_path: Path) -> None:
+    seeded = FileLabStore(tmp_path)
+    lab = seeded.load_or_create()
+    lab.name = "Previously entered lab"
+    lab.capabilities[0].price = Decimal("50.123456789")
+    seeded.save(lab)
+    before = seeded.path.read_bytes()
+
+    reloaded = FileLabStore(tmp_path, seed_demo=False).load_or_create()
+
+    assert reloaded.name == "Previously entered lab"
+    assert reloaded.capabilities[0].price == Decimal("50.123456789")
+    assert reloaded.capabilities
+    assert reloaded.version == 2
+    assert seeded.path.read_bytes() == before
+
+
 def test_save_reload_preserves_ids_decimal_price_and_increments_version(tmp_path: Path) -> None:
     store = FileLabStore(tmp_path)
     lab = store.load_or_create()

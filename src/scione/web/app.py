@@ -15,6 +15,7 @@ from scione.web.portal import (
 )
 from scione.web.reports import render_reports
 from scione.web.specifications import render_specifications
+from scione.workspace_reset import DemoResetError, reset_demo_workspace
 
 
 def _apply_theme() -> None:
@@ -77,6 +78,15 @@ def _apply_theme() -> None:
         }
         .stMain button[kind="primary"] p,
         .stMain button[kind="primary"] span { color: #ffffff !important; }
+        .stMain button:disabled {
+            background: #e4ebe7 !important;
+            border-color: #d0dbd5 !important;
+            color: #677970 !important;
+            opacity: 1;
+            cursor: not-allowed;
+        }
+        .stMain button:disabled p,
+        .stMain button:disabled span { color: #677970 !important; }
         .st-key-spec_pdf_panel, .st-key-spec_review_panel {
             background: #ffffff;
             border-radius: 12px;
@@ -144,6 +154,34 @@ def _render_developer_tools(settings: Settings) -> None:
         "are inspected locally; opening this page does not call a model."
     )
     render_developer_diagnostics(settings)
+    with st.expander("Reset demo workspace"):
+        st.caption(
+            "Start a first-use walkthrough. Saved lab entries, uploads, analyses, reviews and "
+            "reports are moved into a private recovery backup. API keys and source files stay. "
+            "Finish any running analysis before resetting."
+        )
+        acknowledged = st.checkbox(
+            "I want to back up and clear this local demo", key="demo_reset_acknowledge"
+        )
+        if (
+            st.button("Reset to first use", key="demo_reset_confirm", disabled=not acknowledged)
+            and acknowledged
+        ):
+            try:
+                result = reset_demo_workspace(settings.scione_workspace_dir)
+            except DemoResetError as exc:
+                st.error(str(exc))
+            else:
+                st.cache_data.clear()
+                st.cache_resource.clear()
+                st.session_state.clear()
+                st.session_state["workspace_page"] = "My Lab"
+                st.session_state["_workspace_notice"] = (
+                    f"Demo reset. Recovery backup: {result.backup_path}"
+                    if result.backup_path
+                    else "Demo reset. No saved data needed moving."
+                )
+                st.rerun()
 
 
 def main() -> None:
@@ -170,7 +208,9 @@ def main() -> None:
     try:
         catalog = load_reference_catalog()
         if page == "My Lab":
-            render_my_lab(FileLabStore(settings.scione_workspace_dir, catalog), catalog)
+            render_my_lab(
+                FileLabStore(settings.scione_workspace_dir, catalog, seed_demo=False), catalog
+            )
         else:
             render_test_catalog(catalog)
     except (CatalogError, LabStoreError, ValidationError) as exc:

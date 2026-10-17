@@ -13,10 +13,21 @@ from scione.catalogs import (
     LabProfile,
     LabStoreError,
     ReferenceCatalog,
+    default_demo_lab,
 )
+from scione.catalogs.models import LabOperatingLimit
 
 WORKSPACE_PAGES = ["My Lab", "Test Catalog", "Specifications", "Reports", "Developer Tools"]
 NEW_CAPABILITY = "__new__"
+_OPERATING_PARAMETERS = {
+    "temperature": ("Temperature", "°C"),
+    "load": ("Applied load", "g"),
+    "spacing": ("Cutter spacing", "mm"),
+    "duration": ("Exposure / test duration", "h"),
+    "angle": ("Measurement angle", "°"),
+    "pressure": ("Pressure", "bar"),
+    "cycles": ("Number of cycles", "cycles"),
+}
 
 
 def _select_workspace(page: str) -> None:
@@ -121,6 +132,121 @@ def _initial_editor_values(lab: LabProfile, catalog: ReferenceCatalog, choice: s
         key: st.session_state[key]
         for key in ("capability_price", "capability_currency", "capability_pricing_basis")
     }
+    limits = {item.parameter: item for item in capability.structured_limits} if capability else {}
+    # Keep the original declarations when the user only edits a price or a note.
+    # In particular, never infer new operating limits from the old prose field.
+    st.session_state["_capability_original_limits"] = (
+        capability.structured_limits if capability else []
+    )
+    for parameter in _OPERATING_PARAMETERS:
+        limit = limits.get(parameter)
+        prefix = f"capability_limit_{parameter}"
+        st.session_state[prefix + "_enabled"] = limit is not None
+        st.session_state[prefix + "_minimum"] = (
+            format(limit.minimum, "f") if limit is not None and limit.minimum is not None else ""
+        )
+        st.session_state[prefix + "_maximum"] = (
+            format(limit.maximum, "f") if limit is not None and limit.maximum is not None else ""
+        )
+        st.session_state[prefix + "_values"] = (
+            ", ".join(format(value, "f") for value in limit.values) if limit else ""
+        )
+    for parameter in ("condition", "scope", "instruction"):
+        limit = limits.get(parameter)
+        st.session_state[f"capability_limit_{parameter}"] = (
+            "\n".join(limit.supported_values) if limit else ""
+        )
+
+
+def _structured_editor_limits() -> list[LabOperatingLimit]:
+    limits = []
+    for parameter, (_, unit) in _OPERATING_PARAMETERS.items():
+        prefix = f"capability_limit_{parameter}"
+        if not st.session_state[prefix + "_enabled"]:
+            continue
+        minimum = st.session_state[prefix + "_minimum"].strip()
+        maximum = st.session_state[prefix + "_maximum"].strip()
+        values = [
+            value.strip()
+            for value in st.session_state[prefix + "_values"].split(",")
+            if value.strip()
+        ]
+        limits.append(
+            LabOperatingLimit(
+                parameter=parameter,
+                minimum=minimum or None,
+                maximum=maximum or None,
+                unit=unit,
+                values=values,
+            )
+        )
+    for parameter in ("condition", "scope", "instruction"):
+        values = [
+            value.strip()
+            for value in st.session_state[f"capability_limit_{parameter}"].splitlines()
+            if value.strip()
+        ]
+        if values:
+            limits.append(LabOperatingLimit(parameter=parameter, supported_values=values))
+    # A legacy caller may have multiple same-parameter ranges. If the visible
+    # values were untouched, preserve those ranges rather than collapsing them.
+    original = st.session_state.get("_capability_original_limits", [])
+    for parameter in {item.parameter for item in original}:
+        prior = [item for item in original if item.parameter == parameter]
+        current = [item for item in limits if item.parameter == parameter]
+        if len(prior) > 1 and current == prior[-1:]:
+            limits = [item for item in limits if item.parameter != parameter] + prior
+    return limits
+
+
+def _render_structured_limits() -> None:
+    with st.expander("Structured operating limits (optional)"):
+        st.caption(
+            "Explicit lab inputs let the system compare conditions automatically. "
+            "Use a range OR discrete values; use equal minimum and maximum for a fixed setting. "
+            "Unfilled fields stay unknown. Existing notes and restrictions still apply."
+        )
+        for parameter, (label, unit) in _OPERATING_PARAMETERS.items():
+            prefix = f"capability_limit_{parameter}"
+            enabled = st.checkbox(f"Declare {label.lower()} ({unit})", key=prefix + "_enabled")
+            columns = st.columns(3)
+            with columns[0]:
+                st.text_input(
+                    f"Minimum {label.lower()}", key=prefix + "_minimum", disabled=not enabled
+                )
+            with columns[1]:
+                st.text_input(
+                    f"Maximum {label.lower()}", key=prefix + "_maximum", disabled=not enabled
+                )
+            with columns[2]:
+                st.text_input(
+                    f"Discrete {label.lower()} values",
+                    key=prefix + "_values",
+                    disabled=not enabled,
+                    placeholder="For example: 20, 60, 85"
+                    if parameter == "angle"
+                    else "Comma-separated",
+                )
+        for parameter, label in (
+            ("condition", "Other supported operating clauses"),
+            ("scope", "Supported customer scope"),
+            ("instruction", "Supported special instructions"),
+        ):
+            st.text_area(
+                label,
+                key=f"capability_limit_{parameter}",
+                height=80,
+                help=(
+                    "One precise phrase per line. "
+                    "These require an exact text match, not an AI guess."
+                ),
+            )
+        original = st.session_state.get("_capability_original_limits", [])
+        if len(original) != len({item.parameter for item in original}):
+            st.caption(
+                "This entry has multiple ranges for one setting; "
+                "unchanged ranges are preserved on save."
+            )
 
 
 def _save_capability(
@@ -136,6 +262,7 @@ def _save_capability(
             canonical_test_id=test_id,
             method_ids=method_ids,
             declared_constraints=st.session_state["capability_constraints"].strip() or None,
+            structured_limits=_structured_editor_limits(),
             notes=st.session_state["capability_notes"].strip() or None,
             price=st.session_state["capability_price"].strip() if has_price else None,
             currency=st.session_state["capability_currency"].strip().upper() if has_price else None,
@@ -209,6 +336,7 @@ def _render_capability_editor(
         key="capability_constraints",
         placeholder="For example: 23 °C only; minimum panel size; instrument limits.",
     )
+    _render_structured_limits()
     with st.expander("Additional notes"):
         st.text_area("Notes", key="capability_notes")
     has_price = st.checkbox("Include a price", key="capability_has_price")
@@ -316,6 +444,21 @@ def render_my_lab(store: FileLabStore, catalog: ReferenceCatalog) -> None:
         st.dataframe(rows, width="stretch", hide_index=True)
     else:
         st.info("Your list is empty. Choose Add a test to record your first capability.")
+        st.caption("For a demonstration, you can explicitly load invented examples instead.")
+        if st.button("Load example lab", key="load_example_lab"):
+            example = default_demo_lab()
+            try:
+                store.save(lab.model_copy(update={"capabilities": example.capabilities}))
+                if st.session_state.get("_lab_details_version") == lab.version:
+                    st.session_state["_lab_details_version"] = lab.version + 1
+                st.session_state.pop("_capability_editor_signature", None)
+                st.session_state["_capability_editor_open"] = False
+                st.session_state["_workspace_notice"] = (
+                    "Synthetic example capabilities loaded. Review or edit them before using them."
+                )
+                st.rerun()
+            except (ValidationError, LabStoreError) as exc:
+                st.error(f"Example lab was not loaded: {exc}")
     if lab.capabilities:
         by_id = {item.id: item for item in lab.capabilities}
         with st.expander("Edit a saved test"):

@@ -10,16 +10,19 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 
+from scione.catalogs.normalization import is_source_defined_procedure, normalized_name
+from scione.catalogs.seed import load_reference_catalog
 from scione.schemas import IngestedDocument
 from scione.specifications.extraction import validate_customer_sources
 from scione.specifications.models import CustomerExtractionRun
 from scione.specifications.pdf_preview import PDFPreviewError, inspect_pdf_highlights
 from scione.specifications.store import RequirementReviewSet
 
-REVIEW_POLICY_VERSION = "0.2"
+REVIEW_POLICY_VERSION = "0.3"
 
 RequirementState = Literal["needs_attention", "ready", "confirmed", "excluded"]
 _REQUIREMENT_ID = re.compile(
@@ -87,9 +90,10 @@ def assess_requirements(
                 reasons[requirement_id].append(issue)
 
     assessed: dict[str, RequirementAssessment] = {}
+    source_defined = _proved_source_procedures(run, pdf_bytes)
     for requirement in requirements:
         row_reasons = reasons[requirement.id]
-        if not requirement.requested_methods:
+        if not requirement.requested_methods and requirement.id not in source_defined:
             row_reasons.append("No test method was identified; check the source.")
         if not requirement.conditions and not requirement.acceptance_criteria:
             row_reasons.append(
@@ -108,6 +112,62 @@ def assess_requirements(
                 row_reasons.append("Marked for review by a user.")
         assessed[requirement.id] = RequirementAssessment(state, tuple(row_reasons))
     return assessed
+
+
+def _proved_source_procedures(run: CustomerExtractionRun, pdf_bytes: bytes | None) -> set[str]:
+    """A complete located custom-procedure row need not have an ISO/ASTM number.
+
+    Curated identity plus exact source location is required; an omitted standard
+    reference, invented/partial citation, or a generic unknown name still needs review.
+    This never declares lab support or suppresses other model/source warnings.
+    """
+
+    if pdf_bytes is None:
+        return set()
+    catalog = load_reference_catalog()
+    proved = set()
+    standard = re.compile(r"\b(?:ISO|ASTM|SAE|VDMA|VDA|DIN|GB\s*/?\s*T?)\s*[A-Z]?\s*\d", re.I)
+    for requirement in run.extraction.requirements:
+        if not is_source_defined_procedure(requirement, catalog):
+            continue
+        if any(
+            standard.search(evidence.quote)
+            or len([part for part in evidence.quote.split("|") if part.strip()]) < 2
+            or normalized_name(evidence.quote.split("|")[0])
+            != normalized_name(requirement.original_test_name)
+            for evidence in requirement.evidence
+        ):
+            continue
+
+        def literal(value: str) -> str:
+            normalized = unicodedata.normalize("NFKC", value).casefold().replace("−", "-")
+            return " ".join(normalized.split())
+
+        if not all(
+            any(
+                re.search(
+                    r"(?<![\w.+-])" + re.escape(literal(condition.raw_value)) + r"(?![\w.])",
+                    literal(evidence.quote),
+                )
+                for evidence in requirement.evidence
+            )
+            for condition in requirement.conditions
+        ):
+            continue
+        try:
+            if all(
+                inspect_pdf_highlights(
+                    pdf_bytes, page_number=evidence.page, quotes=(evidence.quote,)
+                )
+                .matches[0]
+                .status
+                == "matched"
+                for evidence in requirement.evidence
+            ):
+                proved.add(requirement.id)
+        except PDFPreviewError:
+            continue
+    return proved
 
 
 def _located_source_issues(

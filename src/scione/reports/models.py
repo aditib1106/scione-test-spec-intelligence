@@ -104,6 +104,9 @@ class GapLine(ReportModel):
     extraction_review_state: Literal["ready", "confirmed", "needs_attention", "excluded"]
     extraction_review_reasons: list[str] = Field(default_factory=list)
     mapping_choice: MappingChoice | None = None
+    operation_assessment: Literal["supported", "gap", "unknown"] = "unknown"
+    operation_checks: list[str] = Field(default_factory=list)
+    operation_reasons: list[str] = Field(default_factory=list)
     quote: QuoteLine | None = None
 
 

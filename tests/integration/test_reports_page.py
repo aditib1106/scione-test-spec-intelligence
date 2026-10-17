@@ -13,6 +13,7 @@ from streamlit.delta_generator import DeltaGenerator
 from streamlit.testing.v1 import AppTest
 
 from scione.catalogs import FileLabStore, LabCapability, load_reference_catalog
+from scione.catalogs.models import LabOperatingLimit
 from scione.config import Settings
 from scione.providers.gemini import GeminiModelProvider
 from scione.providers.groq import GroqModelProvider
@@ -136,9 +137,12 @@ def seed(stores, *, name: str = "customer.pdf", count: int = 3, one_page: bool =
     return document, run
 
 
-def open_reports() -> AppTest:
+def open_reports(*, pending_only: bool = False) -> AppTest:
     app = AppTest.from_file(str(APP), default_timeout=20).run()
-    return app.sidebar.button(key="nav_reports").click().run()
+    app = app.sidebar.button(key="nav_reports").click().run()
+    if not pending_only and any(item.key == "report_group" for item in app.selectbox):
+        app = app.selectbox(key="report_group").set_value("All active").run()
+    return app
 
 
 def all_text(app) -> str:
@@ -153,6 +157,8 @@ def all_text(app) -> str:
 
 
 def inspect_pencil(app: AppTest) -> AppTest:
+    if not any("Pencil hardness" in option for option in app.selectbox(key="report_item").options):
+        app = app.selectbox(key="report_group").set_value("All active").run()
     return app.selectbox(key="report_item").set_value("req_pencil").run()
 
 
@@ -206,6 +212,57 @@ def make_adhesion_available(stores) -> None:
     labs.save(lab)
 
 
+def make_pencil_operating_limits_explicit(stores) -> None:
+    _, _, labs = stores
+    lab = labs.load_or_create()
+    lab.capabilities[0].structured_limits = [
+        LabOperatingLimit(parameter="load", minimum="750", maximum="750", unit="g")
+    ]
+    labs.save(lab)
+
+
+def seed_stone_gap(stores):
+    specs, _, labs = stores
+    _, run = seed(stores, count=1)
+    quote = "Stone-chip resistance: ISO 20567-1, -20 °C; rating at most 2.0."
+    document = specs.import_pdf("stone-chip.pdf", make_pdf(quote))
+    changed = run.model_copy(deep=True)
+    changed.run_id = str(uuid4())
+    changed.document_id = document.document_id
+    request = changed.extraction.requirements[0]
+    request.id = "req_stone"
+    request.original_test_name = "Stone-chip resistance"
+    request.requested_methods[0].code = "ISO 20567-1"
+    request.conditions[0].name = "Temperature"
+    request.conditions[0].raw_value = "-20"
+    request.conditions[0].unit = "°C"
+    request.acceptance_criteria[0].raw_value = "rating at most 2.0"
+    request.evidence[0].quote = quote
+    specs.save_extraction(document.document_id, changed)
+    lab = labs.load_or_create()
+    lab.capabilities = [
+        LabCapability(
+            id="cap_stone",
+            canonical_test_id="stone_chip_resistance",
+            method_ids=["iso_20567_1"],
+            declared_constraints="23 °C only.",
+            structured_limits=[
+                LabOperatingLimit(
+                    parameter="temperature",
+                    minimum="23",
+                    maximum="23",
+                    unit="°C",
+                )
+            ],
+            price=Decimal("100"),
+            currency="USD",
+            pricing_basis="per panel",
+        )
+    ]
+    labs.save(lab)
+    return document, changed
+
+
 def select_scope_batch(app: AppTest, *, acknowledge: bool = True) -> AppTest:
     app = app.multiselect(key="report_bulk_items").set_value(["req_pencil", "req_adhesion"]).run()
     if acknowledge:
@@ -253,8 +310,12 @@ def test_current_comparison_distinguishes_method_match_wrong_method_and_missing_
     assert table.loc["req_adhesion", "Requested method"] == "ISO 2409"
     assert "ASTM D3359" in table.loc["req_adhesion", "Lab method"]
     assert table.loc["req_pencil", "Lab scope review"] == "Pending lab review"
-    assert table.loc["req_adhesion", "Lab scope review"] == "Resolve test / method first"
-    assert table.loc["req_pull", "Lab scope review"] == "Resolve test / method first"
+    assert table.loc["req_adhesion", "Lab scope review"] == (
+        "Requested method not listed — no confirmation needed"
+    )
+    assert table.loc["req_pull", "Lab scope review"] == (
+        "Not listed in lab catalog — no confirmation needed"
+    )
     assert "billable test count" in all_text(app)
     assert specs.load_review(document.document_id, run.run_id) == before
     assert reports.list_reports() == []
@@ -381,6 +442,107 @@ def test_direct_support_action_cannot_promote_a_method_gap(stores) -> None:
     assert quote_submit(app).disabled
 
 
+def seed_scratch_request(stores, *, lab_declared: bool = False, source_flag: bool = False):
+    specs, _, labs = stores
+    _, original = seed(stores, count=1)
+    quote = "Scratch resistance: ISO 20566 and ASTM D6279; 10 cycles; residual gloss at least 60%."
+    document = specs.import_pdf("scratch-request.pdf", make_pdf(quote))
+    run = original.model_copy(deep=True)
+    run.run_id = str(uuid4())
+    run.document_id = document.document_id
+    requirement_type = type(run.extraction.requirements[0])
+    run.extraction.requirements = [
+        requirement_type.model_validate(
+            {
+                "id": "req_scratch",
+                "original_test_name": "Scratch resistance",
+                "requested_methods": [{"code": "ISO 20566"}, {"code": "ASTM D6279"}],
+                "conditions": [{"name": "Cycles", "raw_value": "10 cycles"}],
+                "acceptance_criteria": [{"name": "Gloss", "raw_value": "At least 60%"}],
+                "evidence": [{"page": 1, "quote": quote}],
+            }
+        )
+    ]
+    if source_flag:
+        run.extraction.review_issues = ["req_scratch: check the customer condition."]
+    specs.save_extraction(document.document_id, run)
+    if lab_declared:
+        lab = labs.load_or_create()
+        lab.capabilities.append(
+            LabCapability(
+                id="cap_scratch",
+                canonical_test_id="scratch_resistance",
+                method_ids=["iso_20566", "astm_d6279"],
+            )
+        )
+        labs.save(lab)
+    return document, run
+
+
+@pytest.mark.parametrize("source_flag", [False, True])
+def test_absent_lab_test_with_multiple_methods_is_a_reportable_gap_not_a_scope_confirmation(
+    stores, source_flag: bool
+) -> None:
+    document, run = seed_scratch_request(stores, source_flag=source_flag)
+    specs, reports, _ = stores
+    before = specs.load_review(document.document_id, run.run_id)
+    app = open_reports().selectbox(key="report_document").set_value(document.document_id).run()
+
+    assert not app.exception
+    assert not any(
+        button.key in {"report_confirm_scope", "report_decline_scope"} for button in app.button
+    )
+    assert "already included as a gap" in all_text(app)
+    assert pending_review_count(app) == int(source_flag)
+    assert requirement_matrix(app).set_index("ID").loc["req_scratch", "Result"] == (
+        "Not in lab catalog"
+    )
+    editor = next(
+        item for item in app.expander if item.label == "Change test or method / record a gap"
+    )
+    assert not editor.proto.expanded
+    if source_flag:
+        assert "needs checking against the PDF" in all_text(app)
+        assert app.button(key="report_open_source")
+    app = app.button(key="report_generate").click().run()
+    saved = reports.list_reports(document.document_id)[0]
+    assert saved.lines[0].status == "test_gap"
+    assert len(saved.lines[0].requirement.requested_methods) == 2
+    assert saved.lines[0].quote is None
+    assert saved.lines[0].extraction_review_state == ("needs_attention" if source_flag else "ready")
+    assert specs.load_review(document.document_id, run.run_id) == before
+    assert specs.load_extraction(document.document_id, run.run_id) == run
+
+
+def test_real_method_ambiguity_opens_the_actionable_form_without_disabled_scope_buttons(
+    stores,
+) -> None:
+    document, run = seed_scratch_request(stores, lab_declared=True)
+    specs, reports, _ = stores
+    app = open_reports().selectbox(key="report_document").set_value(document.document_id).run()
+    assert not app.exception
+    assert pending_review_count(app) == 1
+    assert not any(
+        button.key in {"report_confirm_scope", "report_decline_scope"} for button in app.button
+    )
+    editor = next(
+        item for item in app.expander if item.label == "Change test or method / record a gap"
+    )
+    assert editor.proto.expanded
+    assert not app.button(key="report_save_mapping").disabled
+    # Explicitly retaining both source methods resolves their applicability,
+    # but must not claim operating support or clear a source review.
+    app = app.button(key="report_save_mapping").click().run()
+    assert not app.exception
+    assert not app.error
+    choice = reports.load_workspace(document.document_id, run.run_id).mappings["req_scratch"]
+    assert choice.selected_method_codes == ["ISO 20566", "ASTM D6279"]
+    assert choice.capability_verdict == "unreviewed"
+    assert not specs.load_review(document.document_id, run.run_id).decisions
+    assert not app.button(key="report_confirm_scope").disabled
+    assert not app.button(key="report_decline_scope").disabled
+
+
 def test_direct_support_action_cannot_overwrite_a_stale_matching_editor(stores) -> None:
     document, run = seed(stores, count=1)
     _, reports, _ = stores
@@ -438,6 +600,122 @@ def test_method_match_without_source_flags_still_needs_lab_scope_review(stores) 
     assert not editor.proto.expanded
     assert "Test identity" in all_text(app)
     assert "Lab capability for this request" in all_text(app)
+
+
+def test_fresh_report_queue_excludes_known_gaps_and_automatically_covered_operations(
+    stores,
+) -> None:
+    document, run = seed(stores)
+    specs, reports, _ = stores
+    make_pencil_operating_limits_explicit(stores)
+    before = specs.load_review(document.document_id, run.run_id)
+    app = open_reports(pending_only=True)
+
+    assert not app.exception
+    assert app.selectbox(key="report_group").value == "Needs review"
+    assert pending_review_count(app) == 0
+    assert not requirement_choices(app)
+    row = requirement_matrix(app).set_index("ID").loc["req_pencil"]
+    assert row["Lab scope review"] == "Operating conditions matched automatically"
+    assert reports.load_workspace(document.document_id, run.run_id).mappings == {}
+    assert reports.load_workspace(document.document_id, run.run_id).quantities == {}
+    assert specs.load_review(document.document_id, run.run_id) == before
+
+
+def test_automatic_operating_support_still_requires_an_explicit_quote_quantity(stores) -> None:
+    document, run = seed(stores, count=1)
+    _, reports, _ = stores
+    make_pencil_operating_limits_explicit(stores)
+    app = inspect_pencil(open_reports())
+
+    assert not app.exception
+    assert pending_review_count(app) == 0
+    assert "No extra confirmation needed" in all_text(app)
+    assert not any(button.key == "report_confirm_scope" for button in app.button)
+    assert not app.button(key="report_decline_scope").disabled
+    assert not quote_submit(app).disabled
+    assert app.text_input(key="report_quote_quantity").value == ""
+    assert not app.checkbox(key="report_quote_confirm").value
+    assert reports.load_workspace(document.document_id, run.run_id).quantities == {}
+    app.text_input(key="report_quote_quantity").set_value("3.25")
+    app.text_area(key="report_quote_note").set_value(
+        "Three and a quarter catalog panel-equivalents."
+    )
+    app = quote_submit(app).click().run()
+    assert "Confirm scope and pricing basis" in all_text(app)
+    assert not reports.load_workspace(document.document_id, run.run_id).quantities
+    app.checkbox(key="report_quote_confirm").check()
+    app = quote_submit(app).click().run()
+    app = app.button(key="report_generate").click().run()
+
+    assert not app.exception
+    saved = reports.list_reports(document.document_id)[0]
+    assert saved.workspace.mappings == {}
+    assert saved.lines[0].operation_assessment == "supported"
+    assert saved.lines[0].quote.quantity == Decimal("3.25")
+    assert saved.totals_by_currency == {"USD": Decimal("325.0000")}
+
+
+def test_automatic_operating_match_never_clears_source_flags_or_enables_pricing(stores) -> None:
+    document, run = seed(stores, count=1)
+    specs, reports, _ = stores
+    make_pencil_operating_limits_explicit(stores)
+    changed = run.model_copy(deep=True)
+    changed.run_id = str(uuid4())
+    changed.extraction.review_issues = ["req_pencil: source conditions require checking."]
+    specs.save_extraction(document.document_id, changed)
+    before = specs.load_review(document.document_id, changed.run_id)
+    app = open_reports(pending_only=True)
+
+    assert not app.exception
+    assert pending_review_count(app) == 1
+    assert app.selectbox(key="report_item").value == "req_pencil"
+    row = requirement_matrix(app).set_index("ID").loc["req_pencil"]
+    assert row["Lab scope review"] == "Operating conditions matched automatically"
+    assert row["Content review"] == "Needs review"
+    assert quote_submit(app).disabled
+    assert specs.load_review(document.document_id, changed.run_id) == before
+    assert not reports.load_workspace(document.document_id, changed.run_id).mappings
+
+
+def test_declared_operating_gap_cannot_be_promoted_by_individual_or_batch_confirmation(
+    stores,
+) -> None:
+    document, run = seed_stone_gap(stores)
+    _, reports, _ = stores
+    app = open_reports()
+
+    assert not app.exception
+    assert app.selectbox(key="report_document").value == document.document_id
+    assert not any(
+        button.key in {"report_confirm_scope", "report_decline_scope"} for button in app.button
+    )
+    assert quote_submit(app).disabled
+    row = requirement_matrix(app).set_index("ID").loc["req_stone"]
+    assert row["Result"] == "Condition / scope gap"
+    assert row["Lab scope review"] == "Outside lab scope"
+    app = app.multiselect(key="report_bulk_items").set_value(["req_stone"]).run()
+    app = app.checkbox(key="report_bulk_ack").check().run()
+    assert app.button(key="report_bulk_confirm").disabled
+    assert reports.load_workspace(document.document_id, run.run_id).version == 0
+    app.selectbox(key="report_mapping_verdict").set_value("supported")
+    app.text_area(key="report_mapping_note").set_value(
+        "Manual claim does not change the 23 C limit."
+    )
+    app = app.button(key="report_save_mapping").click().run()
+
+    assert not app.exception
+    row = requirement_matrix(app).set_index("ID").loc["req_stone"]
+    assert row["Result"] == "Condition / scope gap"
+    assert not any(
+        button.key in {"report_confirm_scope", "report_decline_scope"} for button in app.button
+    )
+    assert quote_submit(app).disabled
+    app = app.button(key="report_generate").click().run()
+    saved = reports.list_reports(document.document_id)[0]
+    assert saved.lines[0].operation_assessment == "gap"
+    assert saved.lines[0].quote is None
+    assert not saved.totals_by_currency
 
 
 def test_current_lab_scope_confirmation_removes_ready_row_from_pending_review(stores) -> None:
@@ -534,7 +812,9 @@ def test_groups_filter_table_and_clear_inspected_item_when_outside_group(stores)
     assert not requirement_choices(app)
 
 
-def test_matching_requires_note_and_remains_separate_from_source_review(stores) -> None:
+def test_ordinary_matching_allows_blank_note_and_remains_separate_from_source_review(
+    stores,
+) -> None:
     document, run = seed(stores)
     specs, reports, _ = stores
     review_before = specs.load_review(document.document_id, run.run_id)
@@ -542,13 +822,17 @@ def test_matching_requires_note_and_remains_separate_from_source_review(stores) 
     assert not app.exception
     app = app.button(key="report_save_mapping").click().run()
     assert not app.exception
-    assert app.error
-    assert reports.load_workspace(document.document_id, run.run_id).version == 0
+    assert not app.error
+    initial = reports.load_workspace(document.document_id, run.run_id)
+    assert initial.version == 1
+    assert initial.mappings["req_pencil"].capability_verdict == "unreviewed"
+    assert "Operating scope was not assessed" in initial.mappings["req_pencil"].note
+    assert not initial.quantities
     app = save_support(app)
     assert not app.exception
     workspace = reports.load_workspace(document.document_id, run.run_id)
     choice = workspace.mappings["req_pencil"]
-    assert workspace.version == 1
+    assert workspace.version == 2
     assert choice.canonical_test_id == "pencil_hardness"
     assert choice.capability_id == "cap_pencil"
     assert choice.capability_verdict == "supported"

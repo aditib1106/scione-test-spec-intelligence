@@ -9,10 +9,11 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from scione.catalogs.models import Alias, LabCapability
+from scione.catalogs.models import Alias, LabCapability, LabOperatingLimit
+from scione.catalogs.normalization import is_source_defined_procedure
 from scione.catalogs.seed import default_demo_lab, load_reference_catalog
 from scione.providers import TokenUsage
-from scione.reports.matching import build_report, input_fingerprint, lab_fingerprint
+from scione.reports.matching import build_report, input_fingerprint, lab_fingerprint, support_basis
 from scione.reports.models import MappingChoice, QuoteChoice, ReportSnapshot, ReportWorkspace
 from scione.schemas import DocumentPage, IngestedDocument, TextExtractionStatus, TextReadingOrder
 from scione.specifications.models import (
@@ -116,7 +117,8 @@ def test_curated_english_chinese_aliases_and_unicode_formatting(name):
     assert line.status == "in_house"
     assert line.extraction_review_state == "ready"
     assert line.quote is None
-    assert "not been verified" in " ".join(line.reasons)
+    assert line.operation_assessment == "unknown"
+    assert "operating conditions / scope remain unresolved" in " ".join(line.reasons)
 
 
 @pytest.mark.parametrize("code", ["ISO2409", "iso 2409", "ＩＳＯ ２４０９"])
@@ -141,6 +143,92 @@ def test_known_test_absent_from_lab_is_catalog_gap_not_proof_impossible():
     assert "not proof" in " ".join(line.reasons)
 
 
+def test_absent_known_test_is_gap_without_forcing_multi_method_confirmation():
+    row = _requirement("Scratch resistance", ("ISO 20566", "ASTM D6279"))
+    inputs = _inputs([row])
+    line = build_report(*inputs).lines[0]
+    assert line.canonical_test_id == "scratch_resistance"
+    assert line.status == "test_gap"
+    assert line.method_ids == ["iso_20566", "astm_d6279"]
+    assert line.considered_method_codes == ["ISO 20566", "ASTM D6279"]
+    assert "Multiple method references" in " ".join(line.reasons)
+    assert "not proof" in " ".join(line.reasons)
+    assert line.capability is None
+    assert line.operation_assessment == "unknown"
+    assert line.mapping_choice is None
+    assert line.quote is None
+    assert line.requirement == row
+    assert line.extraction_review_state == "ready"
+    assert support_basis(line, lab_fingerprint(inputs[3])) is None
+
+
+@pytest.mark.parametrize(
+    ("name", "codes", "test_id", "method_ids"),
+    [
+        (
+            "Scratch resistance",
+            ("ISO 20566", "ASTM D6279"),
+            "scratch_resistance",
+            ["iso_20566", "astm_d6279"],
+        ),
+        (
+            "Paint-wetting impairment substances",
+            ("VDMA 24364, liquid paint",),
+            "paint_wetting_impairment",
+            ["vdma_24364"],
+        ),
+    ],
+)
+def test_unresolved_methods_still_require_review_when_lab_lists_the_test(
+    name, codes, test_id, method_ids
+):
+    inputs = _inputs([_requirement(name, codes)])
+    inputs[3].capabilities.append(
+        LabCapability(id="pending_method_scope", canonical_test_id=test_id, method_ids=method_ids)
+    )
+    line = build_report(*inputs).lines[0]
+    assert line.status == "needs_review"
+    assert line.capability is None
+    expected = list(codes) if len(codes) > 1 else ["VDMA 24364"]
+    assert line.lab_method_identifiers == expected
+    assert line.quote is None
+
+
+@pytest.mark.parametrize("name", ["Scratch resistanc", "Unknown customer scratch procedure"])
+def test_absent_lab_declaration_does_not_resolve_uncertain_catalog_identity(name):
+    line = build_report(*_inputs([_requirement(name, ("ISO 20566", "ASTM D6279"))])).lines[0]
+    assert line.canonical_test_id is None
+    assert line.status == "needs_review"
+    assert line.quote is None
+
+
+def test_absent_lab_declaration_does_not_hide_conflicting_test_and_method():
+    line = build_report(*_inputs([_requirement("Scratch resistance", ("ISO 2409",))])).lines[0]
+    assert line.canonical_test_id == "scratch_resistance"
+    assert line.status == "needs_review"
+    assert "test / method conflict" in " ".join(line.reasons)
+
+
+@pytest.mark.parametrize("review_status", ["needs_review", "excluded"])
+def test_absent_known_test_keeps_source_review_and_exclusion_priority(review_status):
+    row = _requirement("Scratch resistance", ("ISO 20566", "ASTM D6279"))
+    inputs = _inputs([row])
+    inputs[2].decisions[row.id] = RequirementReview(
+        requirement_id=row.id,
+        status=review_status,
+        note="The source needs checking, or is outside the customer's scope.",
+        updated_at=NOW,
+    )
+    line = build_report(*inputs).lines[0]
+    assert line.status == ("excluded" if review_status == "excluded" else "test_gap")
+    assert line.extraction_review_state == (
+        "excluded" if review_status == "excluded" else "needs_attention"
+    )
+    assert line.requirement == row
+    assert "Multiple method references" in " ".join(line.reasons)
+    assert line.quote is None
+
+
 @pytest.mark.parametrize("code", ["ISO 20567", "ISO 20567-2", "ASTM 20567-1"])
 def test_method_parts_and_authorities_never_collapse(code):
     line = build_report(*_inputs([_requirement("Stone-chip resistance", (code,))])).lines[0]
@@ -156,6 +244,189 @@ def test_unknown_custom_test_does_not_invent_catalog_identity():
     assert line.canonical_test_id is None
     assert line.status == "needs_review"
     assert line.unknown_methods == ["Client PROC-42"]
+
+
+@pytest.mark.parametrize(
+    ("name", "method", "test_id", "method_id"),
+    [
+        ("Pressure water jet adhesion", "ISO 16925", "pressure_water_jet_adhesion", "iso_16925"),
+        ("Water immersion", "ISO 2812-2", "water_immersion", "iso_2812_2"),
+        ("Filiform (aluminum)", "ISO 4623-2", "filiform_corrosion", "iso_4623_2"),
+        ("MEK (cure check)", "ASTM D5402", "solvent_cure_check", "astm_d5402"),
+        ("Outdoor, subtropical", "SAE J1976", "outdoor_subtropical_weathering", "sae_j1976"),
+        (
+            "Paint-wetting impairment substances",
+            "VDMA 24364",
+            "paint_wetting_impairment",
+            "vdma_24364",
+        ),
+    ],
+)
+def test_expanded_pilot_identity_reports_absent_declaration_without_forcing_support(
+    name, method, test_id, method_id
+):
+    line = build_report(*_inputs([_requirement(name, (method,))])).lines[0]
+    assert line.canonical_test_id == test_id
+    assert line.method_ids == [method_id]
+    assert line.status == "test_gap"
+    assert line.capability is None
+    assert line.quote is None
+
+
+@pytest.mark.parametrize(
+    ("name", "method", "test_id", "method_id"),
+    [
+        ("Long wave (LW)", "Wave-scan structure meter", "long_wave", "customer_wave_scan"),
+        ("Short wave (SW)", "Wave-scan structure meter", "short_wave", "customer_wave_scan"),
+        (
+            "Distinctness of image (DOI)",
+            "Wave-scan structure meter",
+            "distinctness_of_image",
+            "customer_wave_scan",
+        ),
+        (
+            "Mottling / clouding",
+            "Visual, 0 to 5 scale (0 = none)",
+            "mottling_clouding",
+            "customer_mottling_visual",
+        ),
+        (
+            "Popping limit, clearcoat",
+            "Wedge panel, DFT at first pop",
+            "popping_limit",
+            "customer_popping_wedge",
+        ),
+        (
+            "Sagging limit, clearcoat",
+            "Wedge panel with holes",
+            "sagging_limit",
+            "customer_sagging_wedge",
+        ),
+    ],
+)
+def test_exact_curated_source_procedure_remains_explicit_and_not_lab_support(
+    name, method, test_id, method_id
+):
+    line = build_report(*_inputs([_requirement(name, (method,))])).lines[0]
+    assert line.canonical_test_id == test_id
+    assert line.method_ids == [method_id]
+    assert line.considered_method_codes == [method]
+    assert line.unknown_methods == []
+    assert line.status == "test_gap"
+
+
+def test_curated_equipment_wrapper_resolves_exact_alias_not_arbitrary_method_substrings():
+    row = _requirement("Scratch resistance, dry mar", ("Crockmeter per ASTM D6279",))
+    line = build_report(*_inputs([row])).lines[0]
+    assert line.canonical_test_id == "scratch_resistance"
+    assert line.method_ids == ["astm_d6279"]
+    assert line.status == "test_gap"
+    row.requested_methods[0].code = "Our replacement instead of ASTM D6279"
+    bad = build_report(*_inputs([row])).lines[0]
+    assert bad.status == "test_gap"
+    assert bad.unknown_methods == ["Our replacement instead of ASTM D6279"]
+    assert "Unrecognized method reference" in " ".join(bad.reasons)
+    assert bad.capability is None
+
+
+@pytest.mark.parametrize(
+    "name", ["Thermal cycling", "Heat aging", "Recoat, sanded", "Transport protection film"]
+)
+def test_curated_source_defined_procedure_identifies_gap_without_inventing_method(name):
+    row = _requirement(name, ())
+    row.conditions = [RequirementValue(name="Customer procedure", raw_value="500 h at 90 °C")]
+    inputs = _inputs([row])
+    assert is_source_defined_procedure(row, inputs[-2])
+    line = build_report(*inputs).lines[0]
+    assert line.canonical_test_id is not None
+    assert line.method_ids == []
+    assert line.considered_method_codes == []
+    assert line.status == "test_gap"
+    assert "no standard method was inferred" in " ".join(line.reasons)
+    assert line.quote is None
+
+
+def test_source_defined_procedure_does_not_match_a_lab_merely_by_name():
+    row = _requirement("Heat aging", ())
+    inputs = _inputs([row])
+    inputs[3].capabilities.append(LabCapability(id="heat", canonical_test_id="heat_aging"))
+    line = build_report(*inputs).lines[0]
+    assert line.canonical_test_id == "heat_aging"
+    assert line.status == "needs_review"
+    assert line.capability is None
+
+
+@pytest.mark.parametrize("name", ["Cross-cut adhesion", "Unknown customer heat procedure"])
+def test_missing_formal_method_or_unknown_custom_name_still_requires_review(name):
+    row = _requirement(name, ())
+    inputs = _inputs([row])
+    assert not is_source_defined_procedure(row, inputs[-2])
+    assert build_report(*inputs).lines[0].status == "needs_review"
+
+
+def test_known_custom_name_absent_from_lab_preserves_missing_method_details():
+    row = _requirement("Heat aging", ())
+    row.conditions = []
+    inputs = _inputs([row])
+    assert not is_source_defined_procedure(row, inputs[-2])
+    line = build_report(*inputs).lines[0]
+    assert line.status == "test_gap"
+    assert "No requested method was extracted" in " ".join(line.reasons)
+    assert line.capability is None
+
+
+@pytest.mark.parametrize(
+    "medium", ["Sulfuric acid 1 %", "Tree resin", "Pancreatin 50 % (bird droppings)"]
+)
+def test_chemical_media_use_scoped_family_without_inventing_standard_equivalence(medium):
+    row = _requirement(medium, ("Gradient oven",))
+    row.applicability = ["4.3 Chemical and fluid resistance"]
+    line = build_report(*_inputs([row])).lines[0]
+    assert line.canonical_test_id == "chemical_resistance"
+    assert line.method_ids == ["customer_gradient_oven"]
+    assert "iso_2812_5" not in line.method_ids
+    assert line.status == "test_gap"
+    assert line.requirement.original_test_name == medium
+    assert "Scoped curated" in line.match_basis
+
+
+@pytest.mark.parametrize(
+    "section", ["Drinking water analysis", "4.1 Humidity, corrosion and thermal", ""]
+)
+def test_bare_medium_does_not_globally_normalize_to_chemical_resistance(section):
+    row = _requirement("Deionized water", ("Gradient oven",))
+    row.applicability = [section] if section else []
+    line = build_report(*_inputs([row])).lines[0]
+    assert line.canonical_test_id is None
+    assert line.status == "needs_review"
+
+
+def test_spot_test_medium_with_source_conditions_is_identified_but_not_a_formal_method():
+    row = _requirement("Gasoline E10", ())
+    row.applicability = ["4.3 Chemical and fluid resistance"]
+    row.conditions = [RequirementValue(name="Procedure", raw_value="5 drops, evaporate, 3 cycles")]
+    inputs = _inputs([row])
+    assert is_source_defined_procedure(row, inputs[-2])
+    line = build_report(*inputs).lines[0]
+    assert line.canonical_test_id == "chemical_resistance"
+    assert line.status == "test_gap"
+    assert line.method_ids == []
+
+
+def test_custom_procedure_revision_and_qualified_formal_reference_remain_reviewable():
+    row = _requirement("Long wave (LW)", ("Wave-scan structure meter",))
+    row.requested_methods[0].revision = "2026"
+    line = build_report(*_inputs([row])).lines[0]
+    assert line.status == "test_gap"
+    assert line.unknown_methods == ["Wave-scan structure meter"]
+    assert "Requested procedure revision" in " ".join(line.reasons)
+    row = _requirement("Paint-wetting impairment substances", ("VDMA 24364, liquid paint",))
+    line = build_report(*_inputs([row])).lines[0]
+    assert line.canonical_test_id == "paint_wetting_impairment"
+    assert line.status == "test_gap"
+    assert line.unknown_methods == ["VDMA 24364, liquid paint"]
+    assert "Method qualifier needs review" in " ".join(line.reasons)
+    assert line.capability is None
 
 
 @pytest.mark.parametrize("name", ["Cross cut adheison", "Customer adhesion check"])
@@ -236,6 +507,32 @@ def test_multiple_methods_require_explicit_subset_of_original_codes():
     assert build_report(*inputs).lines[0].status == "needs_review"
 
 
+def test_explicit_distinct_cumulative_roles_can_identify_without_selecting_an_alternative():
+    row = _requirement("Color difference (ΔE)", ("ASTM E2194", "ISO 11664-4"))
+    row.requested_methods[0].role = "measurement"
+    row.requested_methods[1].role = "calculation"
+    line = build_report(*_inputs([row])).lines[0]
+    assert line.canonical_test_id == "color_difference"
+    assert line.status == "test_gap"
+    assert line.method_ids == ["astm_e2194", "iso_11664_4"]
+    assert line.considered_method_codes == ["ASTM E2194", "ISO 11664-4"]
+    assert line.mapping_choice is None
+    row.special_instructions = ["Regional alternative; ISO applies instead of ASTM in region X."]
+    alternative = build_report(*_inputs([row])).lines[0]
+    assert alternative.status == "test_gap"
+    assert "Multiple method references" in " ".join(alternative.reasons)
+    assert alternative.capability is None
+
+
+def test_multiple_method_roles_cannot_hide_test_method_conflict():
+    row = _requirement("Cross-cut adhesion", ("ISO 2409", "ISO 2813"))
+    row.requested_methods[0].role = "measurement"
+    row.requested_methods[1].role = "assessment"
+    line = build_report(*_inputs([row])).lines[0]
+    assert line.status == "needs_review"
+    assert "conflict" in " ".join(line.reasons)
+
+
 def test_human_can_choose_both_methods_but_no_combined_capability_is_invented():
     inputs = _inputs([_requirement(methods=("ISO 2409", "ASTM D3359"))])
     inputs[-1].mappings["req_001"] = MappingChoice(
@@ -294,10 +591,10 @@ def test_explicit_unresolved_choice_is_not_silently_replaced_by_automatic_alias(
     assert line.quote is None
 
 
-def test_conditions_do_not_auto_compare_free_text_but_human_can_record_gap():
+def test_typed_operating_gap_is_automatic_and_cannot_be_overridden_by_human_support():
     inputs = _inputs([_requirement("Stone-chip resistance", ("ISO 20567-1",))])
     inputs[1].extraction.requirements[0].conditions[0].raw_value = "-20 °C"
-    assert build_report(*inputs).lines[0].status == "in_house"
+    assert build_report(*inputs).lines[0].status == "condition_gap"
     inputs[-1].mappings["req_001"] = MappingChoice(
         canonical_test_id="stone_chip_resistance",
         lab_fingerprint=lab_fingerprint(inputs[3]),
@@ -306,6 +603,160 @@ def test_conditions_do_not_auto_compare_free_text_but_human_can_record_gap():
     )
     line = build_report(*inputs).lines[0]
     assert line.status == "condition_gap"
+    assert line.operation_assessment == "gap"
+    assert line.quote is None
+    inputs[-1].mappings["req_001"].capability_verdict = "supported"
+    line = build_report(*inputs).lines[0]
+    assert line.status == "condition_gap"
+    assert support_basis(line, lab_fingerprint(inputs[3])) is None
+
+
+def _automatic_pencil_inputs():
+    row = _requirement("Pencil hardness", ("ISO 15184",))
+    row.conditions = [RequirementValue(name="Test load", raw_value="750", unit="g")]
+    row.acceptance_criteria = [RequirementValue(name="Pencil rating", raw_value="At least F")]
+    row.applicability = ["3.2 Mechanical"]
+    row.special_instructions = []
+    inputs = _inputs([row])
+    pencil = next(cap for cap in inputs[3].capabilities if cap.id == "cap_pencil")
+    pencil.price, pencil.currency, pencil.pricing_basis = Decimal("12.50"), "USD", "per panel"
+    return inputs
+
+
+def _explicit_quantity(inputs, *, quantity="2.5", fingerprint=None):
+    inputs[-1].quantities["req_001"] = QuoteChoice(
+        quantity=Decimal(quantity),
+        scope_and_basis_confirmed=True,
+        lab_fingerprint=fingerprint or lab_fingerprint(inputs[3]),
+        note="Reviewer confirmed applicable panels and catalog per-panel pricing basis.",
+    )
+
+
+def test_auto_support_skips_repeated_mapping_confirmation_but_has_no_default_quantity():
+    inputs = _automatic_pencil_inputs()
+    unchanged_run = inputs[1].model_dump_json()
+    line = build_report(*inputs).lines[0]
+    assert line.status == "in_house"
+    assert line.operation_assessment == "supported"
+    assert line.mapping_choice is None
+    assert support_basis(line, lab_fingerprint(inputs[3])) == "automatic"
+    assert any("750 g" in check and "supported" in check for check in line.operation_checks)
+    assert line.quote is None
+    assert inputs[-1].quantities == {}
+    assert inputs[-1].mappings == {}
+    assert inputs[1].model_dump_json() == unchanged_run
+
+
+def test_auto_operating_support_allows_exact_quote_only_after_explicit_current_quantity():
+    inputs = _automatic_pencil_inputs()
+    _explicit_quantity(inputs)
+    report = build_report(*inputs)
+    line = report.lines[0]
+    assert line.mapping_choice is None
+    assert support_basis(line, lab_fingerprint(inputs[3])) == "automatic"
+    assert line.quote.quantity == Decimal("2.5")
+    assert line.quote.subtotal == Decimal("31.250")
+    assert report.totals_by_currency == {"USD": Decimal("31.250")}
+    assert report.status == "draft"
+
+
+@pytest.mark.parametrize(
+    "cause", ["stale_quantity", "source_pending", "human_pending", "missing_price"]
+)
+def test_auto_operating_support_does_not_skip_other_quote_eligibility(cause):
+    inputs = _automatic_pencil_inputs()
+    if cause == "missing_price":
+        pencil = next(cap for cap in inputs[3].capabilities if cap.id == "cap_pencil")
+        pencil.price = None
+    _explicit_quantity(inputs, fingerprint="a" * 64 if cause == "stale_quantity" else None)
+    if cause == "source_pending":
+        inputs[2].decisions["req_001"] = RequirementReview(
+            requirement_id="req_001", status="needs_review", updated_at=NOW
+        )
+    if cause == "human_pending":
+        inputs[-1].mappings["req_001"] = MappingChoice(
+            canonical_test_id="pencil_hardness",
+            capability_id="cap_pencil",
+            capability_verdict="supported",
+            lab_fingerprint="b" * 64,
+            note="Old declaration needs renewal before pricing.",
+        )
+    report = build_report(*inputs)
+    assert report.lines[0].operation_assessment == "supported"
+    assert report.lines[0].quote is None
+    assert report.totals_by_currency == {}
+    assert any("saved quantity was not priced" in reason for reason in report.warnings)
+
+
+def test_auto_supported_load_is_not_a_prediction_of_material_acceptance():
+    inputs = _automatic_pencil_inputs()
+    inputs[1].extraction.requirements[0].acceptance_criteria = [
+        RequirementValue(name="Material rating", raw_value="At least 9H, no cracking")
+    ]
+    line = build_report(*inputs).lines[0]
+    assert line.operation_assessment == "supported"
+    acceptance = [
+        check for check in line.operation_checks if "Material acceptance criteria" in check
+    ]
+    assert len(acceptance) == 1
+    assert "not predicted" in acceptance[0]
+    assert "informational" in acceptance[0]
+
+
+def test_unparsed_customer_scope_stays_unknown_and_quantity_alone_cannot_approve_it():
+    inputs = _automatic_pencil_inputs()
+    inputs[1].extraction.requirements[0].special_instructions = ["Test a curved customer bracket"]
+    _explicit_quantity(inputs)
+    line = build_report(*inputs).lines[0]
+    assert line.status == "in_house"
+    assert line.operation_assessment == "unknown"
+    assert support_basis(line, lab_fingerprint(inputs[3])) is None
+    assert line.quote is None
+
+
+def test_typed_load_mismatch_blocks_even_explicit_human_scope_and_quantity():
+    inputs = _automatic_pencil_inputs()
+    inputs[1].extraction.requirements[0].conditions[0].raw_value = "800"
+    inputs[-1].mappings["req_001"] = MappingChoice(
+        canonical_test_id="pencil_hardness",
+        capability_id="cap_pencil",
+        capability_verdict="supported",
+        lab_fingerprint=lab_fingerprint(inputs[3]),
+        note="Reviewer claimed support without updating declared 750 g operating limit.",
+    )
+    _explicit_quantity(inputs)
+    line = build_report(*inputs).lines[0]
+    assert line.status == "condition_gap"
+    assert line.operation_assessment == "gap"
+    assert line.mapping_choice.capability_verdict == "supported"
+    assert support_basis(line, lab_fingerprint(inputs[3])) is None
+    assert line.quote is None
+
+
+def test_conflicting_free_text_and_new_typed_limits_cannot_be_auto_supported():
+    inputs = _automatic_pencil_inputs()
+    pencil = next(cap for cap in inputs[3].capabilities if cap.id == "cap_pencil")
+    pencil.declared_constraints = "500 g only."
+    pencil.structured_limits = [
+        LabOperatingLimit(parameter="load", values=[Decimal("750")], unit="g")
+    ]
+    _explicit_quantity(inputs)
+    line = build_report(*inputs).lines[0]
+    assert line.operation_assessment == "unknown"
+    assert line.quote is None
+    assert any("conflict" in reason for reason in line.operation_reasons)
+
+
+def test_missing_method_or_identity_cannot_acquire_auto_support_from_fitting_conditions():
+    inputs = _automatic_pencil_inputs()
+    inputs[1].extraction.requirements[
+        0
+    ].original_test_name = "Unrecognized customer hardness operation"
+    _explicit_quantity(inputs)
+    line = build_report(*inputs).lines[0]
+    assert line.status == "needs_review"
+    assert line.canonical_test_id is None
+    assert line.operation_assessment == "unknown"
     assert line.quote is None
 
 

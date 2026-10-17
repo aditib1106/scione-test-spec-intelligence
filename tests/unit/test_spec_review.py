@@ -443,3 +443,151 @@ def test_exact_table_row_does_not_clear_model_caution_or_explicit_human_review()
     )[row.id]
     assert assessed.state == "needs_attention"
     assert assessed.reasons == ("Marked for review by a user.",)
+
+
+def _customer_procedure_document(*, method: str | None = None) -> tuple[bytes, IngestedDocument]:
+    procedure = "500 h at 90 C"
+    if method:
+        procedure = method + "; " + procedure
+    rows = [
+        ("Test", "Customer procedure", "Acceptance"),
+        ("Heat aging", procedure, "No cracking"),
+        ("Other procedure", "100 h at 20 C", "No discoloration"),
+    ]
+    xs, ys = (30, 190, 440, 650), (40, 85, 130, 175)
+    with pymupdf.open() as pdf:
+        page = pdf.new_page(width=700, height=400)
+        for x in xs:
+            page.draw_line((x, ys[0]), (x, ys[-1]))
+        for y in ys:
+            page.draw_line((xs[0], y), (xs[-1], y))
+        for col in range(3):
+            for row in range(len(rows)):
+                page.insert_text((xs[col] + 5, ys[row] + 25), rows[row][col], fontsize=10)
+        text, data = page.get_text(), pdf.tobytes()
+    document = _document().model_copy(
+        update={
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "pages": [
+                DocumentPage(
+                    page_number=1,
+                    text=text,
+                    character_count=len(text),
+                    non_whitespace_character_count=len("".join(text.split())),
+                )
+            ],
+        }
+    )
+    return data, document
+
+
+def _customer_procedure_row(quote: str | None = None) -> CustomerRequirement:
+    return CustomerRequirement(
+        id="req_001",
+        original_test_name="Heat aging",
+        conditions=[RequirementValue(name="Customer procedure", raw_value="500 h at 90 C")],
+        acceptance_criteria=[RequirementValue(name="Appearance", raw_value="No cracking")],
+        applicability=["4.1 Humidity, corrosion and thermal"],
+        evidence=[
+            RequirementEvidence(
+                page=1,
+                quote=quote if quote is not None else "Heat aging | 500 h at 90 C | No cracking",
+            )
+        ],
+    )
+
+
+def test_complete_exact_source_defined_procedure_waives_only_missing_formal_method() -> None:
+    pdf, document = _customer_procedure_document()
+    row = _customer_procedure_row()
+    run = _run(rows=[row])
+    original = run.model_dump_json()
+
+    assert assess_requirements(run, document)[row.id].state == "needs_attention"
+    assessed = assess_requirements(run, document, pdf_bytes=pdf)[row.id]
+    assert assessed.state == "ready"
+    assert assessed.reasons == ()
+    assert row.requested_methods == []
+    assert run.model_dump_json() == original
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        "Heat aging | 500 h at 95 C | No cracking",
+        "Heat aging | 100 h at 20 C | No cracking",
+        "Heat aging",
+        "Heat aging | 500 h at 90 C",
+    ],
+)
+def test_invented_cross_row_or_partial_procedure_quote_does_not_waive_missing_method(quote) -> None:
+    pdf, document = _customer_procedure_document()
+    row = _customer_procedure_row(quote)
+    assessed = assess_requirements(_run(rows=[row]), document, pdf_bytes=pdf)[row.id]
+    assert assessed.state == "needs_attention"
+    assert "No test method was identified; check the source." in assessed.reasons
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        "Heat aging | ISO 11341; 500 h at 90 C | No cracking",
+        "Heat aging | 500 h at 90 C | No cracking",
+        "Heat aging",
+    ],
+)
+def test_source_defined_name_never_waives_an_omitted_formal_method_in_source_row(quote) -> None:
+    pdf, document = _customer_procedure_document(method="ISO 11341")
+    row = _customer_procedure_row(quote)
+    assessed = assess_requirements(_run(rows=[row]), document, pdf_bytes=pdf)[row.id]
+    assert assessed.state == "needs_attention"
+    assert "No test method was identified; check the source." in assessed.reasons
+
+
+def test_proved_customer_procedure_keeps_model_caution_and_explicit_human_review() -> None:
+    pdf, document = _customer_procedure_document()
+    row = _customer_procedure_row()
+    issue = "req_001: model could not resolve this customer's material qualification."
+    assessed = assess_requirements(_run(rows=[row], issues=[issue]), document, pdf_bytes=pdf)[
+        row.id
+    ]
+    assert assessed.state == "needs_attention"
+    assert assessed.reasons == (issue,)
+    reviewed = assess_requirements(
+        _run(rows=[row]), document, _review("needs_review"), pdf_bytes=pdf
+    )[row.id]
+    assert reviewed.state == "needs_attention"
+    assert reviewed.reasons == ("Marked for review by a user.",)
+
+
+@pytest.mark.parametrize("cause", ["unknown_name", "no_conditions", "wrong_page"])
+def test_source_procedure_clearance_requires_curated_name_conditions_and_correct_page(
+    cause,
+) -> None:
+    pdf, document = _customer_procedure_document()
+    row = _customer_procedure_row()
+    if cause == "unknown_name":
+        row.original_test_name = "Customer invented arbitrary heat operation"
+    if cause == "no_conditions":
+        row.conditions = []
+    if cause == "wrong_page":
+        row.evidence[0].page = 2
+    assessed = assess_requirements(_run(rows=[row]), document, pdf_bytes=pdf)[row.id]
+    assert assessed.state == "needs_attention"
+    assert "No test method was identified; check the source." in assessed.reasons
+
+
+def test_procedure_locator_failure_cannot_clear_missing_method(monkeypatch) -> None:
+    from scione.specifications import review
+    from scione.specifications.pdf_preview import PDFPreviewError
+
+    pdf, document = _customer_procedure_document()
+    row = _customer_procedure_row()
+
+    def unavailable(*args, **kwargs):
+        raise PDFPreviewError("Independent source inspection unavailable.")
+
+    monkeypatch.setattr(review, "inspect_pdf_highlights", unavailable)
+    assessed = assess_requirements(_run(rows=[row]), document, pdf_bytes=pdf)[row.id]
+    assert assessed.state == "needs_attention"
+    assert "No test method was identified; check the source." in assessed.reasons

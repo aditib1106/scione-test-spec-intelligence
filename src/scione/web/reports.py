@@ -15,7 +15,12 @@ from pydantic import ValidationError
 from scione.catalogs import FileLabStore, LabProfile, ReferenceCatalog, load_reference_catalog
 from scione.catalogs.lab_store import LabStoreError
 from scione.config import Settings
-from scione.reports.matching import build_report, lab_fingerprint
+from scione.reports.matching import (
+    MATCHING_POLICY_VERSION,
+    build_report,
+    lab_fingerprint,
+    support_basis,
+)
 from scione.reports.models import (
     STATUS_LABELS,
     GapLine,
@@ -164,10 +169,13 @@ def _prepare_editor(report: ReportSnapshot, line: GapLine) -> bool:
 def _mapping_editor(
     report: ReportSnapshot, line: GapLine, store: FileReportStore, stale: bool
 ) -> None:
-    with st.expander("Change test or method / record a gap"):
+    with st.expander(
+        "Change test or method / record a gap", expanded=line.status == "needs_review"
+    ):
         st.caption(
-            "This is separate from confirming extracted content. Method substitutions are not "
-            "automatically equivalent. A scope confirmation cannot make a missing method available."
+            "Use this only to correct a match or clarify which source methods apply. "
+            "A missing lab entry is already reported as a gap; you do not need to confirm it. "
+            "Choosing a different method does not make it equivalent to the customer's method."
         )
         tests = {test.id: test for test in report.catalog.tests}
         st.markdown("**Test identity**")
@@ -177,7 +185,7 @@ def _mapping_editor(
         else:
             st.caption("No catalog candidate identified. A new catalog entry may be needed.")
         st.selectbox(
-            "Catalog test identity",
+            "Test in the reference catalog",
             [None, *tests],
             format_func=lambda value: tests[value].name if value else "Unresolved / not in catalog",
             key="report_mapping_test",
@@ -186,7 +194,7 @@ def _mapping_editor(
             dict.fromkeys(method.code for method in line.requirement.requested_methods)
         )
         st.multiselect(
-            "Requested methods to assess for this scope",
+            "Methods required for this request",
             original_codes,
             key="report_mapping_methods",
             help=(
@@ -202,10 +210,16 @@ def _mapping_editor(
         if st.session_state.get("report_mapping_capability") not in capabilities:
             st.session_state["report_mapping_capability"] = None
         st.markdown("**Lab capability for this request**")
+        if not capabilities:
+            st.caption(
+                "Your lab has no entry for this test. It will appear as a catalog gap in the "
+                "report without any confirmation. Add a capability in My Lab only if it exists."
+            )
         st.selectbox(
-            "Lab declaration to assess",
+            "Your lab's matching capability",
             [None, *capabilities],
             key="report_mapping_capability",
+            disabled=not capabilities,
             format_func=lambda value: (
                 ", ".join(
                     report.catalog.method_by_id(mid).identifier
@@ -218,24 +232,87 @@ def _mapping_editor(
             ),
         )
         st.selectbox(
-            "Conditions and scope decision",
+            "Can your lab meet these conditions?",
             list(_VERDICTS),
             key="report_mapping_verdict",
             format_func=_VERDICTS.__getitem__,
         )
-        st.text_area("Matching / scope review note", key="report_mapping_note", max_chars=4000)
+        st.text_area(
+            "Note (optional unless removing a method or recording a limitation)",
+            key="report_mapping_note",
+            max_chars=4000,
+            help=(
+                "Explain why a source method does not apply if you remove it. "
+                "If your lab cannot meet the scope, describe the limitation. "
+                "Otherwise you can leave this blank."
+            ),
+        )
         save, reset = st.columns(2)
         if save.button(
             "Save matching review", key="report_save_mapping", type="primary", disabled=stale
         ):
+            selected_codes = st.session_state["report_mapping_methods"]
+            capability_id = st.session_state["report_mapping_capability"]
+            verdict = st.session_state["report_mapping_verdict"]
+            note = st.session_state["report_mapping_note"].strip()
+            if original_codes and not selected_codes:
+                st.error(
+                    "Keep at least one method from the customer request. "
+                    "To leave an unavailable test in the report, keep its original methods."
+                )
+                return
+            if set(selected_codes) != set(original_codes) and not note:
+                st.error(
+                    "Add a note explaining why the removed method does not apply to this request."
+                )
+                return
+            if verdict in {"supported", "unsupported"} and capability_id not in capabilities:
+                st.error(
+                    "Choose a lab capability before assessing its operating conditions. "
+                    "If your lab has no entry, leave the conditions unassessed; "
+                    "the missing capability will remain visible in the report."
+                )
+                return
+            if verdict == "unsupported" and not note:
+                st.error("Add a note describing the limitation your lab cannot meet.")
+                return
+            if verdict == "supported":
+                if line.operation_assessment == "gap":
+                    st.error(
+                        "The request exceeds the recorded lab limits. Update an incorrect lab "
+                        "entry in My Lab first; this review cannot override those limits."
+                    )
+                    return
+                if (
+                    line.status not in {"in_house", "condition_gap"}
+                    or line.capability is None
+                    or capability_id != line.capability.id
+                    or st.session_state["report_mapping_test"] != line.canonical_test_id
+                    or set(selected_codes) != set(line.considered_method_codes)
+                ):
+                    st.error(
+                        "Save the test and method selection with conditions not assessed first. "
+                        "Then confirm the displayed lab scope. A missing or different method "
+                        "cannot be approved as a match."
+                    )
+                    return
+            if not note:
+                note = (
+                    "Saved the test and method selection; original method references retained. "
+                    + (
+                        "Lab reviewer marked the selected operating scope as supported."
+                        if verdict == "supported"
+                        else "Operating scope was not assessed."
+                    )
+                )
             candidate = report.workspace.model_copy(deep=True)
             candidate.mappings[line.requirement.id] = MappingChoice(
                 canonical_test_id=st.session_state["report_mapping_test"],
-                selected_method_codes=st.session_state["report_mapping_methods"],
-                capability_id=st.session_state["report_mapping_capability"],
-                capability_verdict=st.session_state["report_mapping_verdict"],
+                selected_method_codes=selected_codes if original_codes else None,
+                capability_id=capability_id,
+                capability_verdict=verdict,
                 lab_fingerprint=lab_fingerprint(report.lab),
-                note=st.session_state["report_mapping_note"],
+                note=note,
             )
             _save_workspace(store, candidate)
         if reset.button(
@@ -254,34 +331,54 @@ def _scope_actions(
     """Confirm the displayed, persisted match, never an unsaved identity edit."""
 
     eligible = line.status in {"in_house", "condition_gap"} and line.capability is not None
+    automatic = support_basis(line, lab_fingerprint(report.lab)) == "automatic"
     with st.container(height=90, border=False, key="report_scope_status"):
         if line.status == "needs_review":
-            st.info("Choose the correct test and method below before confirming lab support.")
+            st.info(
+                "The applicable test or method is unclear. Check the specification, "
+                "then use the open matching form below. No lab-support decision is needed yet."
+            )
         elif line.status in {"test_gap", "method_gap"}:
             st.info(
-                "This test or requested method is not listed in your lab catalog. "
-                "It stays a gap unless the matching is corrected."
+                "This test or requested method is not listed in your current lab catalog. "
+                "It is already included as a gap in the report — no confirmation needed. "
+                "If your lab offers it, update My Lab or correct the matching below."
             )
         elif _lab_scope_review(report, line) == "Confirmed by lab reviewer":
             st.success("Lab support confirmed for this requirement.")
+        elif _lab_scope_review(report, line) == "Operating conditions matched automatically":
+            st.success("Operating conditions matched automatically. No extra confirmation needed.")
         elif line.status == "condition_gap":
-            st.warning("Your review records that the lab cannot meet this scope.")
+            st.warning(
+                "The requested operations exceed declared lab limits. This is already a "
+                "report gap — no confirmation needed. Update My Lab if the limits are incorrect."
+                if line.operation_assessment == "gap"
+                else "Your review records that the lab cannot meet this scope."
+            )
         else:
             st.info(
                 "Check the displayed requirements, then confirm whether your lab can meet them."
             )
+    # A catalog gap or unresolved identity is not a lab operating decision.
+    # Do not show two unusable buttons where the user has nothing to approve.
+    if not eligible or line.operation_assessment == "gap":
+        return
     confirm, gap = st.columns(2)
-    supported = confirm.button(
-        "Confirm lab support",
-        key="report_confirm_scope",
-        type="primary",
-        disabled=stale or not eligible,
-        width="stretch",
-    )
+    supported = False
+    if not automatic:
+        supported = confirm.button(
+            "Confirm lab support",
+            key="report_confirm_scope",
+            type="primary",
+            disabled=stale,
+            width="stretch",
+        )
+    else:
+        confirm.caption("Already matched. You can still record a limitation if needed.")
     unsupported = gap.button(
         "Cannot meet this scope",
         key="report_decline_scope",
-        disabled=stale or not eligible,
+        disabled=stale,
         width="stretch",
     )
     with st.expander("Add a review note"):
@@ -292,6 +389,9 @@ def _scope_actions(
             placeholder="Explain any limitations or add context…",
         )
     if (supported or unsupported) and eligible and not stale:
+        if supported and line.operation_assessment == "gap":
+            st.error("This request exceeds the recorded lab limits. Update My Lab first.")
+            return
         note = st.session_state["report_scope_note"].strip()
         if unsupported and not note:
             st.error("Add a review note explaining the limitation before recording this gap.")
@@ -344,14 +444,12 @@ def _quote_editor(
         eligible = (
             line.status == "in_house"
             and line.extraction_review_state in {"ready", "confirmed"}
-            and line.mapping_choice is not None
-            and line.mapping_choice.capability_verdict == "supported"
-            and line.mapping_choice.lab_fingerprint == lab_fingerprint(report.lab)
+            and support_basis(line, lab_fingerprint(report.lab)) is not None
             and cap is not None
             and cap.price is not None
         )
         st.caption(
-            "Add a quantity only after reviewing this scope and confirming lab support above. "
+            "Add a quantity after lab review or an automatic operating match. "
             "Resolve flagged source content in Specifications first. Records may overlap or refer "
             "to alternative regions; no quantity or full-job total is inferred."
         )
@@ -424,7 +522,14 @@ def _requirement_details(
     with right:
         with st.container(border=True):
             st.markdown("**Your lab lists**")
-            st.write(", ".join(line.lab_method_identifiers) or "No matching method listed")
+            st.write(
+                ", ".join(line.lab_method_identifiers)
+                or (
+                    "Matching needs clarification"
+                    if line.status == "needs_review"
+                    else "No matching method listed"
+                )
+            )
             st.caption(line.canonical_test_name or "Test identity needs confirmation")
     with st.container(border=True):
         st.markdown("**Requirements to check**")
@@ -459,6 +564,11 @@ def _requirement_details(
     if line.status == "excluded":
         st.info("Excluded in Specifications. This item is not included in the quote.")
         return
+    if line.operation_checks:
+        with st.expander("Automatic operating comparison"):
+            for check in line.operation_checks:
+                st.text(check)
+            st.caption("This checks declared operating limits, not whether the material will pass.")
 
 
 def _line_detail(
@@ -481,21 +591,24 @@ def _lab_scope_review(report: ReportSnapshot, line: GapLine) -> str:
         return "Excluded"
     if line.status == "condition_gap":
         return "Outside lab scope"
+    if line.status == "test_gap":
+        return "Not listed in lab catalog — no confirmation needed"
+    if line.status == "method_gap":
+        return "Requested method not listed — no confirmation needed"
     if line.status != "in_house":
         return "Resolve test / method first"
-    choice = line.mapping_choice
-    if (
-        choice is not None
-        and choice.capability_verdict == "supported"
-        and choice.lab_fingerprint == lab_fingerprint(report.lab)
-    ):
+    basis = support_basis(line, lab_fingerprint(report.lab))
+    if basis == "human":
         return "Confirmed by lab reviewer"
+    if basis == "automatic":
+        return "Operating conditions matched automatically"
     return "Pending lab review"
 
 
 def _needs_review(report: ReportSnapshot, line: GapLine) -> bool:
     stale_scope = (
-        line.mapping_choice is not None
+        line.status == "in_house"
+        and line.mapping_choice is not None
         and line.mapping_choice.capability_verdict != "unreviewed"
         and line.mapping_choice.lab_fingerprint != lab_fingerprint(report.lab)
     )
@@ -514,9 +627,11 @@ def _item_status(report: ReportSnapshot, line: GapLine) -> str:
         return "Check extracted text in Specifications"
     return {
         "in_house": (
-            "Lab support confirmed"
-            if _lab_scope_review(report, line) == "Confirmed by lab reviewer"
-            else "Confirm lab support"
+            "Operating conditions matched automatically"
+            if support_basis(line, lab_fingerprint(report.lab)) == "automatic"
+            else "Lab support confirmed"
+            if support_basis(line, lab_fingerprint(report.lab)) == "human"
+            else "Check remaining operating requirements"
         ),
         "needs_review": (
             "No catalog match yet"
@@ -628,9 +743,18 @@ def _bulk_scope_review(report: ReportSnapshot, store: FileReportStore) -> None:
         )
         st.text_area("Batch review note / limitation", key="report_bulk_note", max_chars=4000)
         disabled = stale or not selected or not st.session_state["report_bulk_ack"]
+        operating_gap = any(by_id[value].operation_assessment == "gap" for value in selected)
+        if operating_gap:
+            st.info(
+                "A selected request exceeds declared operating limits; "
+                "support confirmation is disabled."
+            )
         support, decline = st.columns(2)
         supported = support.button(
-            "Confirm selected", key="report_bulk_confirm", type="primary", disabled=disabled
+            "Confirm selected",
+            key="report_bulk_confirm",
+            type="primary",
+            disabled=disabled or operating_gap,
         )
         unsupported = decline.button(
             "Cannot meet selected", key="report_bulk_decline", disabled=disabled
@@ -639,6 +763,14 @@ def _bulk_scope_review(report: ReportSnapshot, store: FileReportStore) -> None:
         if (supported or unsupported) and not disabled:
             if any(identifier not in eligible for identifier in selected):
                 st.error("A selected test no longer has a resolved method and lab declaration.")
+                return
+            if supported and any(
+                eligible[value].operation_assessment == "gap" for value in selected
+            ):
+                st.error(
+                    "A selected request exceeds declared operating limits. "
+                    "Update the lab declaration first."
+                )
                 return
             note = st.session_state["report_bulk_note"].strip()
             if unsupported and not note:
@@ -687,11 +819,11 @@ def _capability_review(report: ReportSnapshot, store: FileReportStore, page_coun
     pending = sum(_needs_review(report, line) for line in report.lines)
     for column, label, value in zip(
         st.columns(3),
-        ["Need review", "Lab support confirmed", "Catalog / scope gaps"],
+        ["Need review", "Operating support resolved", "Catalog / scope gaps"],
         [
             pending,
             sum(
-                _lab_scope_review(report, line) == "Confirmed by lab reviewer"
+                support_basis(line, lab_fingerprint(report.lab)) is not None
                 for line in report.lines
             ),
             counts["test_gap"] + counts["method_gap"] + counts["condition_gap"],
@@ -712,7 +844,7 @@ def _capability_review(report: ReportSnapshot, store: FileReportStore, page_coun
         ". These overlap; they are not a model error rate."
     )
     navigation, detail = st.columns([1, 2.4], gap="large")
-    groups = ["All active", "Methods listed", "Gaps", "Needs review", "Excluded"]
+    groups = ["Needs review", "All active", "Methods listed", "Gaps", "Excluded"]
     with navigation:
         st.subheader("Choose a test")
         selected = st.selectbox("Show", groups, key="report_group")
@@ -1012,7 +1144,7 @@ def render_reports(settings: Settings) -> None:
             return
         review = spec_store.load_review(document_id, run.run_id)
         catalog = load_reference_catalog()
-        lab = FileLabStore(settings.scione_workspace_dir, catalog).load_or_create()
+        lab = FileLabStore(settings.scione_workspace_dir, catalog, seed_demo=False).load_or_create()
         workspace = report_store.load_workspace(document_id, run.run_id)
         current = _draft(
             stored.document.model_dump_json(exclude_computed_fields=True),
@@ -1024,9 +1156,12 @@ def render_reports(settings: Settings) -> None:
             catalog.model_dump_json(),
             workspace.model_dump_json(),
             spec_store.read_pdf(document_id),
-            REVIEW_POLICY_VERSION,
+            f"{REVIEW_POLICY_VERSION}/{MATCHING_POLICY_VERSION}",
         )
-        st.caption(f"{lab.name} · Confirm test matching and lab support, then create your report.")
+        st.caption(
+            f"{lab.name} · Review only the items that need your judgment, or continue to a draft. "
+            "Recorded gaps do not need confirmation."
+        )
         if coverage_issues(run.extraction, stored.document):
             st.warning(
                 "Some tests may be missing from the extraction. Check the original PDF "
@@ -1053,8 +1188,13 @@ def render_reports(settings: Settings) -> None:
         ValidationError,
         ValueError,
     ) as exc:
-        st.error(f"Unable to complete this report action: {exc}")
+        st.error(
+            "This report action could not be completed. Your selections or saved data may "
+            "have changed. Reload the item and check your selections before trying again."
+        )
         st.caption(
             "Existing source data and saved reports have not been reset. "
             "Check the inputs and retry."
         )
+        with st.expander("Developer error details"):
+            st.code(str(exc), language=None)

@@ -310,6 +310,54 @@ def test_listed_method_does_not_imply_lab_scope_has_been_confirmed() -> None:
     assert "Lab engineer checked the conditions against current equipment" in confirmed
 
 
+def test_automatic_operating_match_is_distinct_from_human_approval_and_material_pass() -> None:
+    snapshot = _snapshot(count=1)
+    snapshot.lines[0].operation_assessment = "supported"
+    snapshot.lines[0].operation_checks = ["INTERNAL_OPERATION_CHECK_SENTINEL"]
+    snapshot.lines[0].operation_reasons = ["INTERNAL_OPERATION_REASON_SENTINEL"]
+
+    text = _compact(_pdf_text(render_report_pdf(snapshot)))
+
+    assert "Operating conditions match declared lab limits" in text
+    assert "Lab: operating limits matched" in text
+    assert "Scope confirmed by lab reviewer" not in text
+    assert "GT 0 to 1" in text
+    assert "No confirmed line estimates yet" in text
+    assert "not a quote; quantity and scope not priced" in text
+    assert "INTERNAL_OPERATION_CHECK_SENTINEL" not in text
+    assert "INTERNAL_OPERATION_REASON_SENTINEL" not in text
+    assert snapshot.lines[0].mapping_choice is None
+    assert snapshot.lines[0].quote is None
+    assert not snapshot.totals_by_currency
+
+
+def test_automatic_operating_gap_is_not_misrepresented_as_human_rejection() -> None:
+    snapshot = _snapshot(count=1)
+    snapshot.lines[0].status = "condition_gap"
+    snapshot.lines[0].operation_assessment = "gap"
+
+    text = _compact(_pdf_text(render_report_pdf(snapshot)))
+
+    assert "Outside declared scope" in text
+    assert "The requested operations exceed declared lab limits" in text
+    assert "The lab reviewer marked" not in text
+    assert "Scope confirmed by lab reviewer" not in text
+    assert snapshot.lines[0].mapping_choice is None
+
+
+def test_automatic_operating_match_keeps_pending_source_details_visible_in_pdf() -> None:
+    snapshot = _snapshot(count=1)
+    snapshot.lines[0].operation_assessment = "supported"
+    snapshot.lines[0].extraction_review_state = "needs_attention"
+
+    text = _compact(_pdf_text(render_report_pdf(snapshot)))
+
+    assert "Operating conditions match declared lab limits" in text
+    assert "Source: check details" in text
+    assert "Customer details need confirmation against the specification" in text
+    assert "No confirmed line estimates yet" in text
+
+
 @pytest.mark.parametrize("fingerprint", [None, "d" * 64])
 def test_unbound_or_stale_scope_approval_stays_pending_in_pdf(fingerprint: str | None) -> None:
     snapshot = _snapshot(count=1)

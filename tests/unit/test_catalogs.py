@@ -19,7 +19,9 @@ from scione.catalogs import (
 
 def test_pilot_catalog_has_tagged_aliases_and_unknown_method_editions() -> None:
     catalog = load_reference_catalog()
-    assert len(catalog.tests) == 15
+    assert len(catalog.tests) == 38
+    assert len(catalog.methods) == 36
+    assert catalog.version == 2
     assert catalog.synthetic
     assert "not an authoritative" in catalog.source_note
     assert all(method.edition is None for method in catalog.methods)
@@ -32,7 +34,21 @@ def test_pilot_catalog_has_tagged_aliases_and_unknown_method_editions() -> None:
 def test_seed_catalog_returns_fresh_objects() -> None:
     first = load_reference_catalog()
     first.tests.clear()
-    assert len(load_reference_catalog().tests) == 15
+    assert len(load_reference_catalog().tests) == 38
+
+
+def test_pilot_customer_procedures_are_not_misrepresented_as_formal_standards() -> None:
+    catalog = load_reference_catalog()
+    assert catalog.method_by_id("customer_wave_scan").identifier.startswith("Customer procedure:")
+    assert catalog.method_by_id("customer_gradient_oven").identifier.startswith(
+        "Customer procedure:"
+    )
+    assert catalog.test_by_id("thermal_cycling").method_ids == []
+    assert catalog.test_by_id("water_immersion").method_ids == ["iso_2812_2"]
+    chemical = catalog.test_by_id("chemical_resistance")
+    aliases = {alias.text.casefold() for alias in chemical.aliases}
+    assert not aliases & {"water", "deionized water", "tree resin", "gasoline e10"}
+    assert "source chemical/fluid section" in catalog.source_note
 
 
 def test_demo_lab_is_explicitly_synthetic_and_references_valid_identities() -> None:
@@ -42,6 +58,10 @@ def test_demo_lab_is_explicitly_synthetic_and_references_valid_identities() -> N
     assert len(lab.capabilities) == 5
     stone = next(item for item in lab.capabilities if item.id == "cap_stone_chip")
     assert "23 °C only" in stone.declared_constraints
+    assert stone.structured_limits[0].parameter == "temperature"
+    assert stone.structured_limits[0].values == [Decimal("23")]
+    pencil = next(item for item in lab.capabilities if item.id == "cap_pencil")
+    assert pencil.structured_limits[0].values == [Decimal("750")]
     salt = next(item for item in lab.capabilities if item.id == "cap_salt_spray")
     assert salt.method_ids == ["astm_b117"]
 

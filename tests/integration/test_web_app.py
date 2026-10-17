@@ -57,6 +57,8 @@ def click_button(app: AppTest, label: str) -> AppTest:
 def open_capability_editor(app: AppTest, capability_id: str | None = None) -> AppTest:
     if capability_id is None:
         return app.button(key="add_capability").click().run()
+    if not any(widget.key == "capability_to_edit" for widget in app.selectbox):
+        app = app.button(key="load_example_lab").click().run()
     app = app.selectbox(key="capability_to_edit").set_value(capability_id).run()
     return app.button(key="edit_capability").click().run()
 
@@ -73,7 +75,8 @@ def test_web_app_starts_with_my_lab_without_credentials() -> None:
     assert not any(button.label == "Run extraction" for button in app.button)
     assert not any(field.key == "capability_test_id" for field in app.selectbox)
     assert not any(button.label == "Save test" for button in app.button)
-    assert app.dataframe[0].value.shape[0] == 5
+    assert not app.dataframe
+    assert app.button(key="load_example_lab")
 
 
 def test_capability_editor_only_opens_on_request_and_cancel_does_not_save(
@@ -92,6 +95,73 @@ def test_capability_editor_only_opens_on_request_and_cancel_does_not_save(
 
     app = open_capability_editor(app)
     assert app.text_area(key="capability_notes").value == ""
+
+
+def test_example_lab_is_explicit_and_preserves_profile_details(tmp_path: Path) -> None:
+    app = AppTest.from_file(str(APP), default_timeout=10).run()
+    store = FileLabStore(tmp_path / "workspace")
+    assert store.load_or_create().capabilities == []
+    app.text_input(key="lab_name").set_value("My demonstration lab")
+    app = click_button(app, "Save lab details")
+    app = app.button(key="load_example_lab").click().run()
+
+    assert not app.exception
+    assert not app.error
+    assert not any("Reload before saving" in item.value for item in app.warning)
+    assert store.load_or_create().name == "My demonstration lab"
+    assert len(store.load_or_create().capabilities) == 5
+    assert "Synthetic example" in app.success[0].value
+    assert not any(button.key == "load_example_lab" for button in app.button)
+
+
+def test_structured_operating_limits_are_explicit_and_round_trip_without_price_loss(
+    tmp_path: Path,
+) -> None:
+    app = AppTest.from_file(str(APP), default_timeout=10).run()
+    app = open_capability_editor(app)
+    app = app.selectbox(key="capability_test_id").set_value("pencil_hardness").run()
+    app = app.checkbox(key="capability_limit_load_enabled").check().run()
+    app.text_input(key="capability_limit_load_minimum").set_value("749.999999999999999999")
+    app.text_input(key="capability_limit_load_maximum").set_value("750.000000000000000001")
+    app.text_area(key="capability_constraints").set_value("Existing text is not overwritten.")
+    app = app.checkbox(key="capability_has_price").check().run()
+    app.text_input(key="capability_price").set_value("125.123456789123456789")
+    app = click_button(app, "Save test")
+
+    assert not app.exception
+    assert not app.error
+    saved = FileLabStore(tmp_path / "workspace").load_or_create()
+    assert len(saved.capabilities) == 1
+    capability = saved.capabilities[0]
+    assert str(capability.price) == "125.123456789123456789"
+    assert capability.declared_constraints == "Existing text is not overwritten."
+    assert str(capability.structured_limits[0].minimum) == "749.999999999999999999"
+    app = open_capability_editor(app, capability.id)
+    assert app.checkbox(key="capability_limit_load_enabled").value
+    assert app.text_input(key="capability_limit_load_maximum").value == "750.000000000000000001"
+    app.text_area(key="capability_notes").set_value("Only the note changed.")
+    app = click_button(app, "Save test")
+
+    assert not app.error
+    updated = FileLabStore(tmp_path / "workspace").load_or_create().capabilities[0]
+    assert updated.structured_limits == capability.structured_limits
+    assert updated.price == capability.price
+    assert updated.declared_constraints == capability.declared_constraints
+
+
+def test_invalid_structured_limits_preserve_existing_lab(tmp_path: Path) -> None:
+    app = AppTest.from_file(str(APP), default_timeout=10).run()
+    store = FileLabStore(tmp_path / "workspace")
+    before = store.path.read_bytes()
+    app = open_capability_editor(app)
+    app = app.checkbox(key="capability_limit_temperature_enabled").check().run()
+    app.text_input(key="capability_limit_temperature_minimum").set_value("40")
+    app.text_input(key="capability_limit_temperature_maximum").set_value("-20")
+    app = click_button(app, "Save test")
+
+    assert not app.exception
+    assert app.error
+    assert store.path.read_bytes() == before
 
 
 def test_workspace_navigation_does_not_create_model_runs(tmp_path: Path) -> None:
