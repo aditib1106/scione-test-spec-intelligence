@@ -23,8 +23,12 @@ Implemented:
   and curated English/Chinese aliases. Association does not imply method equivalence.
 - **Specifications**: saved PDFs, local page previews/highlights, model extraction
   and separate, versioned human-review decisions.
-- **Developer tools**: a collapsed sidebar entry for the current customer-spec
-  JSON, original responses, source text, run metadata and failed-attempt diagnostics.
+- **Developer tools**: a collapsed sidebar entry with five diagnostic tabs:
+  Overview, Requirements, Evidence & checks, Compare runs, and Raw & metadata.
+  Browse saved runs of the same PDF without changing the lab-facing result or
+  review decisions. Compare model/prompt metadata and output differences, inspect
+  source highlights, and download expanded predictions or untouched provider text.
+  Counts and local checks are not accuracy scores; neither run is ground truth.
 
 Canonical mapping decisions, interactive AI chat, lab matching and gap-report
 generation are not implemented yet. **Reports** is a clearly labeled placeholder.

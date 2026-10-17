@@ -251,6 +251,130 @@ def test_runs_are_immutable_latest_moves_and_review_is_separate(tmp_path: Path) 
     assert store.list_documents()[0].confirmed_count == 0
 
 
+def test_history_empty_is_read_only_and_does_not_create_runs_directory(tmp_path: Path) -> None:
+    store = FileSpecStore(tmp_path)
+    saved = store.import_pdf("spec.pdf", make_pdf())
+    before = {path.name: path.read_bytes() for path in saved.pdf_path.parent.iterdir()}
+
+    assert store.list_extractions(saved.document_id) == []
+
+    assert not (saved.pdf_path.parent / "runs").exists()
+    assert {path.name: path.read_bytes() for path in saved.pdf_path.parent.iterdir()} == before
+
+
+def test_history_sorted_by_started_time_not_latest_pointer_and_preserves_review(
+    tmp_path: Path,
+) -> None:
+    store = FileSpecStore(tmp_path)
+    saved = store.import_pdf("spec.pdf", make_pdf())
+    newer = make_run(saved.document_id, "run_newer").model_copy(
+        update={"started_at": datetime(2026, 10, 17, 12, tzinfo=UTC)}
+    )
+    older = make_run(saved.document_id, "run_older").model_copy(
+        update={"started_at": datetime(2026, 10, 16, 12)}
+    )
+    store.save_extraction(saved.document_id, newer)
+    store.save_review(saved.document_id, newer.run_id, "req_pencil", "confirmed")
+    store.save_extraction(saved.document_id, older)
+    originals = {
+        str(path.relative_to(saved.pdf_path.parent)): path.read_bytes()
+        for path in saved.pdf_path.parent.rglob("*")
+        if path.is_file()
+    }
+
+    reopened = FileSpecStore(tmp_path)
+    assert reopened.list_extractions(saved.document_id) == [newer, older]
+    assert reopened.load_latest_extraction(saved.document_id) == older
+    assert reopened.load_review(saved.document_id, newer.run_id).version == 1
+    assert {
+        str(path.relative_to(saved.pdf_path.parent)): path.read_bytes()
+        for path in saved.pdf_path.parent.rglob("*")
+        if path.is_file()
+    } == originals
+
+
+def test_history_stays_in_document_scope_and_ignores_real_staging_directories(
+    tmp_path: Path,
+) -> None:
+    store = FileSpecStore(tmp_path)
+    first = store.import_pdf("first.pdf", make_pdf())
+    other = store.import_pdf("other.pdf", make_pdf(pages=2))
+    first_run = make_run(first.document_id)
+    other_run = make_run(other.document_id, "other_run")
+    store.save_extraction(first.document_id, first_run)
+    store.save_extraction(other.document_id, other_run)
+    staging = first.pdf_path.parent / "runs" / ".run-temporary"
+    staging.mkdir()
+    (staging / "run.json").write_text("incomplete staging JSON", encoding="utf-8")
+
+    assert store.list_extractions(first.document_id) == [first_run]
+    assert store.list_extractions(other.document_id) == [other_run]
+    assert (staging / "run.json").read_text(encoding="utf-8") == "incomplete staging JSON"
+
+
+def test_history_corrupt_run_is_reported_not_hidden_or_replaced(tmp_path: Path) -> None:
+    store = FileSpecStore(tmp_path)
+    saved = store.import_pdf("spec.pdf", make_pdf())
+    run = make_run(saved.document_id)
+    store.save_extraction(saved.document_id, run)
+    path = saved.pdf_path.parent / "runs" / run.run_id / "run.json"
+    path.write_text("corrupt historical JSON", encoding="utf-8")
+
+    with pytest.raises(SpecStoreError):
+        store.list_extractions(saved.document_id)
+
+    assert path.read_text(encoding="utf-8") == "corrupt historical JSON"
+
+
+@pytest.mark.parametrize("kind", ["runs", "run", "artifact", "staging"])
+def test_history_rejects_symlinks_including_staging_symlink(tmp_path: Path, kind: str) -> None:
+    store = FileSpecStore(tmp_path / "workspace")
+    saved = store.import_pdf("spec.pdf", make_pdf())
+    run = make_run(saved.document_id)
+    store.save_extraction(saved.document_id, run)
+    directory = saved.pdf_path.parent / "runs"
+    target = tmp_path / "outside"
+    if kind in {"runs", "run"}:
+        original = directory if kind == "runs" else directory / run.run_id
+        original.rename(target)
+        original.symlink_to(target, target_is_directory=True)
+    elif kind == "artifact":
+        path = directory / run.run_id / "run.json"
+        path.rename(target)
+        path.symlink_to(target)
+    else:
+        target.mkdir()
+        (directory / ".run-hidden").symlink_to(target, target_is_directory=True)
+
+    with pytest.raises(SpecStoreError, match="symlink"):
+        store.list_extractions(saved.document_id)
+
+    assert target.exists()
+
+
+@pytest.mark.parametrize("kind", ["file", "invalid_directory", "missing_run", "staging_file"])
+def test_history_reports_unexpected_entries_instead_of_hiding_them(
+    tmp_path: Path, kind: str
+) -> None:
+    store = FileSpecStore(tmp_path)
+    saved = store.import_pdf("spec.pdf", make_pdf())
+    runs = saved.pdf_path.parent / "runs"
+    runs.mkdir()
+    if kind == "file":
+        (runs / "notes.txt").write_text("preserve me", encoding="utf-8")
+    elif kind == "invalid_directory":
+        (runs / "bad name").mkdir()
+    elif kind == "missing_run":
+        (runs / "run_missing").mkdir()
+    else:
+        (runs / ".run-not-a-directory").write_text("preserve me", encoding="utf-8")
+
+    with pytest.raises(SpecStoreError):
+        store.list_extractions(saved.document_id)
+
+    assert len(list(runs.iterdir())) == 1
+
+
 def test_raw_model_whitespace_survives_json_and_text_storage_exactly(tmp_path: Path) -> None:
     store = FileSpecStore(tmp_path)
     saved = store.import_pdf("spec.pdf", make_pdf())

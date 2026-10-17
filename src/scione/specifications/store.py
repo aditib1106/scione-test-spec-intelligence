@@ -278,6 +278,42 @@ class FileSpecStore:
         except (OSError, ValueError) as exc:
             raise SpecStoreError(f"Unable to load extraction {run_id}: {exc}") from exc
 
+    def list_extractions(self, document_id: str) -> list[CustomerExtractionRun]:
+        """Read this document's saved runs newest first without selecting a run.
+
+        In-progress staging directories are omitted. Corrupt runs, unexpected
+        artifacts, and symlinks are reported rather than silently hidden. Listing
+        history never moves the latest pointer or creates/changes human reviews.
+        """
+
+        self.load_document(document_id)
+        directory = self._document_directory(document_id) / "runs"
+        self._check_directory(directory)
+        if not directory.exists():
+            return []
+        try:
+            runs: list[CustomerExtractionRun] = []
+            for entry in directory.iterdir():
+                self._check_directory(entry)
+                if entry.name.startswith(".run-"):
+                    continue
+                runs.append(self.load_extraction(document_id, entry.name))
+        except (OSError, ValueError) as exc:
+            raise SpecStoreError(f"Unable to list extractions: {exc}") from exc
+
+        # Historical metadata may predate timezone-aware timestamps. Interpret
+        # those timestamps consistently as UTC, never the machine's local zone.
+        return sorted(
+            runs,
+            key=lambda run: (
+                run.started_at.replace(tzinfo=UTC)
+                if run.started_at.tzinfo is None
+                else run.started_at.astimezone(UTC),
+                run.run_id,
+            ),
+            reverse=True,
+        )
+
     def load_latest_extraction(self, document_id: str) -> CustomerExtractionRun | None:
         self.load_document(document_id)
         directory = self._document_directory(document_id)

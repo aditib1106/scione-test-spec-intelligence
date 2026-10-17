@@ -7,13 +7,14 @@ from pydantic import ValidationError
 
 from scione.catalogs import CatalogError, FileLabStore, LabStoreError, load_reference_catalog
 from scione.config import Settings
+from scione.web.developer import render_developer_diagnostics
 from scione.web.portal import (
     render_my_lab,
     render_pending_page,
     render_test_catalog,
     render_workspace_navigation,
 )
-from scione.web.specifications import render_specification_debug, render_specifications
+from scione.web.specifications import render_specifications
 
 
 def _apply_theme() -> None:
@@ -51,6 +52,25 @@ def _apply_theme() -> None:
             border-color: #42765f;
         }
         .st-key-workspace_navigation button p { color: #f4fbf7 !important; }
+        .st-key-workspace_navigation [data-testid="stExpander"] {
+            background: #102a2a !important;
+            border-color: #31564c !important;
+        }
+        .st-key-workspace_navigation [data-testid="stExpander"] summary,
+        .st-key-workspace_navigation [data-testid="stExpander"] summary:hover,
+        .st-key-workspace_navigation [data-testid="stExpander"] summary:focus,
+        .st-key-workspace_navigation [data-testid="stExpander"] summary:focus-visible,
+        .st-key-workspace_navigation [data-testid="stExpander"] summary:active,
+        .st-key-workspace_navigation [data-testid="stExpander"] details[open] > summary {
+            color: #f4fbf7 !important;
+            background: #17362f !important;
+        }
+        .st-key-workspace_navigation [data-testid="stExpander"] summary * {
+            color: #f4fbf7 !important;
+        }
+        .st-key-workspace_navigation [data-testid="stExpanderDetails"] {
+            background: #102a2a !important;
+        }
         .stMain button[kind="primary"] {
             background: #147d64;
             border-color: #147d64;
@@ -123,7 +143,7 @@ def _render_developer_tools(settings: Settings) -> None:
         "Customer-spec extraction diagnostics. Saved outputs, source checks and failures "
         "are inspected locally; opening this page does not call a model."
     )
-    render_specification_debug(settings)
+    render_developer_diagnostics(settings)
 
 
 def main() -> None:

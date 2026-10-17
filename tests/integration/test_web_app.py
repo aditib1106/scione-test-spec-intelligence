@@ -185,8 +185,7 @@ def test_capability_and_price_persist_and_can_be_edited(tmp_path: Path) -> None:
     assert reopened.selectbox(key="capability_test_id").value == "pencil_hardness"
     assert reopened.multiselect(key="capability_method_ids").value == ["iso_15184"]
     assert (
-        reopened.text_area(key="capability_constraints").value
-        == "750 g; flat coated panels only."
+        reopened.text_area(key="capability_constraints").value == "750 g; flat coated panels only."
     )
     assert reopened.checkbox(key="capability_has_price").value is True
     assert reopened.text_input(key="capability_price").value == "125.50"
@@ -281,9 +280,10 @@ def test_stale_capability_editor_preserves_external_changes(tmp_path: Path) -> N
     assert not app.exception
     assert any("lab has changed" in error.value.lower() for error in app.error)
     assert store.path.read_bytes() == external_saved
-    assert next(
-        item for item in store.load_or_create().capabilities if item.id == "cap_pencil"
-    ).notes == "Changed by an external editor."
+    assert (
+        next(item for item in store.load_or_create().capabilities if item.id == "cap_pencil").notes
+        == "Changed by an external editor."
+    )
 
 
 def test_saved_capability_can_be_reopened_after_workspace_navigation() -> None:
@@ -350,9 +350,7 @@ def test_developer_tools_renders_saved_customer_extraction_without_model_calls(
                     "id": "req_pencil",
                     "original_test_name": "Pencil hardness",
                     "requested_methods": [{"code": "ISO 15184"}],
-                    "acceptance_criteria": [
-                        {"name": "Pencil hardness", "raw_value": "at least F"}
-                    ],
+                    "acceptance_criteria": [{"name": "Pencil hardness", "raw_value": "at least F"}],
                     "evidence": [{"page": 1, "quote": source}],
                 }
             ],
@@ -385,12 +383,24 @@ def test_developer_tools_renders_saved_customer_extraction_without_model_calls(
     assert metadata["provider"] == "offline-fixture"
     assert "raw_response" not in metadata
     assert "extraction" not in metadata
-    assert any(text.value == run.raw_response for text in app.text)
-    assert any(source in text.value for text in app.text)
-    assert any("offline-fixture/not-a-live-model" in item.value for item in app.caption)
+    assert any(code.value == run.raw_response for code in app.code)
+    assert any(source in code.value for code in app.code)
+    assert any("offline-fixture / not-a-live-model" in item.value for item in app.tabs[0].markdown)
     assert app.number_input(key="spec_debug_text_page").value == 1
-    assert [button.label for button in app.get("download_button")] == ["Download original PDF"]
-    assert not app.tabs
-    assert not app.metric
+    assert {button.label for button in app.get("download_button")} == {
+        "Download original PDF",
+        "Download prediction JSON",
+        "Download raw response",
+    }
+    assert [tab.label for tab in app.tabs] == [
+        "Overview",
+        "Requirements",
+        "Evidence & checks",
+        "Compare runs",
+        "Raw & metadata",
+    ]
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics["Records"] == "1"
+    assert metrics["Total tokens"] == "—"
     assert store.load_latest_extraction(stored.document_id) == run
     assert store.list_documents()[0].requirement_count == 1
