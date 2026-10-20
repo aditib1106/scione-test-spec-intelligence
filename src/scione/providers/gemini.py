@@ -7,7 +7,7 @@ from time import perf_counter
 from typing import Any, Literal
 
 from google import genai
-from google.genai import errors
+from google.genai import errors, types
 
 from scione.providers.base import (
     ModelProvider,
@@ -109,6 +109,21 @@ class GeminiModelProvider(ModelProvider):
                 contents=request.user_prompt,
                 config=config,
             )
+            candidates = getattr(response, "candidates", None)
+            finish_reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+            reason_value = getattr(finish_reason, "value", finish_reason)
+            if reason_value is not None and reason_value != "STOP":
+                # Restrict error text to SDK-defined metadata; never echo source output.
+                safe_reason = (
+                    reason_value
+                    if isinstance(reason_value, str)
+                    and reason_value in {reason.value for reason in types.FinishReason}
+                    else "UNKNOWN"
+                )
+                raise ProviderError(
+                    "Gemini did not complete structured generation "
+                    f"(finish_reason={safe_reason}). No structured result was accepted."
+                )
             content = response.text
         except errors.APIError as exc:
             raise ProviderError(

@@ -221,9 +221,20 @@ __marimo__/
 .DS_Store
 **/.DS_Store
 
-# Client/project reference PDFs kept locally
-docs/*.pdf
+# Client/project reference PDFs stay local, except the approved simulated demo spec.
+/docs/**/*.pdf
+!/docs/samples/MS-PNT-410_demo_spec.pdf
 
 # Local runtime data
 /runs/
 uploads/
+/local_data/
+/.demo-backups/
+
+# Additional local secrets and client reference
+.env.*
+!.env.example
+/key.md
+/credentials*.json
+/service-account*.json
+/(Liyang's provided SPEC) MS-PNT-410 Material Performance Standard Exterior Topcoat System.pdf

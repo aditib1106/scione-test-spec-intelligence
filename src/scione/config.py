@@ -40,7 +40,9 @@ class Settings(BaseSettings):
     gemini_temperature: float = Field(default=0.0, ge=0, le=2)
     gemini_thinking_level: Literal["low", "medium", "high"] = "low"
     scione_single_attempt_mode: bool = True
-    scione_runs_dir: Path = Path("runs")
+    scione_workspace_dir: Path = Path("local_data")
+    scione_customer_input_character_limit: int = Field(default=60_000, gt=0)
+    scione_customer_gemini_output_tokens: int = Field(default=16_000, gt=0)
 
     def require_groq_api_key(self) -> str:
         if self.groq_api_key is None:
