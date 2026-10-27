@@ -124,6 +124,13 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const [batchError, setBatchError] = useState("");
   const [analysisOpen, setAnalysisOpen] = useState(!data?.run);
 
+  useEffect(() => {
+    setBatchIds([]);
+    setBatchAck(false);
+    setBatchNote("");
+    setBatchError("");
+  }, [documentId, data?.run?.run_id]);
+
   const load = useCallback(
     async (
       id: string,
