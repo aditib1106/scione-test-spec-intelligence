@@ -1,4 +1,4 @@
-"""Persistent customer documents, source preview, and explicit extraction review."""
+"""Streamlit adapter for saved PDFs, source previews and extraction review."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Lab-facing prototype pages, separate from the extraction experiments."""
+"""Streamlit lab profile, catalog and workspace navigation."""
 
 from __future__ import annotations
 
