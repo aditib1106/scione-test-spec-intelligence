@@ -1,4 +1,4 @@
-"""Lab-facing matching review, explicit quote inputs and immutable PDF/JSON reports."""
+"""Streamlit adapter for matching review, quote inputs and immutable draft reports."""
 
 from __future__ import annotations
 
@@ -30,6 +30,8 @@ from scione.reports.models import (
     ReportWorkspace,
 )
 from scione.reports.pdf import ReportPDFError, render_report_pdf
+from scione.reports.review import needs_review as _needs_review
+from scione.reports.review import scope_review_state as _lab_scope_review
 from scione.reports.store import FileReportStore, ReportStoreError
 from scione.schemas import IngestedDocument
 from scione.specifications.extraction import coverage_issues
@@ -582,42 +584,6 @@ def _line_detail(
     _scope_actions(report, line, store, stale)
     _mapping_editor(report, line, store, stale)
     _quote_editor(report, line, store, stale)
-
-
-def _lab_scope_review(report: ReportSnapshot, line: GapLine) -> str:
-    """Do not mistake an inventory match for a completed capability review."""
-
-    if line.status == "excluded":
-        return "Excluded"
-    if line.status == "condition_gap":
-        return "Outside lab scope"
-    if line.status == "test_gap":
-        return "Not listed in lab catalog — no confirmation needed"
-    if line.status == "method_gap":
-        return "Requested method not listed — no confirmation needed"
-    if line.status != "in_house":
-        return "Resolve test / method first"
-    basis = support_basis(line, lab_fingerprint(report.lab))
-    if basis == "human":
-        return "Confirmed by lab reviewer"
-    if basis == "automatic":
-        return "Operating conditions matched automatically"
-    return "Pending lab review"
-
-
-def _needs_review(report: ReportSnapshot, line: GapLine) -> bool:
-    stale_scope = (
-        line.status == "in_house"
-        and line.mapping_choice is not None
-        and line.mapping_choice.capability_verdict != "unreviewed"
-        and line.mapping_choice.lab_fingerprint != lab_fingerprint(report.lab)
-    )
-    return line.status != "excluded" and (
-        line.status == "needs_review"
-        or line.extraction_review_state == "needs_attention"
-        or stale_scope
-        or _lab_scope_review(report, line) == "Pending lab review"
-    )
 
 
 def _item_status(report: ReportSnapshot, line: GapLine) -> str:

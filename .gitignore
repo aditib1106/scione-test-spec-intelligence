@@ -229,6 +229,11 @@ __marimo__/
 /runs/
 uploads/
 /local_data/
+/frontend/node_modules/
+/frontend/dist/
+/frontend/test-results/
+/frontend/playwright-report/
+/frontend/*.tsbuildinfo
 /.demo-backups/
 
 # Additional local secrets and client reference

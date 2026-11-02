@@ -1,1 +1,1 @@
-"""Streamlit review interface for extraction runs."""
+"""Retained Streamlit UI and shared read-only diagnostic projections."""

@@ -9,13 +9,16 @@ description = "A local lab workspace for extracting and reviewing customer test 
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.115,<1",
     "google-genai>=2.22,<3",
     "groq>=0.31,<1",
     "pydantic>=2.11,<3",
     "pydantic-settings>=2.10,<3",
     "pymupdf>=1.26,<2",
     "python-dotenv>=1.1,<2",
+    "python-multipart>=0.0.20,<1",
     "streamlit>=1.64,<2",
+    "uvicorn>=0.35,<1",
 ]
 
 [project.scripts]
@@ -23,6 +26,7 @@ scione = "scione.cli:main"
 
 [project.optional-dependencies]
 dev = [
+    "httpx>=0.28,<1",
     "pytest>=8.4,<9",
     "pytest-cov>=6.2,<8",
     "ruff>=0.12,<1",

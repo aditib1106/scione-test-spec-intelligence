@@ -1,4 +1,4 @@
-"""Read-only customer-spec workbench, separate from the lab-facing review UI."""
+"""Read-only Streamlit diagnostics for saved customer-spec extractions."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Lab workspace and developer diagnostics for customer specifications."""
+"""Compatibility Streamlit entry point for the lab workspace and diagnostics."""
 
 from __future__ import annotations
 

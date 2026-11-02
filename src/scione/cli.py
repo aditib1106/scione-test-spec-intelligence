@@ -1,4 +1,4 @@
-"""Offline PDF inspection and recoverable local demo maintenance."""
+"""Local workspace server, offline PDF inspection and recoverable demo maintenance."""
 
 from __future__ import annotations
 
@@ -15,10 +15,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="scione",
         description=(
-            "Inspect page-aware text from customer specification PDFs, without model calls."
+            "Run the local lab workspace, inspect customer PDFs offline, or manage demo state."
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    serve_parser = subparsers.add_parser(
+        "serve", help="Run the local MUI workspace and its Python API. Build frontend first."
+    )
+    serve_parser.add_argument("--port", type=int, default=8000, help="Local HTTP port.")
 
     ingest_parser = subparsers.add_parser(
         "ingest",
@@ -51,6 +56,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.command == "serve":
+        import uvicorn
+
+        uvicorn.run("scione.api.app:app", host="127.0.0.1", port=args.port)
+        return 0
 
     if args.command == "reset-demo":
         if not args.yes:
