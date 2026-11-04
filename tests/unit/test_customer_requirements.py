@@ -160,7 +160,14 @@ def test_whole_document_run_preserves_rich_customer_values_and_raw_response() ->
     assert run.prompt_version == CUSTOMER_REQUIREMENTS_PROMPT_VERSION
     assert run.strategy == "whole_document"
     assert run.provider == "static"
-    assert run.extraction.model_dump(mode="json") == payload
+    # Additive atoms default empty for historical provider payloads.
+    assert (
+        run.extraction.model_dump(
+            mode="json", exclude={"requirements": {"__all__": {"atomic_claims"}}}
+        )
+        == payload
+    )
+    assert all(not row.atomic_claims for row in run.extraction.requirements)
     assert json.loads(run.raw_response) == payload
     assert run.extraction.requirements[0].requested_methods[0].revision is None
     assert run.extraction.requirements[0].acceptance_criteria[0].raw_value == ">= F"

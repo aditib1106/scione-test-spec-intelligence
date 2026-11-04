@@ -215,6 +215,10 @@ def _expand_compact_extraction(compact: CompactCustomerExtraction) -> CustomerEx
                     RequirementEvidence(page=evidence.page, quote=evidence.quote)
                     for evidence in row.evidence
                 ],
+                atomic_claims=[
+                    claim.expand(f"{identifier}_claim_{claim_index}")
+                    for claim_index, claim in enumerate(row.atomic_claims, start=1)
+                ],
             )
         )
         if row.uncertainty is not None:

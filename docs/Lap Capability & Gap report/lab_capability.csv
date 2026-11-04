@@ -1,0 +1,58 @@
+﻿test_item,test_method,test_condition,criteria
+Element migration from toys,ASTM F1558-24,Not specified.,Pb and Cd: 0.1–100 mg/kg each; Cr: not reportable.
+Izod impact resistance,ASTM D1012-17,23 ±2 °C for 48 h; test at 23 ±2 °C or after −10 ±2 °C for 4 h.,Notched impact response: 0.1–50 kJ/m².
+Heat deflection temperature,ISO 60221:2017,Heated bath; temperature ramp 2 ±0.2 °C/min.,Heat-deflection temperature: 20–200 °C.
+Water pH,ISO 60591:2024,23 ±2 °C.,pH: 0–14; pH difference: −14 to +14.
+Metals in water by ICP-MS,DIN EN ISO 60682:2024-08,Sample storage: 2–8 °C; test temperature not specified.,"Fe, Cu and Pb: 0.1–1000 µg/L each."
+Turbidity,ISO 60197:2026,Not specified.,Turbidity: 0.01–100 NTU.
+Dielectric breakdown strength,ISO 60967:2026,Dry: 23 ±2 °C. Water-aged: deionized water at 40 ±2 °C for 168 h.,Breakdown voltage: 0.1–100 kV; dielectric strength: 0.1–100 kV/mm; tracking/splits: present or absent.
+Insulation resistance,ISO 60465:2019,After deionized-water exposure at 40 ±2 °C for 168 h.,Insulation resistance: 0.1–10000 MΩ; tracking/splits: present or absent.
+Rub colorfastness,ISO 60147:2020,"20 ±2 °C, 65 ±5% RH for 24 h; dry/wet exposure; 5 wash cycles at 40 °C.","Dry/wet staining and shade-change grades: 1–5, including half grades."
+Dimensional change after laundering,ISO 60343:2018,5 wash cycles at 40 °C.,Dimensional change: −20% to +20%.
+Charpy impact,ASTM E1353-17,−20 ±2 °C.,Absorbed energy: 0.1–300 J; fracture abnormalities: present or absent.
+Compression set,ASTM D1025-19,23 ±2 °C for 48 h; 100 ±2 °C for 22 h; recovery at 23 ±2 °C for 30 min.,"Compression set: 0–100%; cracks, residue and sticking: present or absent."
+Compression set,ASTM D1065-26,23 ±2 °C for 48 h; oven aging at 60 °C for 7 days; 100 ±2 °C for 22 h; recovery at 23 ±2 °C for 30 min.,"Compression set: 0–100%; cracks, residue and sticking: present or absent."
+Neutral salt spray,ISO 61882:2017,Salt-fog exposure: 720 h; temperature not specified.,Corrosion creep: 0–20 mm; rust/defects: present or absent; visible rust-spot and blister extent: 0–20 mm.
+Scribe corrosion creep,GB/T 50019-2024,After 720 h salt-fog exposure.,"Left/right, mean and maximum creep: 0–20 mm."
+Dry film thickness,ISO 60706:2018,Laboratory ambient for at least 96 h; temperature not specified.,Dry-film thickness: 1–1000 µm.
+Cross-cut adhesion,ISO 60038:2021,5 cycles: −20 °C for 2 h and 70 °C for 2 h; room-temperature recovery for 30 min between transfers.,Adhesion class: 0–5; detached area: 0–100%; exposed-metal length: 0–20 mm; delamination: present or absent.
+Specular gloss,ASTM D1627-16,Before/after 5 cycles: −20 °C for 2 h and 70 °C for 2 h; room-temperature recovery for 30 min between transfers.,Initial specular gloss: 0–200 GU; post-cycle gloss and retention: not reportable.
+Color difference,ISO 60570:2025,"After thermal cycling: −20 °C / 70 °C, 5 cycles; measurement temperature not specified.","ΔE*ab: 0–20; ΔL*, Δa*, Δb*: −200 to +200."
+Dry film thickness,ISO 60152:2025,"23 ±2 °C, 50 ±5% RH for 7 days.",Dry-film thickness: 1–1000 µm.
+Concrete compressive strength,GB/T 52877-2022,20 ±2 °C for 24 h.,Compressive strength: 0.1–150 MPa; fracture mode: categorical report.
+Neutral salt spray,ISO 62525:2022,Continuous salt-fog exposure: up to 480 h; temperature not specified.,Corrosion creep: 0–20 mm; rust/defects: present or absent; visible rust-spot and blister extent: 0–20 mm.
+Cross-cut adhesion,DIN EN ISO 60099:2020-08,8 cycles: −20 ±2 °C for 2 h and 70 ±2 °C for 2 h; laboratory recovery for 24 h.,Adhesion class: 0–5; detached area: 0–100%; exposed-metal length: 0–20 mm; delamination: present or absent.
+Dry film thickness,ISO 67064:2018,"23 ±2 °C, 50 ±5% RH for 72 h.",Dry-film thickness: 1–1000 µm.
+Scribe corrosion creep,ISO 60288:2018,After 600 h continuous salt-fog exposure.,"Left/right, mean and maximum creep: 0–20 mm."
+Water pH,ISO 60591:2024,At sample temperature; numerical temperature not specified.,pH: 0–14; pH difference: −14 to +14.
+Turbidity,ISO 60197:2026,Not specified.,Turbidity: 0.01–100 NTU.
+Metals in water by ICP-MS,ISO 60016:2021,Not specified.,"Fe, Cu and Zn: 0.1–1000 µg/L each."
+Izod impact resistance,ASTM D1012-17,"23 ±2 °C, 50 ±5% RH for 48 h; test at room temperature or after −10 ±2 °C for 4 h.",Notched impact response: 0.1–50 kJ/m².
+Heat deflection temperature,ISO 60221:2017,Heated bath; temperature ramp 2 ±0.2 °C/min.,Heat-deflection temperature: 20–200 °C.
+Tensile strength,ISO 61380:2021,23 ±2 °C for 24 h.,Tensile strength: 1–2000 MPa; elongation: 0–100%.
+Rockwell hardness,GB/T 50057-2018,Not specified.,Rockwell hardness: 20–70 HRC; hardness difference: 0–50 HRC.
+Charpy impact,DIN EN ISO 60357:2018-06,−20 ±2 °C.,Absorbed energy: 0.1–300 J; fracture abnormalities: present or absent.
+Enclosure ingress protection,ISO 60096:2024,"23 ±2 °C, 50 ±5% RH for 24 h; dust/water exposure equivalent to IP54.",Ingress rating: IP54 assessment; absorbed-water mass: 0–1000 mg; visible water: present or absent.
+Shore durometer hardness,ISO 60181:2021,"23 ±2 °C, 50 ±5% RH for 48 h; oven aging at 90 ±2 °C for 168 h; recovery for 24 h.",Shore A hardness: 0–100; hardness change/difference: −100 to +100 points; cracking/tackiness: present or absent.
+Compression set,ASTM D1025-19,100 ±2 °C for 70 h; recovery at 23 ±2 °C for 30 min.,"Compression set: 0–100%; cracks, residue and sticking: present or absent."
+Rub colorfastness,ISO 60147:2020,"20 ±2 °C, 65 ±4% RH for 24 h; dry and wet exposure.","Dry/wet staining and shade-change grades: 1–5, including half grades."
+Fabric strip tensile,ISO 60951:2021,"20 ±2 °C, 65 ±4% RH for 24 h.","Maximum force: 1–5000 N, warp and weft."
+Dimensional change after laundering,ISO 60343:2018,"20 ±2 °C, 65 ±4% RH for 24 h; 5 wash cycles at 40 °C.",Dimensional change: −20% to +20%.
+Dimensional change after laundering,ISO 65772:2024,"20 ±2 °C, 65 ±4% RH for 24 h; 5 wash cycles at 40 °C.",Dimensional change: −20% to +20%.
+Fabric areal mass,ISO 60408:2017,"20 ±2 °C, 65 ±4% RH for 24 h.",Mass per unit area: 10–1000 g/m².
+Neutral salt spray,ISO 61882:2017,"23 ±2 °C, 50 ±5% RH for at least 7 days; continuous salt-fog exposure for 720 h.",Corrosion creep: 0–20 mm; rust/defects: present or absent; visible rust-spot and blister extent: 0–20 mm.
+Dry film thickness,ISO 60174:2025,"23 ±2 °C, 50 ±5% RH for at least 7 days.",Dry-film thickness: 1–1000 µm.
+Scribe corrosion creep,ISO 60017:2022,After 720 h salt-fog exposure.,"Left/right, mean and maximum creep: 0–20 mm."
+Color difference,ISO 62600:2020,"23 ±2 °C, 50 ±5% RH for 7 days.","ΔE*ab: 0–20; ΔL*, Δa*, Δb*: −200 to +200."
+Specular gloss,DIN EN 45333:2019-10,"23 ±2 °C, 50 ±5% RH for 7 days.",Specular gloss: 0–200 GU; gloss retention: 0–200%; gloss change: −200 to +200 GU.
+Xenon-arc weathering,ISO 60212:2019,Xenon-arc exposure: up to 800 h; checkpoints at 400/800 h with 24 h laboratory recovery. Irradiance/cycle to be agreed.,"Gloss: 0–200 GU; gloss retention: 0–200%; ΔE*ab: 0–20; haze, cracks and delamination: present or absent."
+Dry film thickness,ISO 60250:2024,"23 ±2 °C, 50 ±5% RH for 7 days.",Dry-film thickness: 1–1000 µm.
+Dry film thickness,ISO 60679:2024,"23 ±2 °C, 50 ±5% RH for 7 days.",Total cured-film thickness: 1–1000 µm; separate layer thicknesses: not reportable.
+Color difference,ISO 60358:2022,"Initial: 23 ±2 °C, 50 ±5% RH for 7 days. Post-exposure: 40 ±2 °C, ≥95% RH for 240 h; recovery for 24 h.","ΔE*ab: 0–20; ΔL*, Δa*, Δb*: −200 to +200."
+Specular gloss,ISO 60653:2020,"Initial: 23 ±2 °C, 50 ±5% RH for 7 days. Post-exposure: 40 ±2 °C, ≥95% RH for 240 h; recovery for 24 h.",Specular gloss: 0–200 GU; gloss retention: 0–200%; gloss change: −200 to +200 GU.
+Humidity resistance,ISO 60134:2018,"40 ±2 °C, ≥95% RH for 240 h.","Blister rating: native method scale; blistering, cracks, edge lift, whitening and water marks: present or absent. Gloss retention: 0–200%."
+Cross-cut adhesion,ISO 64094:2018,"10 cycles: −25 ±2 °C for 2 h, 75 ±2 °C for 2 h, 23 ±2 °C for 1 h; recovery for 24 h.",Adhesion class: 0–5; detached area: 0–100%; exposed-metal length: 0–20 mm; delamination: present or absent.
+Cross-cut adhesion,ISO 61689:2022,Deionized water at 40 ±2 °C for 72 h; laboratory recovery for 2 h.,Adhesion class: 0–5; detached area: 0–100%; exposed-metal length: 0–20 mm; delamination: present or absent.
+Specular gloss,ISO 60763:2020,Condensation at 40 ±2 °C for 240 h; recovery for 24 h.,Specular gloss: 0–200 GU; gloss retention: 0–200%; gloss change: −200 to +200 GU.
+Humidity resistance,ISO 61951:2020,Condensation at 40 ±2 °C for 240 h.,"Blister rating: native method scale; blistering, cracks, edge lift, whitening and water marks: present or absent. Gloss retention: 0–200%."
+Dry film thickness,ISO 63883-2:2016,"23 ±2 °C, 50 ±5% RH for 48 h.",Dry-film thickness: 1–1000 µm.

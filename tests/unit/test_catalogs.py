@@ -15,16 +15,21 @@ from scione.catalogs import (
     load_reference_catalog,
     validate_lab_references,
 )
+from scione.catalogs.seed import default_csp301_lab
 
 
-def test_pilot_catalog_has_tagged_aliases_and_unknown_method_editions() -> None:
+def test_pilot_catalog_retains_aliases_and_explicit_synthetic_editions() -> None:
     catalog = load_reference_catalog()
-    assert len(catalog.tests) == 38
-    assert len(catalog.methods) == 36
-    assert catalog.version == 2
+    assert len(catalog.tests) == 39
+    assert len(catalog.methods) == 40
+    assert catalog.version == 3
     assert catalog.synthetic
     assert "not an authoritative" in catalog.source_note
-    assert all(method.edition is None for method in catalog.methods)
+    assert all(
+        method.edition is None
+        for method in catalog.methods
+        if not method.id.startswith("synthetic_")
+    )
     pencil = catalog.test_by_id("pencil_hardness")
     assert Alias(text="铅笔硬度", language="zh") in pencil.aliases
     assert pencil.method_ids == ["iso_15184"]
@@ -34,7 +39,47 @@ def test_pilot_catalog_has_tagged_aliases_and_unknown_method_editions() -> None:
 def test_seed_catalog_returns_fresh_objects() -> None:
     first = load_reference_catalog()
     first.tests.clear()
-    assert len(load_reference_catalog().tests) == 38
+    assert len(load_reference_catalog().tests) == 39
+
+
+def test_csp301_methods_are_distinct_from_the_original_pilot_methods() -> None:
+    catalog = load_reference_catalog()
+    assert catalog.test_by_id("cross_cut_adhesion").method_ids == [
+        "iso_2409", "astm_d3359", "gb_t_9286", "synthetic_iso_60038_2021"
+    ]
+    method = catalog.method_by_id("synthetic_iso_60038_2021")
+    assert method.identifier == "ISO 60038:2021"
+    assert method.edition == "2021"
+    assert "ISO 2409" not in {alias.text for alias in method.aliases}
+    assert catalog.method_by_id("synthetic_astm_d1627_16").edition == "16"
+    assert catalog.test_by_id("dry_film_thickness").method_ids == [
+        "synthetic_iso_60152_2025"
+    ]
+
+
+def test_csp301_lab_retains_data_team_declarations_without_inventing_coverage() -> None:
+    lab = default_csp301_lab()
+    validate_lab_references(lab, load_reference_catalog())
+    assert len(lab.capabilities) == 4
+    assert all(capability.price is None for capability in lab.capabilities)
+    gloss = next(item for item in lab.capabilities if item.id == "cap_csp301_gloss")
+    assert "post-cycle gloss and retention: not reportable" in gloss.notes
+    assert "30 min between transfers" in gloss.declared_constraints
+    assert "Reportable outputs:" in gloss.notes
+    thickness = next(item for item in lab.capabilities if item.id == "cap_csp301_thickness")
+    assert thickness.declared_constraints == "23 ±2 °C, 50 ±5% RH for 7 days."
+    assert "Dry-film thickness: 1–1000 µm." in thickness.notes
+    assert "topcoat" not in thickness.notes
+    color = next(item for item in lab.capabilities if item.id == "cap_csp301_color")
+    assert "measurement temperature not specified" in color.declared_constraints
+    assert "D65" not in color.notes
+    assert not any(item.structured_limits for item in lab.capabilities)
+
+
+def test_csp301_lab_returns_independent_editable_profiles() -> None:
+    first = default_csp301_lab()
+    first.capabilities[0].declared_constraints = "Changed by a lab user"
+    assert "Changed" not in default_csp301_lab().capabilities[0].declared_constraints
 
 
 def test_pilot_customer_procedures_are_not_misrepresented_as_formal_standards() -> None:
