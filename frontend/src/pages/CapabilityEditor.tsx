@@ -508,13 +508,14 @@ export default function CapabilityEditor({
               />
             </Stack>
             <TextField
-              label="Internal notes"
+              label="Measurements and additional capability details"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               multiline
               minRows={2}
               fullWidth
               sx={{ mt: 1 }}
+              helperText="Record reportable outputs and limitations, including measurement stages. Missing details remain unresolved."
             />
           </Box>
         </Stack>

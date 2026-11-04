@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from scione.catalogs import CatalogError, FileLabStore, LabStoreError, load_reference_catalog
 from scione.config import Settings
+from scione.library.reset import reset_library_workspace
 from scione.web.developer import render_developer_diagnostics
 from scione.web.portal import (
     render_my_lab,
@@ -15,7 +16,7 @@ from scione.web.portal import (
 )
 from scione.web.reports import render_reports
 from scione.web.specifications import render_specifications
-from scione.workspace_reset import DemoResetError, reset_demo_workspace
+from scione.workspace_reset import DemoResetError
 
 
 def _apply_theme() -> None:
@@ -168,7 +169,7 @@ def _render_developer_tools(settings: Settings) -> None:
             and acknowledged
         ):
             try:
-                result = reset_demo_workspace(settings.scione_workspace_dir)
+                result = reset_library_workspace(settings)
             except DemoResetError as exc:
                 st.error(str(exc))
             else:

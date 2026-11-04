@@ -16,10 +16,10 @@ from scione.catalogs.models import (
 def load_reference_catalog() -> ReferenceCatalog:
     """Return a fresh pilot catalog without reading files or calling a model.
 
-    Test names and method identifiers are scoped to the supplied MS-PNT-410
-    demonstration. Chinese aliases are curated demo terminology. Editions are
-    deliberately unknown: no method text, editions, or global equivalences are
-    inferred from identifier similarity or sample-specific regional allowances.
+    Existing pilot identities are retained alongside the CSP-EN-301 synthetic
+    sample. Chinese aliases are curated demo terminology. Editions are unknown
+    unless explicitly supplied by the synthetic bank; no method text or global
+    equivalences are inferred from identifier similarity or regional allowances.
     """
 
     method_rows = [
@@ -88,6 +88,44 @@ def load_reference_catalog() -> ReferenceCatalog:
         )
         for method_id, identifier, name in method_rows
     ]
+    # These designations are fictional identifiers from the capstone data team's
+    # synthetic bank. They are separate methods, never aliases for real-looking
+    # identifiers used by the earlier demonstration.
+    methods.extend(
+        TestMethod(
+            id=method_id,
+            identifier=identifier,
+            name=name,
+            edition=edition,
+            aliases=[Alias(text=identifier, language="und")],
+        )
+        for method_id, identifier, name, edition in [
+            (
+                "synthetic_iso_60038_2021",
+                "ISO 60038:2021",
+                "Synthetic scored-grid adhesion method",
+                "2021",
+            ),
+            (
+                "synthetic_astm_d1627_16",
+                "ASTM D1627-16",
+                "Synthetic specular-gloss method",
+                "16",
+            ),
+            (
+                "synthetic_iso_60570_2025",
+                "ISO 60570:2025",
+                "Synthetic colour-difference method",
+                "2025",
+            ),
+            (
+                "synthetic_iso_60152_2025",
+                "ISO 60152:2025",
+                "Synthetic dry-film-thickness method",
+                "2025",
+            ),
+        ]
+    )
     for method in methods:
         if method.id.startswith("customer_"):
             method.aliases.append(
@@ -263,10 +301,39 @@ def load_reference_catalog() -> ReferenceCatalog:
         )
         for test_id, name, chinese, aliases, method_ids in test_rows
     ]
+    synthetic_methods = {
+        "cross_cut_adhesion": "synthetic_iso_60038_2021",
+        "gloss": "synthetic_astm_d1627_16",
+        "color_difference": "synthetic_iso_60570_2025",
+    }
+    for test in tests:
+        if method_id := synthetic_methods.get(test.id):
+            test.method_ids.append(method_id)
+        if test.id == "gloss":
+            test.aliases.append(Alias(text="Specular gloss", language="en"))
+        if test.id == "color_difference":
+            test.aliases.append(Alias(text="Colour difference", language="en"))
+    tests.append(
+        CanonicalTest(
+            id="dry_film_thickness",
+            name="Dry film thickness",
+            description=(
+                "Coating-thickness test identity from the synthetic CSP-EN-301 sample; "
+                "a generic thickness declaration does not establish separate-layer measurement."
+            ),
+            aliases=[
+                Alias(text="Dry film thickness", language="en"),
+                Alias(text="Dry-film thickness", language="en"),
+                Alias(text="Topcoat film thickness", language="en"),
+                Alias(text="干膜厚度", language="zh"),
+            ],
+            method_ids=["synthetic_iso_60152_2025"],
+        )
+    )
     return ReferenceCatalog(
         id="ms_pnt_410_pilot",
-        name="MS-PNT-410 pilot test catalog",
-        version=2,
+        name="Synthetic coatings test catalog",
+        version=3,
         synthetic=True,
         source_note=(
             "Manually curated pilot metadata for the supplied MS-PNT-410 sample, not an "
@@ -275,6 +342,8 @@ def load_reference_catalog() -> ReferenceCatalog:
             "Customer procedures are labeled separately from formal standard identifiers. "
             "Fluid names are not global test aliases; family mapping also requires the "
             "source chemical/fluid section and its stated procedure or conditions. "
+            "The four explicitly fictional CSP-EN-301 methods retain their source-stated "
+            "editions and are not equivalent to earlier catalog methods. "
             "No standard body text or lab capability claims are included."
         ),
         tests=tests,
@@ -358,5 +427,71 @@ def default_demo_lab() -> LabProfile:
                     "for ISO 9227; any acceptance needs customer-specific evidence."
                 ),
             ),
+        ],
+    )
+
+
+def default_csp301_lab() -> LabProfile:
+    """Return the data team's four synthetic declarations, without altering a store.
+
+    Conditions and reportable outputs are copied from rows 17-20 of the supplied
+    lab_capability.csv. They describe declared execution/reporting ability, not
+    specimen acceptance limits. Missing declarations remain missing; no prices,
+    preparation coverage, illuminant or separate-layer capability is invented.
+    """
+
+    rows = [
+        (
+            "cross_cut",
+            "cross_cut_adhesion",
+            "synthetic_iso_60038_2021",
+            "5 cycles: −20 °C for 2 h and 70 °C for 2 h; room-temperature recovery "
+            "for 30 min between transfers.",
+            "Adhesion class: 0–5; detached area: 0–100%; exposed-metal length: "
+            "0–20 mm; delamination: present or absent.",
+        ),
+        (
+            "gloss",
+            "gloss",
+            "synthetic_astm_d1627_16",
+            "Before/after 5 cycles: −20 °C for 2 h and 70 °C for 2 h; "
+            "room-temperature recovery for 30 min between transfers.",
+            "Initial specular gloss: 0–200 GU; post-cycle gloss and retention: not reportable.",
+        ),
+        (
+            "color",
+            "color_difference",
+            "synthetic_iso_60570_2025",
+            "After thermal cycling: −20 °C / 70 °C, 5 cycles; "
+            "measurement temperature not specified.",
+            "ΔE*ab: 0–20; ΔL*, Δa*, Δb*: −200 to +200.",
+        ),
+        (
+            "thickness",
+            "dry_film_thickness",
+            "synthetic_iso_60152_2025",
+            "23 ±2 °C, 50 ±5% RH for 7 days.",
+            "Dry-film thickness: 1–1000 µm.",
+        ),
+    ]
+    return LabProfile(
+        id="demo_lab",
+        name="CSP-EN-301 Example Lab",
+        description=(
+            "Synthetic declarations provided by the capstone data team for CSP-EN-301. "
+            "These are unverified demonstration capabilities; prices were not supplied."
+        ),
+        capabilities=[
+            LabCapability(
+                id=f"cap_csp301_{suffix}",
+                canonical_test_id=test_id,
+                method_ids=[method_id],
+                declared_constraints=condition,
+                notes=(
+                    f"Reportable outputs: {outputs}\n"
+                    f"Source: synthetic lab_capability.csv, data row {index}."
+                ),
+            )
+            for index, (suffix, test_id, method_id, condition, outputs) in enumerate(rows, 17)
         ],
     )

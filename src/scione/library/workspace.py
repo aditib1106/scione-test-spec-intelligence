@@ -1,0 +1,281 @@
+"""Join saved source artifacts, the SQL archive and explainable comparisons."""
+
+from __future__ import annotations
+
+from collections import Counter
+
+from fastapi import HTTPException
+
+from scione.library.store import LibraryStore, digest
+from scione.reports.matching import lab_fingerprint
+from scione.specifications.review import assess_requirements
+from scione.structured import compare_requirement, normalize_capability, normalize_requirement
+from scione.structured.models import NORMALIZER_VERSION, AtomicClaim
+
+
+class LibraryWorkspace:
+    def __init__(self, workspace):
+        self.workspace = workspace
+        settings = workspace.settings
+        self.store = LibraryStore(
+            settings.scione_workspace_dir,
+            settings.scione_database_url.get_secret_value()
+            if settings.scione_database_url
+            else None,
+        )
+
+    def index(self, document_id: str):
+        stored = self.workspace.specs.load_document(document_id)
+        run = self.workspace.specs.load_latest_extraction(document_id)
+        self.store.ensure_document(stored, run.extraction.document if run else None)
+        if run:
+            normalized = [normalize_requirement(item) for item in run.extraction.requirements]
+            self.store.save_requirements(run, normalized)
+        return stored, run
+
+    def document(self, document_id: str) -> dict:
+        stored, run = self.index(document_id)
+        review = self.workspace.specs.load_review(document_id, run.run_id) if run else None
+        return self._document_view(stored, run, review)
+
+    def _document_view(self, stored, run, review) -> dict:
+        """Build metadata around one captured source/review, not another latest read."""
+        row = self.store.document(stored.document_id)
+        assessments = (
+            assess_requirements(
+                run,
+                stored.document,
+                review,
+                pdf_bytes=self.workspace.specs.read_pdf(stored.document_id),
+            )
+            if run
+            else {}
+        )
+        return {
+            **row,
+            "page_count": stored.document.page_count,
+            "run_id": run.run_id if run else None,
+            "provider": run.provider if run else None,
+            "requirement_count": len(run.extraction.requirements) if run else 0,
+            "review_count": sum(item.state == "needs_attention" for item in assessments.values()),
+        }
+
+    def listing(self) -> dict:
+        return {
+            "documents": [
+                self.document(item.document_id) for item in self.workspace.specs.list_documents()
+            ]
+        }
+
+    def detail(self, document_id: str) -> dict:
+        document = self.document(document_id)
+        rows = self.store.load_requirements(document["run_id"]) if document["run_id"] else []
+        for row in rows:
+            row["claims"] = [
+                self.present_claim(AtomicClaim.model_validate(item)) for item in row["claims"]
+            ]
+        versions = [
+            item
+            for item in self.listing()["documents"]
+            if item["family_id"] == document["family_id"]
+        ]
+        return {"document": document, "versions": versions, "requirements": rows}
+
+    @staticmethod
+    def present_claim(claim: AtomicClaim) -> dict:
+        return {
+            **claim.model_dump(mode="json"),
+            "display_value": claim.display_value,
+            "source_page": claim.source_pages[0] if claim.source_pages else None,
+            "status": claim.normalization_state,
+        }
+
+    def metadata(self, document_id: str, body) -> dict:
+        self.index(document_id)
+        values = body.model_dump(exclude={"expected_version"})
+        self.store.edit_metadata(document_id, values, body.expected_version)
+        return self.detail(document_id)
+
+    def comparison(self, document_id: str) -> dict:
+        # The report captures exactly one immutable extraction plus its review,
+        # lab and matching decisions. Derive every exported field from it.
+        report = self.workspace.draft(document_id)
+        run = report.source_run
+        stored = self.workspace.specs.load_document(document_id)
+        self.store.ensure_document(stored, run.extraction.document)
+        document = self._document_view(stored, run, report.source_review)
+        self.store.save_requirements(
+            run, [normalize_requirement(item) for item in run.extraction.requirements]
+        )
+        fingerprint = lab_fingerprint(report.lab)
+        self.store.save_capability_revision(report.lab, fingerprint)
+        rows = []
+        for line in report.lines:
+            requirement = line.requirement
+            methods = line.considered_method_codes or [
+                item.code for item in requirement.requested_methods
+            ]
+            if line.status == "excluded" or line.extraction_review_state == "excluded":
+                comparison = {
+                    "requirement_id": requirement.id,
+                    "status": "excluded",
+                    "checks": [],
+                    "supported_count": 0,
+                    "gap_count": 0,
+                    "unknown_count": 0,
+                }
+            else:
+                method_status = "unknown"
+                if line.status in {"test_gap", "method_gap"}:
+                    method_status = "gap"
+                elif line.capability and not line.unknown_methods and line.status != "needs_review":
+                    method_status = "supported"
+                atoms = normalize_capability(line.capability) if line.capability else []
+                result = compare_requirement(
+                    normalize_requirement(requirement), atoms, method_status
+                )
+                if line.capability is None and method_status == "unknown":
+                    for check in result.checks:
+                        claim = check.requirement_claim
+                        if (
+                            check.status == "unknown"
+                            and check.kind != "method"
+                            and claim is not None
+                            and claim.parameter_id
+                            and claim.normalization_state != "unresolved"
+                        ):
+                            check.declared = "Not compared: confirm test/method"
+                            check.reason = (
+                                "Confirm the requested test/method before comparing this "
+                                "requirement with lab declarations."
+                            )
+                if result.checks:
+                    result.checks[0].requested = ", ".join(methods) or "Customer-defined procedure"
+                    result.checks[0].declared = ", ".join(line.lab_method_identifiers) or None
+                comparison = result.model_dump(mode="json")
+                choice = line.mapping_choice
+                if (
+                    choice
+                    and choice.lab_fingerprint == fingerprint
+                    and choice.capability_verdict == "unsupported"
+                ):
+                    comparison["checks"].append(
+                        {
+                            "id": f"{requirement.id}_lab_review",
+                            "parameter_id": "lab_scope_review",
+                            "label": "Lab scope decision",
+                            "kind": "scope",
+                            "stage": "general",
+                            "requested": "The complete requested test scope",
+                            "declared": choice.note,
+                            "status": "gap",
+                            "unit": None,
+                            "reason": "The lab recorded that it cannot meet this scope.",
+                            "source_pages": [],
+                        }
+                    )
+                    comparison["gap_count"] += 1
+                    comparison["status"] = (
+                        "partially_matched" if comparison["supported_count"] else "not_matched"
+                    )
+                if len(requirement.requested_methods) > len(methods):
+                    comparison["checks"].append(
+                        {
+                            "id": f"{requirement.id}_alternative",
+                            "parameter_id": "conditional_method",
+                            "label": "Conditional alternative",
+                            "kind": "instruction",
+                            "stage": "general",
+                            "requested": "; ".join(
+                                f"{item.code}: {item.role or 'Conditional source reference'}"
+                                for item in requirement.requested_methods
+                                if item.code not in methods
+                            ),
+                            "declared": None,
+                            "status": "informational",
+                            "unit": None,
+                            "reason": (
+                                "The required route is assessed. Conditional alternatives remain "
+                                "subject to the source's approval requirements."
+                            ),
+                            "source_pages": sorted({item.page for item in requirement.evidence}),
+                        }
+                    )
+                if line.extraction_review_state == "needs_attention":
+                    comparison["checks"].append(
+                        {
+                            "id": f"{requirement.id}_source",
+                            "parameter_id": "source_review",
+                            "label": "Source text",
+                            "kind": "source",
+                            "stage": "general",
+                            "requested": "Check the extracted requirement against the PDF",
+                            "declared": None,
+                            "status": "unknown",
+                            "unit": None,
+                            "reason": "; ".join(line.extraction_review_reasons)
+                            or "Source verification is pending.",
+                            "source_pages": sorted({item.page for item in requirement.evidence}),
+                        }
+                    )
+                    comparison["unknown_count"] += 1
+                    if comparison["status"] == "fully_matched":
+                        comparison["status"] = "needs_information"
+            rows.append(
+                {
+                    "requirement_id": requirement.id,
+                    "test_name": requirement.original_test_name,
+                    "methods": methods,
+                    "capability_id": line.capability.id if line.capability else None,
+                    "source_review_state": line.extraction_review_state,
+                    "comparison": comparison,
+                }
+            )
+        summary = {
+            key: 0
+            for key in (
+                "fully_matched",
+                "partially_matched",
+                "not_matched",
+                "needs_information",
+                "excluded",
+            )
+        }
+        summary.update(Counter(item["comparison"]["status"] for item in rows))
+        payload = {
+            "document": document,
+            "lab_name": report.lab.name,
+            "lab_version": report.lab.version,
+            "normalizer_version": NORMALIZER_VERSION,
+            "requirements": rows,
+            "summary": summary,
+            "notes": [
+                "Draft capability assessment. It does not predict specimen pass/fail.",
+                "Missing lab information remains unresolved; it is not an explicit limitation.",
+            ],
+            "source_run_id": run.run_id,
+            "lab_fingerprint": fingerprint,
+        }
+        self._assert_comparison_inputs_current(report, document)
+        identity = digest([report.input_fingerprint, document, NORMALIZER_VERSION])
+        saved = self.store.save_comparison(identity, payload)
+        # Pagination is presentation metadata; the persisted comparison remains immutable.
+        return saved
+
+    def _assert_comparison_inputs_current(self, report, document: dict) -> None:
+        """Reject a stale analysis/review/lab/metadata race before publishing it.
+
+        All payload data already comes from the captured report, so even a
+        change after this optimistic check cannot mix different source runs.
+        """
+        self.workspace.latest(report.document_id, report.source_run.run_id)
+        current = self.workspace.draft(report.document_id)
+        if current.input_fingerprint != report.input_fingerprint:
+            raise HTTPException(
+                409, "Source, review or lab information changed. Recompare the latest saved data."
+            )
+        metadata = self.store.document(report.document_id)
+        if any(document.get(key) != value for key, value in metadata.items()):
+            raise HTTPException(
+                409, "Specification details changed. Reload before comparing again."
+            )

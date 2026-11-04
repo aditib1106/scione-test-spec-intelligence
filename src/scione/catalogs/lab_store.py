@@ -49,7 +49,13 @@ class FileLabStore:
         """Load a validated profile, creating the synthetic seed only if absent."""
 
         try:
+            # Writers publish complete files with os.replace. Readers may safely
+            # observe either version without competing for the writer's lock.
+            self._check_root()
+            if self.path.exists() or self.path.is_symlink():
+                return self._read()
             with self._locked():
+                # Another request may have initialized the profile meanwhile.
                 if self.path.exists() or self.path.is_symlink():
                     return self._read()
                 lab = self._validate(

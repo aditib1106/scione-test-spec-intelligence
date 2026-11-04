@@ -8,8 +8,8 @@ from scione.schemas import IngestedDocument
 
 CUSTOMER_REQUIREMENTS_PROMPT_VERSION = "customer_requirements_v0.2"
 _PROMPT_FILE = "customer_requirements_v0_2.txt"
-CUSTOMER_REQUIREMENTS_COMPACT_PROMPT_VERSION = "customer_requirements_compact_v0.1"
-_COMPACT_PROMPT_FILE = "customer_requirements_compact_v0_1.txt"
+CUSTOMER_REQUIREMENTS_COMPACT_PROMPT_VERSION = "customer_requirements_compact_v0.2"
+_COMPACT_PROMPT_FILE = "customer_requirements_compact_v0_2.txt"
 
 
 def load_customer_requirements_system_prompt() -> str:

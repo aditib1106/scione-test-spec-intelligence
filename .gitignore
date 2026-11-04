@@ -224,6 +224,7 @@ __marimo__/
 # Client/project reference PDFs stay local, except the approved simulated demo spec.
 /docs/**/*.pdf
 !/docs/samples/MS-PNT-410_demo_spec.pdf
+!/docs/samples/CSP-EN-301_demo_spec.pdf
 
 # Local runtime data
 /runs/

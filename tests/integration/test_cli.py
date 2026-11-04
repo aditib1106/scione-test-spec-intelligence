@@ -10,6 +10,7 @@ import pymupdf
 import pytest
 
 from scione.cli import build_parser, main
+from scione.config import Settings
 
 
 @pytest.fixture
@@ -32,6 +33,11 @@ def customer_pdf(tmp_path: Path) -> Path:
 
 @pytest.fixture(autouse=True)
 def forbid_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    # CLI checks run against temporary workspaces, independent of the user's
+    # newly configured MySQL credentials or development env files.
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    monkeypatch.delenv("SCIONE_DATABASE_URL", raising=False)
+
     def reject_network(*args: object, **kwargs: object) -> None:
         raise AssertionError("The offline ingest CLI must not access the network.")
 

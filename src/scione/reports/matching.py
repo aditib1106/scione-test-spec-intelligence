@@ -55,7 +55,7 @@ _METHOD = re.compile(
     re.IGNORECASE,
 )
 _REVISION = re.compile(r"^\s*:\s*(\d{4})\s*$")
-MATCHING_POLICY_VERSION = "0.4"
+MATCHING_POLICY_VERSION = "0.5"
 
 
 @dataclass(frozen=True)
@@ -268,6 +268,23 @@ def _selected_methods(
         roles = [
             (_name(method.role) if method.role else "") for method in requirement.requested_methods
         ]
+        # A clearly required primary route can be evaluated while a separately
+        # approval-dependent optional route remains visible in original source.
+        # Unknown roles or merely calling something an alternative never suffice.
+        primary_indices = [
+            index for index, role in enumerate(roles) if role in {"required", "primary"}
+        ]
+        if len(roles) > 1 and len(primary_indices) == 1:
+            primary_index = primary_indices[0]
+            optional_roles = [role for index, role in enumerate(roles) if index != primary_index]
+            explicit_conditional = all(
+                role.startswith("optional ")
+                and re.search(r"\b(?:approval|agreement)\b", role)
+                and re.search(r"\brequired\b", role)
+                for role in optional_roles
+            )
+            if explicit_conditional:
+                return [requirement.requested_methods[primary_index]], []
         # Explicit source roles can establish that references are cumulative
         # (for example exposure + measurement). Merely seeing several known
         # identifiers never establishes their applicability or equivalence.
