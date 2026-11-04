@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from scione.api.contracts import MappingReview, QuantityReview, ReportEdit, ScopeReview
 from scione.catalogs import FileLabStore, load_reference_catalog
 from scione.config import Settings
+from scione.library.workspace import LibraryWorkspace
 from scione.reports.matching import build_report, lab_fingerprint, support_basis
 from scione.reports.models import GapLine, MappingChoice, QuoteChoice, ReportSnapshot
 from scione.reports.review import batch_eligible, needs_review, quote_eligible, scope_review_state
@@ -25,6 +26,7 @@ class Workspace:
         self.labs = FileLabStore(settings.scione_workspace_dir, self.catalog, seed_demo=False)
         self.specs = FileSpecStore(settings.scione_workspace_dir)
         self.reports = FileReportStore(settings.scione_workspace_dir)
+        self.library = LibraryWorkspace(self)
 
     def overview(self) -> dict:
         providers = []

@@ -156,12 +156,13 @@ def test_parent_traversal_is_rejected(tmp_path: Path) -> None:
 
 def test_existing_lock_blocks_writes_without_resetting_data(tmp_path: Path) -> None:
     store = FileLabStore(tmp_path)
-    store.load_or_create()
+    lab = store.load_or_create()
     before = store.path.read_bytes()
     lock = tmp_path / ".lab.lock"
     lock.write_text("another writer")
+    assert store.load_or_create().model_dump() == lab.model_dump()
     with pytest.raises(LabStoreError, match="Another"):
-        store.load_or_create()
+        store.save(lab)
     assert store.path.read_bytes() == before
     assert lock.read_text() == "another writer"
 

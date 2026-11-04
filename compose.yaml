@@ -1,0 +1,22 @@
+name: scione
+services:
+  database:
+    image: mysql:8.4
+    env_file: .env.database
+    ports:
+      - "127.0.0.1:${SCIONE_DB_PORT:-3307}:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - database:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", 'mysqladmin ping -h 127.0.0.1 -u"$$MYSQL_USER" -p"$$MYSQL_PASSWORD" --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: "no"
+volumes:
+  database:
+
