@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 from uuid import uuid4
 
 import uvicorn
+from shared_demo import seed_shared_demo
 
 from scione.catalogs import FileLabStore, load_reference_catalog
 from scione.config import Settings
@@ -40,6 +41,7 @@ def seed_review(root: Path):
     run.extraction.review_issues = ["req_pencil: applicability needs checking."]
     stores[0].save_extraction(document.document_id, run)
     module.seed(stores, name="offline-two-test-spec.pdf", count=2)
+    seed_shared_demo(stores[0], stores[2])
 
 
 def main():

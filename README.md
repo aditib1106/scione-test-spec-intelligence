@@ -78,11 +78,19 @@ Review counts are not accuracy scores; ground-truth evaluation is still needed.
    above a stable action row. **Batch review** requires explicit selection;
    multiple-item source batches also require acknowledgment. Exclusion requires
    a reason. One batch is saved atomically.
+   For an unresolved source issue, add a note under **Source quotations & review
+   note**, then choose **Keep pending & next**. The note is saved separately from
+   the original extraction and the item remains in the review queue.
    **Continue to lab review** opens the same document in **Reports**. Confirming
    source text does not approve the matched test or the lab's capability.
 2. **Review & confirm** opens a pending test automatically. Compare **Customer
    asks for** with **Your lab lists**, check conditions, criteria and scope, then
    **Confirm lab support**, or record why the lab **Cannot meet this scope**.
+   Customer conditions and acceptance criteria stay in **Customer asks for**;
+   declared methods and operating limits stay in **Your lab lists**.
+   **Comparison result** shows the existing assessment and its reasons, with
+   automatic operating checks expanded for inspection. **View lab declarations**
+   opens My Lab when declarations need updating.
    A method match alone is not condition coverage, accreditation or test success.
    Missing catalog entries remain gaps, not proof a lab cannot perform a test.
    Already covered operating conditions are labeled as automatic matches, separately
@@ -90,6 +98,8 @@ Review counts are not accuracy scores; ground-truth evaluation is still needed.
    Catalog gaps and automatic operating-limit gaps are already reportable: they show
    their result without a pair of disabled confirmation buttons. Genuine matching
    ambiguity opens the matching form directly. Source-text checks remain separate.
+   Source warnings show their own review reasons and a link back to the PDF;
+   confirming lab support does not clear those warnings.
 3. Use **Change test or method / record a gap** when the identity or method needs
    correction. Decisions remain separate from extracted source text; **Check
    source text** returns to the corresponding highlighted item in Specifications.
@@ -109,7 +119,9 @@ Review counts are not accuracy scores; ground-truth evaluation is still needed.
    alternatives must not be counted as independent chargeable tests.
 5. **Continue to report** opens **Report**. **Create draft report** saves the PDF
    and its JSON snapshot locally, without calling a model. Pending reviews remain
-   marked in the draft. Preview, download or choose an earlier saved PDF here.
+   marked in the draft. **Review unresolved items** returns to the pending queue.
+   The report summary repeats review, operating-support and gap counts; these can
+   overlap. Preview, download or choose an earlier saved PDF here.
    Changed inputs mark older snapshots as historical instead of rewriting them.
    PDF and JSON downloads are available in **Report → Preview & download**.
    **Developer**, the last tab, holds the diagnostic matrix, input versions,
@@ -362,6 +374,26 @@ historical snapshots. On Linux, an installed `/usr/bin/chromium` is used when
 available; `PLAYWRIGHT_CHROMIUM_EXECUTABLE` can select another local executable.
 Browser fixture workspaces and reset backups are temporary and never use
 `local_data/` or `.env`.
+
+To replay the review-to-report UI walkthrough against the shared demo PDF:
+
+```bash
+SCIONE_TEST_PYTHON="$PWD/.venv/bin/python" npm --prefix frontend run test:e2e -- shared-demo.spec.ts
+```
+
+This offline fixture preserves the original 13-page PDF and supplies five
+hand-authored rows from pages 6–7: pencil hardness, cross-cut adhesion, pull-off
+adhesion, humidity resistance and neutral salt spray. It is a partial UI fixture,
+not a saved model response, complete extraction or accuracy evaluation. Other
+requirements and reference-coverage warnings remain unresolved.
+
+The walkthrough checks source confirmation against page 6, separate lab-support
+confirmation, an ISO 2409 / ASTM D3359 method gap, and a 240 h humidity request
+against a synthetic 120 h lab limit. It returns from the report to unresolved
+items, then saves a draft with those items still pending and downloads PDF/JSON.
+Both desktop and narrow runs save screenshots and report files under the ignored
+`frontend/test-results/` directory. The fixture never calls a model or changes a
+developer's saved workspace.
 
 For checks that do not recreate repository caches:
 

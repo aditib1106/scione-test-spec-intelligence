@@ -50,6 +50,18 @@ for (const change of ["document", "run"] as const) {
         `**/api/specifications/${first.document_id}/analysis`,
         (route) => route.fulfill({ json: updated }),
       );
+      // The mocked run has no saved PDF highlights. Serve the original run's
+      // page image rather than asking the real server for a nonexistent run.
+      await page.route(
+        `**/api/specifications/${first.document_id}/pages/*?*`,
+        (route) => {
+          const url = new URL(route.request().url());
+          if (url.searchParams.get("run_id") === updated.run!.run_id) {
+            url.searchParams.set("run_id", source.run!.run_id);
+          }
+          return route.fallback({ url: url.toString() });
+        },
+      );
     }
 
     await page.goto(`${base}/specifications?document=${first.document_id}`);
@@ -86,10 +98,19 @@ for (const change of ["document", "run"] as const) {
       await page
         .getByRole("checkbox", { name: /I have permission to send/ })
         .check();
+      const response = page.waitForResponse(
+        (item) =>
+          item
+            .url()
+            .endsWith(`/api/specifications/${first.document_id}/analysis`) &&
+          item.request().method() === "POST",
+      );
       await page.getByRole("button", { name: "Analyze again" }).click();
+      expect((await response).ok()).toBeTruthy();
+      // A successful analysis closes its settings; the submit button is hidden.
       await expect(
-        page.getByRole("button", { name: "Analyze again" }),
-      ).toBeEnabled();
+        page.getByRole("button", { name: /Analysis settings/ }),
+      ).toHaveAttribute("aria-expanded", "false");
     }
 
     for (const box of boxes) await expect(box).not.toBeChecked();
