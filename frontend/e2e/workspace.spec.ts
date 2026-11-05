@@ -14,7 +14,10 @@ type SeedReportResponse = {
       status: string;
     }[];
   };
-  line_states: Record<string, { support_basis: string | null }>;
+  line_states: Record<
+    string,
+    { support_basis: string | null; quote_eligible: boolean }
+  >;
 };
 
 async function resetEmptyWorkspace(request: APIRequestContext) {
@@ -287,7 +290,7 @@ test("seeded source review, lab support, catalog gap, and immutable report histo
   );
   expect(pencil).toBeTruthy();
   if (
-    !report.line_states.req_pencil?.support_basis &&
+    !report.line_states.req_pencil?.quote_eligible &&
     pencil?.status === "in_house"
   ) {
     await chooseMuiOption(page, "Show", "All active");
@@ -299,13 +302,41 @@ test("seeded source review, lab support, catalog gap, and immutable report histo
           request,
           `${seededBase}/api/reports/${document.document_id}`,
         );
-        return report.line_states.req_pencil?.support_basis;
+        return report.line_states.req_pencil?.quote_eligible;
       })
-      .toBe("human");
+      .toBe(true);
   }
 
   await chooseMuiOption(page, "Show", "All active");
   await page.getByRole("button", { name: /Pencil hardness/ }).click();
+  await expect(
+    page.getByText("Customer asks for", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Your lab lists", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Comparison result", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "View lab declarations" }),
+  ).toHaveAttribute("href", "/my-lab");
+  const customerPanel = page
+    .getByText("Customer asks for", { exact: true })
+    .locator("..");
+  const labPanel = page
+    .getByText("Your lab lists", { exact: true })
+    .locator("..");
+  await expect(
+    customerPanel.getByText("Acceptance criteria", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    customerPanel.getByText("Your lab’s recorded limits", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    labPanel.getByText("Your lab’s recorded limits", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    labPanel.getByText("Acceptance criteria", { exact: true }),
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "Optional quote quantity" }).click();
   await expect(
     page.getByRole("button", { name: "Save quantity", exact: true }),
@@ -354,6 +385,11 @@ test("seeded source review, lab support, catalog gap, and immutable report histo
       /already included as a catalog gap|already visible in the report/,
     ),
   ).toBeVisible();
+  const reviewWidth = await page.evaluate(() => ({
+    viewport: window.document.documentElement.clientWidth,
+    content: window.document.documentElement.scrollWidth,
+  }));
+  expect(reviewWidth.content).toBeLessThanOrEqual(reviewWidth.viewport + 1);
   await page.screenshot({
     path: testInfo.outputPath("report-gap-review.png"),
     fullPage: true,
@@ -367,6 +403,19 @@ test("seeded source review, lab support, catalog gap, and immutable report histo
   await page.goBack();
 
   await page.getByRole("tab", { name: "Report" }).click();
+  const unresolved = page.getByRole("button", {
+    name: "Review unresolved items",
+  });
+  if (await unresolved.isVisible()) {
+    await unresolved.click();
+    await expect(page.getByRole("combobox", { name: "Show" })).toHaveText(
+      "Needs review",
+    );
+    await page.getByRole("tab", { name: "Report" }).click();
+  }
+  await expect(
+    page.getByText("Review and gap counts can overlap.", { exact: false }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Create draft report" }).click();
   await expect(page.getByRole("link", { name: "Download PDF" })).toBeVisible();
   await expect(
