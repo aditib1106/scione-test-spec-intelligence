@@ -9,7 +9,35 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProviderError(RuntimeError):
-    """Raised when a model provider cannot produce a usable response."""
+    """Safe failure message plus separately retained generation artifacts.
+
+    Adapters pass only actual generated text and response metadata here, never
+    request headers, credentials or whole SDK exceptions. ``raw_text`` may
+    contain customer data and belongs in the authorized run artifact, not in
+    user-facing errors or ordinary logs. Existing message-only callers remain
+    compatible.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        raw_text: str | None = None,
+        usage: TokenUsage | None = None,
+        latency_ms: float | None = None,
+        provider: str | None = None,
+        model: str | None = None,
+        provider_request_id: str | None = None,
+        generation_settings: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.raw_text = raw_text
+        self.usage = usage.model_copy(deep=True) if usage is not None else TokenUsage()
+        self.latency_ms = latency_ms
+        self.provider = provider
+        self.model = model
+        self.provider_request_id = provider_request_id
+        self.generation_settings = dict(generation_settings or {})
 
 
 class StructuredGenerationRequest(BaseModel):
@@ -45,6 +73,7 @@ class StructuredGenerationResponse(BaseModel):
     latency_ms: float = Field(ge=0)
     usage: TokenUsage = Field(default_factory=TokenUsage)
     provider_request_id: str | None = None
+    generation_settings: dict[str, Any] = Field(default_factory=dict)
 
 
 class ModelProvider(ABC):
@@ -59,6 +88,11 @@ class ModelProvider(ABC):
     @abstractmethod
     def model_name(self) -> str:
         """Provider model identifier used for this adapter instance."""
+
+    @property
+    def generation_settings(self) -> dict[str, Any]:
+        """Safe reproducibility metadata, without credentials or request headers."""
+        return {}
 
     @abstractmethod
     def generate_structured(

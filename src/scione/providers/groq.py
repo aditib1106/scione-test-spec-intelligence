@@ -97,10 +97,11 @@ def _safe_api_error_message(exc: groq.APIError) -> str:
 
             for key in ("type", "code", "param"):
                 value = error.get(key)
-                if value:
+                if isinstance(value, str) and re.fullmatch(r"[a-z_][a-z0-9_.]{0,79}", value):
                     details.append(f"{key}={value}")
-            if isinstance(message, str) and message:
-                details.append(f"message={message[:500]}")
+            # Arbitrary API messages can quote prompts, URLs or credentials.
+            # Only recognized token-limit metadata and identifier-shaped codes
+            # are suitable for the public failure message.
 
     return ", ".join(details) or type(exc).__name__
 
@@ -177,14 +178,37 @@ class GroqModelProvider(ModelProvider):
                 temperature=self._temperature,
             )
         except groq.APIError as exc:
+            body = getattr(exc, "body", None)
+            error = body.get("error") if isinstance(body, dict) else None
+            generated = error.get("failed_generation") if isinstance(error, dict) else None
             raise ProviderError(
-                f"Groq API request failed ({_safe_api_error_message(exc)})."
+                f"Groq API request failed ({_safe_api_error_message(exc)}).",
+                raw_text=generated if isinstance(generated, str) else None,
+                latency_ms=(perf_counter() - started) * 1000,
+                provider=self.provider_name,
+                model=self.model_name,
+                provider_request_id=getattr(exc, "request_id", None),
             ) from exc
 
         latency_ms = (perf_counter() - started) * 1000
+        usage = getattr(completion, "usage", None)
+        metadata = {
+            "provider": self.provider_name,
+            "model": getattr(completion, "model", None) or self.model_name,
+            "latency_ms": latency_ms,
+            "usage": TokenUsage(
+                input_tokens=getattr(usage, "prompt_tokens", None),
+                output_tokens=getattr(usage, "completion_tokens", None),
+                total_tokens=getattr(usage, "total_tokens", None),
+            ),
+            "provider_request_id": getattr(completion, "id", None),
+        }
         if not completion.choices:
-            raise ProviderError("Groq returned no structured response candidates.")
+            raise ProviderError("Groq returned no structured response candidates.", **metadata)
         choice = completion.choices[0]
+        content = getattr(getattr(choice, "message", None), "content", None)
+        if content is not None and not isinstance(content, str):
+            raise ProviderError("Groq returned an unusable structured response.", **metadata)
         finish_reason = getattr(choice, "finish_reason", None)
         if finish_reason is not None and finish_reason != "stop":
             # Only echo documented metadata, never arbitrary provider text.
@@ -202,30 +226,30 @@ class GroqModelProvider(ModelProvider):
                     "fix completeness. Use a narrower extraction scope or a suitable quota."
                     if safe_reason == "length"
                     else ""
-                )
+                ),
+                raw_text=content,
+                **metadata,
             )
-        content = choice.message.content
         if not content:
-            raise ProviderError("Groq returned an empty structured response.")
+            raise ProviderError(
+                "Groq returned an empty structured response.", raw_text=content, **metadata
+            )
 
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError as exc:
-            raise ProviderError(f"Groq returned invalid JSON: {exc}") from exc
+            raise ProviderError(
+                f"Groq returned invalid JSON (line {exc.lineno}, column {exc.colno}).",
+                raw_text=content,
+                **metadata,
+            ) from exc
         if not isinstance(parsed, dict):
-            raise ProviderError("Groq structured response must be a JSON object.")
+            raise ProviderError(
+                "Groq structured response must be a JSON object.", raw_text=content, **metadata
+            )
 
-        usage = getattr(completion, "usage", None)
         return StructuredGenerationResponse(
-            provider=self.provider_name,
-            model=getattr(completion, "model", None) or self.model_name,
             raw_text=content,
             parsed=parsed,
-            latency_ms=latency_ms,
-            usage=TokenUsage(
-                input_tokens=getattr(usage, "prompt_tokens", None),
-                output_tokens=getattr(usage, "completion_tokens", None),
-                total_tokens=getattr(usage, "total_tokens", None),
-            ),
-            provider_request_id=getattr(completion, "id", None),
+            **metadata,
         )

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    model_provider: str = "groq"
+    model_provider: str = "sail"
     groq_api_key: SecretStr | None = None
     groq_model: str = "qwen/qwen3.8-27b"
     groq_timeout_seconds: float = Field(default=60.0, gt=0)
@@ -39,6 +39,19 @@ class Settings(BaseSettings):
     gemini_max_output_tokens: int = Field(default=6000, gt=0)
     gemini_temperature: float = Field(default=0.0, ge=0, le=2)
     gemini_thinking_level: Literal["low", "medium", "high"] = "low"
+    fireworks_api_key: SecretStr | None = None
+    fireworks_model: str = "accounts/fireworks/models/deepseek-v4p1-flash-1017"
+    fireworks_timeout_seconds: float = Field(default=90.0, gt=0)
+    fireworks_max_output_tokens: int = Field(default=8192, gt=0)
+    fireworks_temperature: float = Field(default=0.0, ge=0, le=2)
+    fireworks_reasoning_effort: (
+        Literal["none", "low", "medium", "high", "xhigh", "max"] | None
+    ) = None
+    sail_api_key: SecretStr | None = None
+    sail_model: str = "zai-org/GLM-5.3"
+    sail_timeout_seconds: float = Field(default=90.0, gt=0)
+    sail_max_output_tokens: int = Field(default=8192, gt=0)
+    sail_temperature: float = Field(default=0.0, ge=0, le=2)
     scione_single_attempt_mode: bool = True
     scione_workspace_dir: Path = Path("local_data")
     # Optional cloud/local MySQL URL. None uses an embedded SQL database inside
@@ -46,6 +59,7 @@ class Settings(BaseSettings):
     scione_database_url: SecretStr | None = None
     scione_customer_input_character_limit: int = Field(default=60_000, gt=0)
     scione_customer_gemini_output_tokens: int = Field(default=16_000, gt=0)
+    scione_matching_input_character_limit: int = Field(default=120_000, gt=0)
 
     def require_groq_api_key(self) -> str:
         if self.groq_api_key is None:
@@ -67,3 +81,27 @@ class Settings(BaseSettings):
         if not value or value == "replace_with_your_gemini_api_key":
             raise ConfigurationError("GEMINI_API_KEY still contains the placeholder value.")
         return value
+
+    def require_api_key(self, provider: str) -> str:
+        """Return an explicitly configured secret; never treat examples as keys."""
+        if provider == "groq":
+            return self.require_groq_api_key()
+        if provider == "gemini":
+            return self.require_gemini_api_key()
+        if provider not in {"fireworks", "sail"}:
+            raise ConfigurationError(f"Unsupported provider={provider!r}.")
+        name = f"{provider.upper()}_API_KEY"
+        secret = getattr(self, f"{provider}_api_key")
+        if secret is None or not secret.get_secret_value().strip():
+            raise ConfigurationError(f"{name} is missing. Fill it in your local .env.")
+        value = secret.get_secret_value().strip()
+        if value.casefold().startswith("replace_with_"):
+            raise ConfigurationError(f"{name} still contains the placeholder value.")
+        return value
+
+    def provider_configured(self, provider: str) -> bool:
+        try:
+            self.require_api_key(provider)
+        except ConfigurationError:
+            return False
+        return True
