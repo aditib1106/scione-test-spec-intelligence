@@ -13,16 +13,27 @@ report. Reading the full content of referenced standards is outside the MVP.
 - **My Lab**: manually enter tests, methods, conditions, reportable outputs and optional
   rates. New workspaces start empty. Explicit example loading offers CSP-EN-301 (four
   declarations) or the earlier MS-PNT-410 pilot lab; it never replaces existing entries.
+  Detailed parameters support arbitrary names, values/ranges, units and context. Current
+  declarations, queryable parameter rows and immutable revisions are saved to SQL.
+  Conditions and Criteria / reporting offer common parameter presets and typed input.
+  Unfamiliar custom fields remain visible as unresolved; they are not automatically
+  certified because their labels resemble a familiar parameter.
 - **Test Catalog**: 39 synthetic test identities and 40 methods, with English/Chinese
   aliases. Different method identifiers remain distinct; association is not equivalence.
 - **Specifications → Library**: company/search filters, specification metadata, revisions
-  and saved requirements. Open a specification, then select a test to browse parameter,
-  value, unit, stage and source-page records in a filterable table.
+  and saved requirements. Select a test to see method/condition/criteria summaries;
+  expand detailed requirements for parameter, unit, stage and source-page records.
 - **Specifications → PDF & review**: PDF previews, highlighted evidence, model analysis and
   separate source-review decisions. PDF pages support zoom, fit width and fullscreen
   reading with pagination. Source confirmation does not approve lab support.
-- **Reports**: overview and detailed customer-versus-lab checks, reasons, relevant lab-edit
-  links, PDF previews and PDF/JSON downloads. Recompare after editing lab information.
+  **Correct extracted content** saves a separate reviewed-facts revision. Matching and
+  Library use the corrected draft; original model output remains unchanged. Changed
+  rows require a fresh source confirmation, without resetting unchanged rows.
+- **Reports**: selectable test list and customer-versus-lab summaries, expandable checks,
+  PDF previews and PDF/JSON downloads. Explicit **Run AI matching** aligns supplied
+  identities/parameters; code checks the linked values. Browsing never calls a model.
+  Remove/restore tests in this report without deleting source data. Matching history and
+  machine artifacts are available under Developer details.
 - **Developer Tools**: original provider output, run history and diagnostics. **Reports →
   Advanced review** retains the earlier mapping/scope and manual quantity/price workflow.
   Its older report snapshots remain separate from the new structured reports.
@@ -44,6 +55,58 @@ For model analysis, copy `.env.example` to `.env` only if `.env` does not alread
 then enter your provider key. Preserve existing keys. Never commit `.env` or credentials.
 Reviewing records, comparing saved data and exporting reports do not call a model.
 
+### Fireworks and Sail model APIs
+
+Create a key in [Fireworks API Keys](https://app.fireworks.ai/settings/users/api-keys)
+or the [Sail dashboard](https://app.sailresearch.com/). Copy the corresponding new
+block from `.env.example` into your existing `.env`, preserving existing keys and
+database settings. Fill only the local key value:
+
+| Provider | Key variable | Default model |
+| --- | --- | --- |
+| Fireworks | `FIREWORKS_API_KEY` | `accounts/fireworks/models/deepseek-v4p1-flash-1017` |
+| Sail | `SAIL_API_KEY` | `zai-org/GLM-5.3` |
+
+The calibrated workspace default is **Sail / GLM-5.3** (`MODEL_PROVIDER=sail`).
+Fireworks and the other providers remain explicit alternatives for development.
+You can configure either or both. No model deployment, Sailbox, GPU allocation or
+additional vendor SDK is required; these adapters use the existing HTTP client.
+The fixed API endpoints are `https://api.fireworks.ai/inference/v1` and
+`https://api.sailresearch.com/v1`. Keys are sent only to the matching provider.
+See the official [Fireworks quickstart](https://docs.fireworks.ai/getting-started/quickstart)
+and [Sail quickstart](https://docs.sailresearch.com/quickstart).
+
+Restart the Python server after editing `.env`. In the React application, select
+Fireworks or Sail in **PDF & review → Run analysis** or **Reports → Run AI matching**,
+then review the model, output limit and sending/usage consent before running.
+Selecting a provider or browsing a saved result makes no model call; saved result
+metadata continues to describe the provider/model that actually produced it.
+`MODEL_PROVIDER=fireworks` or `MODEL_PROVIDER=sail` can set the configured default.
+
+Both adapters request JSON Schema output and use one attempt, without automatic
+retries. Account/model rate limits still apply despite available credit, and valid
+JSON does not establish factual extraction or capability accuracy. Model IDs must
+be available to your account. The retained Streamlit controls still offer Groq and
+Gemini; use React/FastAPI for Fireworks and Sail.
+
+The Sail baseline uses temperature **0**, reasoning **low**, an **8192-token**
+completion ceiling, and a **90-second total local HTTP deadline**. This bounds
+local waiting; a provider may finish and bill an already accepted request after a
+browser closes, a timeout, or server shutdown. Idle pages never call the model.
+There is no automatic repair call, provider fallback, retry loop or inference job
+queue. Default compact extraction and AI matching each make at most one request;
+the explicitly selected advanced focused mode can make up to eight requests.
+
+Malformed/truncated outputs, inconsistent fields, unknown IDs and incomplete
+matching coverage fail validation. A failed analysis preserves the previous
+accepted result and exposes a raw attempt download under the collapsed developer
+details; retrying is a new explicit action. Concurrent AI operations for the same
+document are blocked in this single-process pilot. Multiworker deployment needs a
+shared database lease. Effective generation settings are saved with new model
+artifacts, and changing those settings does not reuse incompatible matching cache.
+See the [inference policy](docs/architecture/inference_policy.md) for recovery and
+shutdown behavior.
+
 ### MySQL in Docker
 
 Open Docker Desktop yourself, then generate local database credentials once:
@@ -61,6 +124,7 @@ Once the database is healthy:
 ```bash
 npm --prefix frontend ci
 npm --prefix frontend run build
+uv run scione database-upgrade
 uv run scione serve
 ```
 
@@ -88,13 +152,18 @@ migration and runtime validation, in addition to connection configuration.
 2. **Specifications → Library**: add a PDF with its company and specification details.
    The authorized synthetic PDF is bundled at `docs/samples/CSP-EN-301_demo_spec.pdf`.
 3. Open **PDF & review**, select a configured provider/model and analyze after confirming
-   sending permission and provider billing tier. This is the model-call step.
-4. Return to Library. Inspect saved tests and their parameters, units, stages and source
-   links. Reload the page to verify persistence.
-5. Open **Reports**. The supplied lab explicitly cannot report post-cycle gloss retention.
+   sending permission and API usage. Extraction is the first explicit model-call stage.
+4. Return to Library. Inspect test summaries; expand detailed parameters and source links.
+   Reload the page to verify persistence.
+5. Open **Reports**, then **Run AI matching**. Choose a provider/model and explicitly allow
+   sending the extracted requirements and lab declarations. This is a separate model call;
+   unchanged successful inputs reuse their saved result. The report labels rules-only and
+   AI-assisted results separately. The supplied lab cannot report post-cycle gloss retention.
    Unrecorded D65/master and separate topcoat-measurement information remain unresolved.
-6. Update the relevant capability if you can genuinely supply missing information, return
-   to Reports and recompare without re-extracting the PDF. Download the PDF and JSON.
+6. Update a capability if you can genuinely supply missing information. The old matching
+   attempt remains in history but no longer applies; run matching for the changed inputs
+   without re-extracting the PDF. Try removing/restoring a test, then export PDF/JSON.
+   Report-only removal does not invalidate the machine matching or delete the extraction.
 
 For a walkthrough without provider calls, **Try worked example** imports the same PDF
 and an explicitly human-prepared reference extraction. Relevant views label it as prepared
@@ -112,20 +181,33 @@ extraction. Claims preserve parameter identity, kind, stage, operator, value/ran
 unit, source fragment and page. Untouched provider responses stay available. Older runs use
 a conservative local parser; unresolved clauses remain visible.
 
-AI handles natural-language extraction and semantic interpretation. Code validates source
-and numeric grounding, then compares explicit identities, units, ranges, stages and
-reportable outputs. Matching, comparison and export make no model calls. Missing declarations
+AI handles extraction and, when explicitly requested, semantic matching of the supplied
+catalog/lab candidates. Code validates candidate IDs, source grounding, units, ranges,
+stages, contexts and reportable outputs. Accepted links must refer to supplied lab declarations;
+numeric comparison uses preserved source facts. Browsing comparisons, expanding rows and
+exporting make no model calls.
+Missing declarations
 are unknown; explicit limitations are gaps. Workflow tasks stay visible separately from
 capability evidence. Thermal-cycle steps and independent configurations remain separate.
 
 One SQL database stores companies, specification families/versions, extraction records,
 requirements, atomic claims, lab revisions and comparison snapshots. Fixed relationships
 use relational columns; variable details use JSON. See [storage notes](docs/architecture/structured_archive.md).
+The [inference policy](docs/architecture/inference_policy.md) describes model settings,
+validation, recovery and shutdown behavior. Synthetic evaluation protocols are documented
+with the [development fixtures](tests/fixtures/README.md).
 
-Original PDFs, untouched provider output, source reviews and the retained lab editor still
-use versioned files under `local_data/`. This is deliberate hybrid storage. Lab revisions
-used in assessments are also saved to SQL. Saved JSON and first-rendered PDF bytes remain
-immutable for their comparison inputs.
+Original PDFs, extraction responses, source reviews and report-scope actions still use
+files under `local_data/`. The primary React lab editor now uses SQL: an existing lab.json
+imports once, remains unchanged for recovery, and is not a second live data source.
+Semantic matching attempts store full candidate inputs, raw/validated output, token usage,
+normalized extraction and deterministic comparison artifacts in SQL. Saved JSON and
+first-rendered PDF bytes remain immutable for their comparison inputs.
+
+The retained Streamlit compatibility interface still uses legacy file stores; use the
+React/FastAPI application for the SQL lab and semantic matching workflow. These are local
+milestones: authentication, tenant-wide document isolation, durable jobs and cloud storage
+must be completed before exposing this branch to external users.
 
 New customer revisions can be linked to an existing specification; earlier versions remain
 viewable. Re-running a model does not create a new customer revision. Automatic semantic

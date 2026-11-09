@@ -244,3 +244,8 @@ uploads/
 /credentials*.json
 /service-account*.json
 /(Liyang's provided SPEC) MS-PNT-410 Material Performance Standard Exterior Topcoat System.pdf
+
+# Personal planning and experiment notes; keep source fixtures and public docs tracked.
+/docs/plans/
+/docs/evaluation/
+/docs/architecture/capability_pipeline.md
