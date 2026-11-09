@@ -12,11 +12,13 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from scione.api.contracts import (
     AnalysisRequest,
     LabExample,
+    LibraryMetadata,
     MappingReset,
     MappingReview,
     QuantityReview,
@@ -28,7 +30,10 @@ from scione.api.contracts import (
 from scione.api.workspace import Workspace, utc_now
 from scione.catalogs import CatalogError, LabProfile, LabStoreError, default_demo_lab
 from scione.catalogs.lab_store import LabVersionConflict
+from scione.catalogs.seed import default_csp301_lab
 from scione.config import ConfigurationError, Settings
+from scione.library.reset import reset_library_workspace
+from scione.library.store import LibraryConflict, LibraryStoreError
 from scione.providers.factory import create_configured_provider
 from scione.reports.pdf import ReportPDFError, render_report_pdf
 from scione.reports.store import ReportStoreError, ReportVersionConflict
@@ -44,16 +49,18 @@ from scione.specifications.store import (
     SpecStoreError,
     SpecVersionConflict,
 )
+from scione.structured.pdf import render_comparison_pdf
 from scione.web.diagnostics_data import (
     comparison_rows,
     evidence_rows,
     requirement_rows,
     run_summary,
 )
-from scione.workspace_reset import DemoResetError, reset_demo_workspace
+from scione.workspace_reset import DemoResetError
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 SAMPLE_SPEC = REPOSITORY_ROOT / "docs" / "samples" / "MS-PNT-410_demo_spec.pdf"
+CSP301_SPEC = REPOSITORY_ROOT / "docs" / "samples" / "CSP-EN-301_demo_spec.pdf"
 
 
 def create_app(settings: Settings | None = None, frontend_dir: Path | None = None) -> FastAPI:
@@ -86,7 +93,9 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         return response
 
     async def domain_error(_request: Request, exc: Exception):
-        conflict = isinstance(exc, (LabVersionConflict, SpecVersionConflict, ReportVersionConflict))
+        conflict = isinstance(
+            exc, (LabVersionConflict, SpecVersionConflict, ReportVersionConflict, LibraryConflict)
+        )
         return JSONResponse({"detail": str(exc)}, 409 if conflict else 400)
 
     for error_type in (
@@ -97,8 +106,19 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         PDFPreviewError,
         ReportPDFError,
         DemoResetError,
+        LibraryStoreError,
     ):
         app.add_exception_handler(error_type, domain_error)
+
+    @app.exception_handler(SQLAlchemyError)
+    async def database_error(_request: Request, _exc: SQLAlchemyError):
+        return JSONResponse(
+            {
+                "detail": "The specification database could not complete this action. "
+                "Check the database service and retry. Existing source files have been preserved."
+            },
+            503,
+        )
 
     @app.exception_handler(ValidationError)
     async def validation_error(_request: Request, exc: ValidationError):
@@ -138,13 +158,80 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         if lab.capabilities:
             raise HTTPException(409, "Examples can only be loaded into an empty lab.")
         workspace.labs.save(
-            lab.model_copy(update={"capabilities": default_demo_lab().capabilities})
+            lab.model_copy(
+                update={
+                    "capabilities": (
+                        default_csp301_lab().capabilities
+                        if body.example == "csp301"
+                        else default_demo_lab().capabilities
+                    )
+                }
+            )
         )
         return workspace.labs.load_or_create()
 
     @app.get("/api/catalog")
     def catalog():
         return workspace.catalog
+
+    @app.get("/api/library")
+    def library():
+        return workspace.library.listing()
+
+    @app.get("/api/library/{document_id}")
+    def library_document(document_id: str):
+        return workspace.library.detail(document_id)
+
+    @app.put("/api/library/{document_id}/metadata")
+    def library_metadata(document_id: str, body: LibraryMetadata):
+        return workspace.library.metadata(document_id, body)
+
+    @app.get("/api/comparisons/{document_id}")
+    def comparison(document_id: str):
+        return workspace.library.comparison(document_id)
+
+    @app.get("/api/comparison-snapshots/{comparison_id}")
+    def comparison_snapshot(comparison_id: str):
+        payload = workspace.library.store.comparison(comparison_id)
+        pdf = workspace.library.store.comparison_pdf(comparison_id, render_comparison_pdf)
+        with pymupdf.open(stream=pdf, filetype="pdf") as document:
+            return {"comparison": payload, "page_count": len(document)}
+
+    @app.get("/api/comparison-snapshots/{comparison_id}/pdf")
+    def comparison_pdf(comparison_id: str, download: bool = False):
+        pdf = workspace.library.store.comparison_pdf(comparison_id, render_comparison_pdf)
+        return Response(
+            pdf,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"{'attachment' if download else 'inline'}; "
+                f'filename="scione-gap-{comparison_id[:8]}.pdf"'
+            },
+        )
+
+    @app.get("/api/comparison-snapshots/{comparison_id}/pages/{page}")
+    def comparison_page(comparison_id: str, page: int):
+        pdf = workspace.library.store.comparison_pdf(comparison_id, render_comparison_pdf)
+        with pymupdf.open(stream=pdf, filetype="pdf") as document:
+            count = len(document)
+        return Response(
+            render_pdf_page(pdf, page_number=page, scale=2.4, max_dimension=2000),
+            media_type="image/png",
+            headers={"X-Page-Count": str(count)},
+        )
+
+    @app.get("/api/comparison-snapshots/{comparison_id}/json")
+    def comparison_json(comparison_id: str):
+        import json
+
+        payload = workspace.library.store.comparison(comparison_id)
+        return Response(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f'attachment; filename="scione-gap-{comparison_id[:8]}.json"'
+            },
+        )
 
     @app.get("/api/specifications")
     def documents():
@@ -162,8 +249,31 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             await file.close()
 
     @app.post("/api/specifications/demo")
-    def import_demo():
-        saved = workspace.specs.import_pdf(SAMPLE_SPEC.name, SAMPLE_SPEC.read_bytes())
+    def import_demo(example: str = "legacy"):
+        sample = CSP301_SPEC if example == "csp301" else SAMPLE_SPEC
+        saved = workspace.specs.import_pdf(sample.name, sample.read_bytes())
+        return {"document_id": saved.document_id}
+
+    @app.post("/api/specifications/worked-example")
+    def import_worked_example():
+        from scione.structured.examples import csp301_reference_run
+
+        saved = workspace.specs.import_pdf(CSP301_SPEC.name, CSP301_SPEC.read_bytes())
+        # An explicit reference example is never allowed to replace a live model run.
+        if workspace.specs.load_latest_extraction(saved.document_id) is None:
+            workspace.specs.save_extraction(saved.document_id, csp301_reference_run(saved))
+        document = workspace.library.document(saved.document_id)
+        if document["version"] == 0 and not document["company_name"]:
+            workspace.library.store.edit_metadata(
+                saved.document_id,
+                {
+                    "company_name": "Synthetic example customer",
+                    "specification_id": "CSP-EN-301",
+                    "title": document["title"] or "Exterior Fascia Finish - Change Approval Rider",
+                    "revision": document["revision"] or "Issue A",
+                },
+                expected_version=0,
+            )
         return {"document_id": saved.document_id}
 
     @app.get("/api/specifications/{document_id}")
@@ -200,6 +310,8 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             render_pdf_page(
                 workspace.specs.read_pdf(document_id),
                 page_number=page,
+                scale=2.4,
+                max_dimension=2000,
                 highlight_quotes=quotes,
             ),
             media_type="image/png",
@@ -268,6 +380,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             except SpecStoreError:
                 message += " Attempt details could not be saved. Existing data was not reset."
             raise HTTPException(400, message) from exc
+        workspace.library.index(document_id)
         return jsonable_encoder(workspace.specification(document_id))
 
     @app.get("/api/reports/{document_id}")
@@ -326,7 +439,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         with pymupdf.open(stream=pdf, filetype="pdf") as document:
             count = len(document)
         return Response(
-            render_pdf_page(pdf, page_number=page),
+            render_pdf_page(pdf, page_number=page, scale=2.4, max_dimension=2000),
             media_type="image/png",
             headers={"X-Page-Count": str(count)},
         )
@@ -389,7 +502,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
 
     @app.post("/api/workspace/reset")
     def reset(body: ResetRequest):
-        result = reset_demo_workspace(config.scione_workspace_dir)
+        result = reset_library_workspace(config, workspace.library.store)
         return {"backup_path": str(result.backup_path) if result.backup_path else None}
 
     static = frontend_dir if frontend_dir is not None else REPOSITORY_ROOT / "frontend" / "dist"
@@ -400,7 +513,16 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         def frontend():
             return FileResponse(static / "index.html")
 
-        for route in ("/", "/my-lab", "/catalog", "/specifications", "/reports", "/developer"):
+        for route in (
+            "/",
+            "/my-lab",
+            "/catalog",
+            "/specifications",
+            "/specifications/library",
+            "/reports",
+            "/reports/advanced",
+            "/developer",
+        ):
             app.add_api_route(route, frontend, methods=["GET"], include_in_schema=False)
 
     return app

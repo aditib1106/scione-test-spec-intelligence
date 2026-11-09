@@ -8,7 +8,7 @@ from pathlib import Path
 
 from scione.ingestion import IngestionError, PyMuPDFTextIngestor
 from scione.schemas import TextReadingOrder
-from scione.workspace_reset import DemoResetError, reset_demo_workspace
+from scione.workspace_reset import DemoResetError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -68,10 +68,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("Reset cancelled. Stop active demo operations, then add --yes to confirm.")
             return 1
         from scione.config import Settings
+        from scione.library.reset import reset_library_workspace
 
         try:
-            workspace = args.workspace or Settings().scione_workspace_dir
-            result = reset_demo_workspace(workspace, args.backup_dir)
+            settings = Settings()
+            if args.workspace:
+                settings = settings.model_copy(update={"scione_workspace_dir": args.workspace})
+            result = reset_library_workspace(settings, backup_root=args.backup_dir)
         except (DemoResetError, ValueError) as exc:
             print(f"Demo reset failed: {exc}")
             return 1

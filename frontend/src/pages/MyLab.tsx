@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -14,7 +15,14 @@ import {
   Divider,
   IconButton,
   InputAdornment,
+  MenuItem,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from "@mui/material";
@@ -23,7 +31,12 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { ApiError, request } from "../api";
-import type { Capability, LabProfile, PageProps } from "../types";
+import type {
+  Capability,
+  LabProfile,
+  OperatingLimit,
+  PageProps,
+} from "../types";
 import CapabilityEditor from "./CapabilityEditor";
 
 const money = (capability: Capability) =>
@@ -31,7 +44,27 @@ const money = (capability: Capability) =>
     ? `${capability.currency ?? ""} ${capability.price}${capability.pricing_basis ? ` / ${capability.pricing_basis}` : ""}`.trim()
     : "—";
 
+const previewSx = {
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+} as const;
+const measurements = (capability: Capability) =>
+  (capability.notes ?? "")
+    .replace(/^Reportable outputs:\s*/i, "")
+    .split(/\nSource:/i)[0]
+    .trim();
+const limitText = (limit: OperatingLimit) => {
+  if (limit.supported_values.length) return limit.supported_values.join("; ");
+  const value = limit.values.length
+    ? limit.values.join(" / ")
+    : `${limit.minimum ?? "…"}–${limit.maximum ?? "…"}`;
+  return `${value}${limit.unit ? ` ${limit.unit}` : ""}`;
+};
+
 export default function MyLab({ workspace, onRefresh }: PageProps) {
+  const [params, setParams] = useSearchParams();
   const { lab, catalog } = workspace;
   const [query, setQuery] = useState("");
   const [editingCapability, setEditingCapability] = useState<
@@ -47,6 +80,20 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
   const [exampleError, setExampleError] = useState("");
   const [exampleNotice, setExampleNotice] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [example, setExample] = useState("csp301");
+  const [viewingId, setViewingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const id = params.get("capability");
+    const capability = lab.capabilities.find((item) => item.id === id);
+    if (capability) {
+      setEditingCapability(capability);
+      setCapabilityOpen(true);
+      const next = new URLSearchParams(params);
+      next.delete("capability");
+      setParams(next, { replace: true });
+    }
+  }, [params, lab.capabilities, setParams]);
 
   const tests = useMemo(
     () => new Map(catalog.tests.map((test) => [test.id, test])),
@@ -128,7 +175,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
     try {
       await request<LabProfile>("/api/lab/example", {
         method: "POST",
-        body: JSON.stringify({ version: lab.version }),
+        body: JSON.stringify({ version: lab.version, example }),
       });
       setExampleNotice("Example capabilities loaded.");
       onRefresh();
@@ -147,7 +194,9 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
     }
   }
 
+  const viewed = lab.capabilities.find((item) => item.id === viewingId);
   const editCapability = (capability?: Capability) => {
+    setViewingId(null);
     setEditingCapability(capability);
     setCapabilityOpen(true);
   };
@@ -155,7 +204,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
   return (
     <Box
       sx={{
-        maxWidth: 1200,
+        maxWidth: 1440,
         mx: "auto",
         px: { xs: 2, md: 4 },
         py: { xs: 3, md: 4 },
@@ -284,7 +333,8 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
               Capabilities
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              What your lab can perform, with declared scope and pricing.
+              View declared conditions, reportable measurements and rates.
+              Select a test for full details.
             </Typography>
           </Box>
           <TextField
@@ -334,6 +384,17 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
               >
                 Add a test
               </Button>
+              <TextField
+                select
+                size="small"
+                label="Example"
+                value={example}
+                onChange={(event) => setExample(event.target.value)}
+                sx={{ minWidth: 185 }}
+              >
+                <MenuItem value="csp301">CSP-EN-301 · four tests</MenuItem>
+                <MenuItem value="legacy">MS-PNT-410 · pilot lab</MenuItem>
+              </TextField>
               <Button
                 variant="outlined"
                 onClick={loadExample}
@@ -355,95 +416,111 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
             </Typography>
           </Box>
         ) : (
-          <Box>
-            {filtered.map((capability, index) => {
-              const test = tests.get(capability.canonical_test_id);
-              const declaredMethods = capability.method_ids
-                .map((id) => methods.get(id))
-                .filter(Boolean);
-              return (
-                <Box
-                  key={capability.id}
-                  sx={{
-                    px: 2,
-                    py: 1.75,
-                    borderBottom: index < filtered.length - 1 ? "1px solid" : 0,
-                    borderColor: "divider",
-                  }}
-                >
-                  <Stack
-                    direction={{ xs: "column", md: "row" }}
-                    justifyContent="space-between"
-                    spacing={1.25}
-                  >
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Typography fontWeight={650}>
-                        {test?.name ?? capability.canonical_test_id}
-                      </Typography>
-                      {declaredMethods.length > 0 && (
-                        <Stack
-                          direction="row"
-                          flexWrap="wrap"
-                          gap={0.5}
-                          sx={{ mt: 0.75 }}
+          <TableContainer>
+            <Table
+              size="small"
+              aria-label="Lab capabilities"
+              sx={{ minWidth: 980, tableLayout: "fixed" }}
+            >
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ width: "17%" }}>Test</TableCell>
+                  <TableCell sx={{ width: "15%" }}>Method</TableCell>
+                  <TableCell sx={{ width: "23%" }}>Conditions</TableCell>
+                  <TableCell sx={{ width: "25%" }}>
+                    Measurements / reporting
+                  </TableCell>
+                  <TableCell sx={{ width: "13%" }}>Rate</TableCell>
+                  <TableCell sx={{ width: "7%" }} align="right">
+                    Action
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filtered.map((capability) => {
+                  const test = tests.get(capability.canonical_test_id);
+                  const declaredMethods = capability.method_ids
+                    .map((id) => methods.get(id))
+                    .filter(Boolean);
+                  return (
+                    <TableRow
+                      key={capability.id}
+                      hover
+                      onClick={() => setViewingId(capability.id)}
+                      sx={{
+                        cursor: "pointer",
+                        "& td": { px: 1.5, py: 1.75, verticalAlign: "top" },
+                      }}
+                    >
+                      <TableCell>
+                        <Button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setViewingId(capability.id);
+                          }}
+                          sx={{
+                            p: 0,
+                            minWidth: 0,
+                            textAlign: "left",
+                            justifyContent: "flex-start",
+                          }}
                         >
-                          {declaredMethods.map((method) => (
-                            <Chip
-                              key={method!.id}
-                              size="small"
-                              label={`${method!.identifier}${method!.edition ? ` · ${method!.edition}` : ""}`}
-                            />
-                          ))}
-                        </Stack>
-                      )}
-                      <Stack
-                        direction="row"
-                        flexWrap="wrap"
-                        gap={1}
-                        sx={{ mt: 1 }}
-                      >
-                        <Typography variant="body2" color="text.secondary">
-                          <b>Conditions</b> ·{" "}
+                          {test?.name ?? "Unrecognized test"}
+                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={previewSx}>
+                          {declaredMethods
+                            .map((method) => method!.identifier)
+                            .join(" · ") || "Not specified"}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={previewSx}
+                        >
                           {capability.declared_constraints ||
                             (capability.structured_limits.length
-                              ? "Operating limits declared — view in Edit"
+                              ? `${capability.structured_limits.length} declared operating limits`
                               : "Not specified")}
                         </Typography>
-                        {capability.notes && (
-                          <Typography variant="body2" color="text.secondary">
-                            <b>Notes</b> · {capability.notes}
-                          </Typography>
-                        )}
-                      </Stack>
-                    </Box>
-                    <Stack
-                      direction="row"
-                      alignItems="center"
-                      justifyContent="space-between"
-                      spacing={2}
-                      sx={{ minWidth: { md: 205 } }}
-                    >
-                      <Box sx={{ textAlign: { md: "right" } }}>
-                        <Typography variant="caption" color="text.secondary">
-                          Price
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={previewSx}
+                        >
+                          {measurements(capability) || "Not specified"}
                         </Typography>
-                        <Typography fontWeight={650}>
-                          {money(capability)}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={600}>
+                          {money(capability) === "—"
+                            ? "Not priced"
+                            : money(capability)}
                         </Typography>
-                      </Box>
-                      <Button
-                        size="small"
-                        startIcon={<EditOutlinedIcon />}
-                        onClick={() => editCapability(capability)}
-                      >
-                        Edit
-                      </Button>
-                    </Stack>
-                  </Stack>
-                </Box>
-              );
-            })}
-          </Box>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            editCapability(capability);
+                          }}
+                          sx={{ minWidth: 0, px: 0.5 }}
+                        >
+                          Edit
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
       </Card>
       <Typography
@@ -454,6 +531,113 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
         Lab declarations and reference rates require review before use in a
         quote. Example capabilities are illustrative.
       </Typography>
+
+      <Dialog
+        open={Boolean(viewed)}
+        onClose={() => setViewingId(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {viewed
+            ? (tests.get(viewed.canonical_test_id)?.name ?? "Lab capability")
+            : "Lab capability"}
+        </DialogTitle>
+        <DialogContent dividers>
+          {viewed && (
+            <Stack spacing={2.5}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
+                  Declared methods
+                </Typography>
+                <Stack direction="row" flexWrap="wrap" gap={0.75}>
+                  {viewed.method_ids
+                    .map((id) => methods.get(id))
+                    .filter(Boolean)
+                    .map((method) => (
+                      <Chip
+                        key={method!.id}
+                        size="small"
+                        variant="outlined"
+                        label={method!.identifier}
+                      />
+                    ))}
+                  {!viewed.method_ids.length && (
+                    <Typography color="text.secondary">
+                      No method recorded.
+                    </Typography>
+                  )}
+                </Stack>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
+                  Conditions and scope
+                </Typography>
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                  {viewed.declared_constraints || "Not specified"}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
+                  Measurements and additional information
+                </Typography>
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                  {measurements(viewed) || "Not specified"}
+                </Typography>
+              </Box>
+              {viewed.structured_limits.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
+                    Declared operating limits
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small" aria-label="Declared operating limits">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Parameter</TableCell>
+                          <TableCell>Declared support</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {viewed.structured_limits.map((limit, index) => (
+                          <TableRow key={`${limit.parameter}-${index}`}>
+                            <TableCell sx={{ textTransform: "capitalize" }}>
+                              {limit.parameter.replaceAll("_", " ")}
+                            </TableCell>
+                            <TableCell>{limitText(limit)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
+                  Reference rate
+                </Typography>
+                <Typography variant="body2">
+                  {money(viewed) === "—" ? "Not priced" : money(viewed)}
+                </Typography>
+              </Box>
+              {viewed.notes?.match(/\nSource:\s*(.*)/i)?.[1] && (
+                <Typography variant="caption" color="text.secondary">
+                  Source: {viewed.notes.match(/\nSource:\s*(.*)/i)?.[1]}
+                </Typography>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setViewingId(null)}>Close</Button>
+          <Button
+            variant="contained"
+            onClick={() => viewed && editCapability(viewed)}
+          >
+            Edit capability
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <CapabilityEditor
         onReload={() => {

@@ -1026,3 +1026,29 @@ def test_snapshot_rejects_priced_excluded_lines(field):
 def test_snapshot_validates_exact_quoted_source_data_on_round_trip():
     report = build_report(*_supported(_inputs(), quantity="3.001"))
     assert ReportSnapshot.model_validate_json(report.model_dump_json()) == report
+
+
+def test_required_primary_route_keeps_approval_dependent_alternative_separate():
+    row = _requirement(methods=("ISO 2409", "ASTM D3359"))
+    row.requested_methods[0].role = "required"
+    row.requested_methods[
+        1
+    ].role = "Optional North American route; customer approval is required before use."
+    line = build_report(*_inputs([row])).lines[0]
+    assert line.status == "in_house"
+    assert line.considered_method_codes == ["ISO 2409"]
+    assert [method.code for method in line.requirement.requested_methods] == [
+        "ISO 2409",
+        "ASTM D3359",
+    ]
+    assert "approval" in line.requirement.requested_methods[1].role
+
+
+@pytest.mark.parametrize(
+    "role", [None, "alternative", "optional", "Optional North American route", "measurement"]
+)
+def test_unclear_alternative_role_still_needs_review(role):
+    row = _requirement(methods=("ISO 2409", "ASTM D3359"))
+    row.requested_methods[0].role = "required"
+    row.requested_methods[1].role = role
+    assert build_report(*_inputs([row])).lines[0].status == "needs_review"

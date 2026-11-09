@@ -21,6 +21,8 @@ import {
   ListItemIcon,
   ListItemText,
   Stack,
+  Tab,
+  Tabs,
   Typography,
 } from "@mui/material";
 import ScienceOutlined from "@mui/icons-material/ScienceOutlined";
@@ -35,14 +37,16 @@ import type { Workspace } from "./types";
 const MyLab = lazy(() => import("./pages/MyLab"));
 const TestCatalog = lazy(() => import("./pages/TestCatalog"));
 const Specifications = lazy(() => import("./pages/Specifications"));
+const SpecificationLibrary = lazy(() => import("./pages/SpecificationLibrary"));
 const Reports = lazy(() => import("./pages/Reports"));
+const Comparison = lazy(() => import("./pages/Comparison"));
 const Developer = lazy(() => import("./pages/Developer"));
 
 const navigation = [
   { path: "/my-lab", label: "My Lab", icon: ScienceOutlined },
   { path: "/catalog", label: "Test Catalog", icon: GridViewOutlined },
   {
-    path: "/specifications",
+    path: "/specifications/library",
     label: "Specifications",
     icon: DescriptionOutlined,
   },
@@ -58,7 +62,13 @@ export default function App() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const active =
-    navigation.find((item) => location.pathname === item.path)?.label ??
+    navigation.find((item) =>
+      item.path === "/specifications/library"
+        ? location.pathname.startsWith("/specifications")
+        : item.path === "/reports"
+          ? location.pathname.startsWith("/reports")
+          : location.pathname === item.path,
+    )?.label ??
     (location.pathname === "/developer" ? "Developer Tools" : "My Lab");
   const sidebar = (
     <Stack sx={{ height: "100%", px: 2, py: 3 }}>
@@ -117,6 +127,15 @@ export default function App() {
               px: 1.5,
               minHeight: 44,
               color: "text.secondary",
+              ...((path === "/specifications/library" &&
+                location.pathname.startsWith("/specifications")) ||
+              (path === "/reports" && location.pathname.startsWith("/reports"))
+                ? {
+                    bgcolor: "#edf3ff",
+                    color: "primary.main",
+                    "& .MuiListItemIcon-root": { color: "primary.main" },
+                  }
+                : {}),
               "&.active": {
                 bgcolor: "#edf3ff",
                 color: "primary.main",
@@ -267,6 +286,38 @@ export default function App() {
           />
         </Stack>
         <Box component="main" id="main" tabIndex={-1} sx={{ outline: "none" }}>
+          {location.pathname.startsWith("/specifications") && (
+            <Box
+              sx={{
+                borderBottom: "1px solid",
+                borderColor: "divider",
+                bgcolor: "background.paper",
+                px: { xs: 2, md: 4 },
+              }}
+            >
+              <Tabs
+                value={
+                  location.pathname === "/specifications/library"
+                    ? "library"
+                    : "review"
+                }
+                aria-label="Specification workspace"
+              >
+                <Tab
+                  label="Library"
+                  value="library"
+                  component={Link}
+                  to={`/specifications/library${location.search}`}
+                />
+                <Tab
+                  label="PDF & review"
+                  value="review"
+                  component={Link}
+                  to={`/specifications${location.search}`}
+                />
+              </Tabs>
+            </Box>
+          )}
           {error && (
             <Alert
               severity="error"
@@ -315,6 +366,15 @@ export default function App() {
                     }
                   />
                   <Route
+                    path="/specifications/library"
+                    element={
+                      <SpecificationLibrary
+                        workspace={workspace}
+                        onRefresh={refresh}
+                      />
+                    }
+                  />
+                  <Route
                     path="/specifications"
                     element={
                       <Specifications
@@ -325,6 +385,12 @@ export default function App() {
                   />
                   <Route
                     path="/reports"
+                    element={
+                      <Comparison workspace={workspace} onRefresh={refresh} />
+                    }
+                  />
+                  <Route
+                    path="/reports/advanced"
                     element={
                       <Reports workspace={workspace} onRefresh={refresh} />
                     }
