@@ -155,6 +155,17 @@ Credentials, database settings, runtime data, backups, dependencies, builds and 
 are ignored. Only approved synthetic demo PDFs are allowlisted; original client reference
 and meeting PDFs remain local.
 
+## Review workflow checks
+
+Source confirmation and lab support review are separate decisions. In PDF review,
+add a note and use **Keep pending & next** when a source issue is unresolved.
+**Reports → Advanced review** shows customer requirements alongside lab declarations,
+comparison reasons and scope checks. Pending items remain visible in draft reports.
+
+The browser suite includes a hand-authored partial fixture from five test rows in the
+MS-PNT-410 sample. It checks source review, lab method/scope gaps and draft exports;
+it is UI test data, not model output or an extraction accuracy benchmark.
+
 ## Deployment and handoff
 
 React/FastAPI can be deployed and attached to a domain. Production still needs authentication,

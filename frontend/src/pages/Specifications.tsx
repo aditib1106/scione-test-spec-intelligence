@@ -334,7 +334,15 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [currentPage, data, documentId, selected]);
+    // Source runs are immutable. Saving review decisions does not change the
+    // highlighted source image and must not reload it or shift nearby actions.
+  }, [
+    currentPage,
+    data?.document_id,
+    data?.run?.run_id,
+    documentId,
+    selected?.id,
+  ]);
 
   const selectRequirement = (id: string) => {
     setSelectedId(id);
@@ -684,6 +692,13 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               />
             )}
           </Stack>
+          <Alert severity="info" sx={{ mt: 1.5 }}>
+            Review customer requirements against the source PDF. Confirm &amp;
+            next confirms the extracted content; test matching and lab support
+            are reviewed separately in Reports. If something is unresolved, add
+            a review note and keep the item pending. Excluding an item also
+            requires a reason.
+          </Alert>
           {data?.assessments[selected.id]?.reasons?.length ? (
             <Alert severity="warning" sx={{ mt: 1.5 }}>
               Review flagged: {data.assessments[selected.id].reasons.join("; ")}
@@ -1606,6 +1621,29 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                         >
                           Exclude & next
                         </Button>
+                        <Button
+                          fullWidth
+                          variant="text"
+                          disabled={
+                            !selected ||
+                            !canReviewSelected ||
+                            saving ||
+                            batchSaving ||
+                            !data.review ||
+                            !note.trim()
+                          }
+                          onClick={() =>
+                            void review(
+                              "needs_review",
+                              [selectedId],
+                              note,
+                              false,
+                            )
+                          }
+                          sx={{ whiteSpace: "nowrap" }}
+                        >
+                          Keep pending & next
+                        </Button>
                       </Stack>
                       {!note.trim() &&
                         state !== "confirmed" &&
@@ -1615,8 +1653,8 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                             color="text.secondary"
                             sx={{ mt: 0.5, display: "block" }}
                           >
-                            Add a reason in the source quotation section before
-                            excluding.
+                            Open Source quotations &amp; review note and add a
+                            note to keep this pending or explain an exclusion.
                           </Typography>
                         )}
                     </Box>
@@ -1643,6 +1681,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                 <Button
                   variant="contained"
                   endIcon={<ArrowForwardIcon />}
+                  disabled={saving || batchSaving}
                   onClick={() =>
                     navigate(
                       `/reports?document=${encodeURIComponent(documentId)}`,

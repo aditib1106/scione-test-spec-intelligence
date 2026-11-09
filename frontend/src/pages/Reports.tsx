@@ -123,9 +123,16 @@ function ValueList({
 }
 
 function statusText(data: ReportData, line: GapLine) {
-  const state = data.line_states[idOf(line)];
-  if (line.extraction_review_state === "needs_attention")
+  if (
+    line.status !== "excluded" &&
+    line.extraction_review_state === "needs_attention"
+  )
     return "Check extracted text in Specifications";
+  return comparisonText(data, line);
+}
+
+function comparisonText(data: ReportData, line: GapLine) {
+  const state = data.line_states[idOf(line)];
   if (line.status === "excluded") return "Excluded from this request";
   if (line.status === "needs_review")
     return line.candidate_test_ids.length
@@ -736,7 +743,7 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
             sx={{
               display: "grid",
               gridTemplateColumns: {
-                xs: "1fr",
+                xs: "minmax(0, 1fr)",
                 md: "minmax(245px, .34fr) minmax(0, 1fr)",
               },
               gap: 1.5,
@@ -808,7 +815,12 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
             {currentLine ? (
               <Paper
                 variant="outlined"
-                sx={{ ...panelSx, p: { xs: 1.5, md: 2.5 } }}
+                sx={{
+                  ...panelSx,
+                  minWidth: 0,
+                  overflowWrap: "anywhere",
+                  p: { xs: 1.5, md: 2.5 },
+                }}
               >
                 <Stack
                   direction={{ xs: "column", sm: "row" }}
@@ -828,7 +840,7 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
                     >
                       <Chip
                         size="small"
-                        label={statusText(data, currentLine)}
+                        label={comparisonText(data, currentLine)}
                         color={
                           currentLine.status.includes("gap")
                             ? "warning"
@@ -838,7 +850,16 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
                       <Chip
                         size="small"
                         variant="outlined"
-                        label={`Source: ${formatLabel(currentLine.extraction_review_state)}`}
+                        label={`Source: ${
+                          {
+                            ready: "Extracted · not confirmed",
+                            needs_attention: "Needs review",
+                            needs_review: "Needs review",
+                            confirmed: "Confirmed",
+                            excluded: "Excluded",
+                          }[currentLine.extraction_review_state] ??
+                          formatLabel(currentLine.extraction_review_state)
+                        }`}
                       />
                     </Stack>
                   </Box>
@@ -862,12 +883,26 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
                   <Alert severity="warning" sx={{ mt: 1.5 }}>
                     Check extracted text against the PDF in Specifications. Lab
                     support review here will not clear that source check.
+                    {currentLine.extraction_review_reasons.map(
+                      (reason, index) => (
+                        <Typography
+                          key={index}
+                          variant="body2"
+                          sx={{ mt: 0.5 }}
+                        >
+                          {reason}
+                        </Typography>
+                      ),
+                    )}
                   </Alert>
                 )}
                 <Box
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                    gridTemplateColumns: {
+                      xs: "minmax(0, 1fr)",
+                      sm: "minmax(0, 1fr) minmax(0, 1fr)",
+                    },
                     gap: 1.2,
                     mt: 2,
                   }}
@@ -890,6 +925,52 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
                     <Typography variant="caption" color="text.secondary">
                       Requested method
                     </Typography>
+                    <Divider sx={{ my: 1.5 }} />
+                    <ValueList
+                      title="Conditions"
+                      values={currentLine.requirement.conditions}
+                    />
+                    <ValueList
+                      title="Acceptance criteria"
+                      values={currentLine.requirement.acceptance_criteria}
+                    />
+                    {currentLine.requirement.applicability.length > 0 && (
+                      <Box sx={{ mb: 1.2 }}>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          Applicability
+                        </Typography>
+                        {currentLine.requirement.applicability.map(
+                          (value, i) => (
+                            <Typography
+                              variant="body2"
+                              key={i}
+                              sx={{ mt: 0.4 }}
+                            >
+                              {value}
+                            </Typography>
+                          ),
+                        )}
+                      </Box>
+                    )}
+                    {currentLine.requirement.special_instructions.length >
+                      0 && (
+                      <Box sx={{ mb: 1.2 }}>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          Special instructions
+                        </Typography>
+                        {currentLine.requirement.special_instructions.map(
+                          (value, i) => (
+                            <Typography
+                              variant="body2"
+                              key={i}
+                              sx={{ mt: 0.4 }}
+                            >
+                              {value}
+                            </Typography>
+                          ),
+                        )}
+                      </Box>
+                    )}
                   </Paper>
                   <Paper variant="outlined" sx={{ ...panelSx, p: 1.5 }}>
                     <Typography variant="subtitle2" fontWeight={700}>
@@ -907,6 +988,53 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
                       {currentLine.canonical_test_name ??
                         "Test identity needs confirmation"}
                     </Typography>
+                    <Divider sx={{ my: 1.5 }} />
+                    {currentLine.capability && (
+                      <>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          Your lab’s recorded limits
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 0.4 }}>
+                          {currentLine.capability.declared_constraints ||
+                            "No operating limits declared."}
+                        </Typography>
+                        {currentLine.capability.structured_limits.map(
+                          (limit) => (
+                            <Typography
+                              variant="caption"
+                              display="block"
+                              key={limit.parameter}
+                            >
+                              {limit.parameter}:{" "}
+                              {[
+                                limit.minimum && `min ${limit.minimum}`,
+                                limit.maximum && `max ${limit.maximum}`,
+                                ...limit.values,
+                                ...limit.supported_values,
+                              ]
+                                .filter(Boolean)
+                                .join(" – ")}{" "}
+                              {limit.unit ?? ""}
+                            </Typography>
+                          ),
+                        )}
+                      </>
+                    )}
+
+                    {!currentLine.capability && (
+                      <Typography variant="body2" color="text.secondary">
+                        No matching lab declaration. Check My Lab or correct the
+                        test or method match below.
+                      </Typography>
+                    )}
+                    <Button
+                      component={RouterLink}
+                      to="/my-lab"
+                      size="small"
+                      sx={{ mt: 1 }}
+                    >
+                      View lab declarations
+                    </Button>
                   </Paper>
                 </Box>
                 <Paper variant="outlined" sx={{ ...panelSx, p: 1.5, mt: 1.2 }}>
@@ -915,73 +1043,50 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
                     fontWeight={700}
                     sx={{ mb: 1 }}
                   >
-                    Requirements to check
+                    Comparison result
                   </Typography>
-                  <ValueList
-                    title="Conditions"
-                    values={currentLine.requirement.conditions}
-                  />
-                  <ValueList
-                    title="Acceptance criteria"
-                    values={currentLine.requirement.acceptance_criteria}
-                  />
-                  {currentLine.requirement.applicability.length > 0 && (
-                    <Box sx={{ mb: 1.2 }}>
-                      <Typography variant="subtitle2" fontWeight={700}>
-                        Applicability
-                      </Typography>
-                      {currentLine.requirement.applicability.map((value, i) => (
-                        <Typography variant="body2" key={i} sx={{ mt: 0.4 }}>
-                          {value}
-                        </Typography>
-                      ))}
-                    </Box>
-                  )}
-                  {currentLine.requirement.special_instructions.length > 0 && (
-                    <Box sx={{ mb: 1.2 }}>
-                      <Typography variant="subtitle2" fontWeight={700}>
-                        Special instructions
-                      </Typography>
-                      {currentLine.requirement.special_instructions.map(
-                        (value, i) => (
-                          <Typography variant="body2" key={i} sx={{ mt: 0.4 }}>
-                            {value}
-                          </Typography>
-                        ),
-                      )}
-                    </Box>
-                  )}
-                  {currentLine.capability && (
-                    <>
-                      <Typography variant="subtitle2" fontWeight={700}>
-                        Your lab’s recorded limits
-                      </Typography>
-                      <Typography variant="body2" sx={{ mt: 0.4 }}>
-                        {currentLine.capability.declared_constraints ||
-                          "No operating limits declared."}
-                      </Typography>
-                      {currentLine.capability.structured_limits.map((limit) => (
-                        <Typography
-                          variant="caption"
-                          display="block"
-                          key={limit.parameter}
-                        >
-                          {limit.parameter}:{" "}
-                          {[
-                            limit.minimum && `min ${limit.minimum}`,
-                            limit.maximum && `max ${limit.maximum}`,
-                            ...limit.values,
-                            ...limit.supported_values,
-                          ]
-                            .filter(Boolean)
-                            .join(" – ")}{" "}
-                          {limit.unit ?? ""}
-                        </Typography>
-                      ))}
-                    </>
-                  )}
+                  <Typography variant="body2" fontWeight={650} sx={{ mb: 1 }}>
+                    {comparisonText(data, currentLine)}
+                  </Typography>
+                  <Stack
+                    direction="row"
+                    gap={0.75}
+                    flexWrap="wrap"
+                    sx={{ mb: 1 }}
+                  >
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`Lab comparison: ${
+                        {
+                          in_house: "Method listed",
+                          needs_review: "Matching unresolved",
+                          test_gap: "Test not listed",
+                          method_gap: "Method not listed",
+                          condition_gap: "Outside declared scope",
+                          excluded: "Excluded",
+                        }[currentLine.status] ?? formatLabel(currentLine.status)
+                      }`}
+                    />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`Operating scope: ${formatLabel(currentLine.operation_assessment)}`}
+                    />
+                  </Stack>
+                  {[
+                    ...new Set([
+                      ...currentLine.reasons,
+                      ...currentLine.operation_reasons,
+                    ]),
+                  ].map((reason) => (
+                    <Typography key={reason} variant="body2" sx={{ mb: 0.5 }}>
+                      {reason}
+                    </Typography>
+                  ))}
                   {currentLine.operation_checks.length > 0 && (
                     <Accordion
+                      defaultExpanded
                       disableGutters
                       elevation={0}
                       sx={{ mt: 1, "&:before": { display: "none" } }}
@@ -1294,6 +1399,15 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
                             calculated.
                           </Alert>
                         )}
+                        {currentLine.capability?.price &&
+                          !data.line_states[idOf(currentLine)]
+                            ?.quote_eligible && (
+                            <Alert severity="info" sx={{ mb: 1 }}>
+                              This line is not ready for pricing. Resolve source
+                              checks, test or method matching, and lab scope
+                              review above before saving a quantity.
+                            </Alert>
+                          )}
                         <Stack spacing={1}>
                           <TextField
                             label="Quantity in catalog pricing basis"
@@ -1562,7 +1676,22 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
               Create your draft report
             </Typography>
             {pendingCount > 0 ? (
-              <Alert severity="info" sx={{ my: 1.5 }}>
+              <Alert
+                severity="info"
+                sx={{ my: 1.5 }}
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => {
+                      setFilter("Needs review");
+                      setTab("review");
+                    }}
+                  >
+                    Review unresolved items
+                  </Button>
+                }
+              >
                 {pendingCount} items still need review. You can create a draft
                 now; unresolved items will be clearly marked.
               </Alert>
@@ -1574,6 +1703,36 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
             <Typography variant="body2" color="text.secondary">
               Includes requested tests, conditions, lab coverage and gaps. This
               draft is not a final approved quote.
+            </Typography>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              sx={{ mt: 2 }}
+            >
+              <SummaryCard
+                label="Need review"
+                count={pendingCount}
+                tint="#f4f7ff"
+              />
+              <SummaryCard
+                label="Operating support resolved"
+                count={resolvedCount}
+                tint="#f3faf7"
+              />
+              <SummaryCard
+                label="Catalog / scope gaps"
+                count={gapCount}
+                tint="#fff8ed"
+              />
+            </Stack>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              display="block"
+              sx={{ mt: 1 }}
+            >
+              Review and gap counts can overlap. Resolved operating support does
+              not clear a source-text check.
             </Typography>
             {Object.keys(data.report.totals_by_currency).length > 0 && (
               <Box sx={{ mt: 2 }}>
