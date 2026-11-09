@@ -1,13 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link as RouterLink, useSearchParams } from "react-router-dom";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
   Chip,
   CircularProgress,
   FormControl,
+  InputAdornment,
   InputLabel,
+  List,
+  ListItemButton,
   MenuItem,
   Paper,
   Select,
@@ -20,6 +26,7 @@ import {
   TableHead,
   TableRow,
   Tabs,
+  TextField,
   Typography,
 } from "@mui/material";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
@@ -28,8 +35,13 @@ import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import { useResource } from "../api";
 import PdfPageViewer from "../components/PdfPageViewer";
+import FactSummary from "../components/FactSummary";
+import MatchingControls from "../components/MatchingControls";
+import ReportScopeControls from "../components/ReportScopeControls";
 import type { PageProps } from "../types";
 import type { LibraryDocument } from "../libraryTypes";
 import type {
@@ -99,44 +111,55 @@ function stepLabel(check: ComparisonCheck, siblings: ComparisonCheck[]) {
   return `Step ${claim.sequence}${temperature}${claim.configuration ? ` · ${claim.configuration}` : ""}`;
 }
 
-function dimension(
+function groupChecks(
   checks: ComparisonCheck[],
   type: "method" | "condition" | "criterion",
 ) {
-  const relevant = checks.filter((check) => {
+  return checks.filter((check) => {
     if (type === "method")
       return check.kind === "method" || check.parameter_id === "method";
     if (type === "criterion")
       return /criter|report|measurement/.test(check.kind);
     return /condition|scope|instruction/.test(check.kind);
   });
-  if (relevant.some((check) => check.status === "gap"))
-    return { label: "Gap", color: "error.main" };
-  if (relevant.some((check) => check.status === "unknown"))
-    return { label: "Check details", color: "warning.main" };
-  if (relevant.some((check) => check.status === "supported"))
-    return { label: "Covered", color: "success.main" };
-  return { label: "—", color: "text.secondary" };
 }
 
-function PrimaryReason({
-  requirement,
-}: {
-  requirement: ComparisonRequirement;
-}) {
-  const reason =
-    requirement.comparison.checks.find((check) => check.status === "gap") ||
-    requirement.comparison.checks.find((check) => check.status === "unknown");
-  if (!reason) return null;
-  return (
-    <Typography
-      variant="caption"
-      color="text.secondary"
-      sx={{ display: "block", mt: 0.5, maxWidth: 260 }}
-    >
-      {reason.reason}
-    </Typography>
-  );
+function dimension(
+  checks: ComparisonCheck[],
+  type: "method" | "condition" | "criterion",
+) {
+  const relevant = groupChecks(checks, type);
+  if (relevant.some((check) => check.status === "gap"))
+    return { label: "Gap", color: "error" as const };
+  if (relevant.some((check) => check.status === "unknown"))
+    return { label: "Needs information", color: "warning" as const };
+  if (relevant.some((check) => check.status === "supported"))
+    return { label: "Covered", color: "success" as const };
+  return {
+    label: relevant.length ? "Recorded" : "Not assessed",
+    color: "default" as const,
+  };
+}
+
+function summaryFacts(
+  checks: ComparisonCheck[],
+  side: "requested" | "declared",
+) {
+  return checks
+    .filter(
+      (check) =>
+        check.requested &&
+        check.requirement_claim?.normalization_state !== "unresolved",
+    )
+    .map((check) => ({
+      label: check.label,
+      value: check[side] || "Not recorded",
+      context: check.requirement_claim?.sequence
+        ? `step ${check.requirement_claim.sequence}`
+        : check.stage && !["general", "measurement"].includes(check.stage)
+          ? stageLabel(check.stage)
+          : undefined,
+    }));
 }
 
 function nextActions(documentId: string, requirement: ComparisonRequirement) {
@@ -207,19 +230,36 @@ export default function Comparison({ workspace }: PageProps) {
   const library = useResource<{ documents: LibraryDocument[] }>("/api/library");
   const [selectedId, setSelectedId] = useState("");
   const [filter, setFilter] = useState("all");
+  const [query, setQuery] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [tab, setTab] = useState("comparison");
   const [page, setPage] = useState(1);
   const [pageImage, setPageImage] = useState("");
   const [pageLoading, setPageLoading] = useState(false);
   const [pageError, setPageError] = useState("");
+  const previousWorkspace = useRef({
+    labVersion: workspace.lab.version,
+    documents: workspace.documents,
+  });
 
   useEffect(() => {
+    const previous = previousWorkspace.current;
+    if (
+      previous.labVersion === workspace.lab.version &&
+      previous.documents === workspace.documents
+    )
+      return;
+    previousWorkspace.current = {
+      labVersion: workspace.lab.version,
+      documents: workspace.documents,
+    };
     data.refresh();
   }, [workspace.lab.version, workspace.documents, data.refresh]);
 
   useEffect(() => {
     setSelectedId("");
     setFilter("all");
+    setQuery("");
     setPage(1);
   }, [documentId]);
 
@@ -228,16 +268,21 @@ export default function Comparison({ workspace }: PageProps) {
   }, [data.data?.comparison_id]);
 
   const report = data.data;
-  const visible = useMemo(
-    () =>
-      (report?.requirements ?? []).filter(
-        (item) => filter === "all" || item.comparison.status === filter,
-      ),
-    [report, filter],
-  );
+  const visible = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase();
+    return (report?.requirements ?? []).filter(
+      (item) =>
+        (filter === "all" || item.comparison.status === filter) &&
+        [item.test_name, ...item.methods]
+          .join(" ")
+          .toLocaleLowerCase()
+          .includes(needle),
+    );
+  }, [report, filter, query]);
   const selected =
     visible.find((item) => item.requirement_id === selectedId) || visible[0];
   const actions = selected ? nextActions(documentId, selected) : [];
+  useEffect(() => setDetailsOpen(false), [selected?.requirement_id]);
   const reportBase = report
     ? `/api/comparison-snapshots/${encodeURIComponent(report.comparison_id)}`
     : "";
@@ -402,8 +447,30 @@ export default function Comparison({ workspace }: PageProps) {
                         report.document.original_name}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {report.lab_name} · {report.requirements.length} requested
-                      tests
+                      {report.lab_name} ·{" "}
+                      {report.requirements.length -
+                        (report.summary.excluded ?? 0)}{" "}
+                      tests in scope
+                      {(report.summary.excluded ?? 0) > 0 && (
+                        <>
+                          {" "}
+                          ·{" "}
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setFilter("excluded");
+                              setTab("comparison");
+                            }}
+                            sx={{
+                              minWidth: 0,
+                              py: 0,
+                              verticalAlign: "baseline",
+                            }}
+                          >
+                            {report.summary.excluded} excluded
+                          </Button>
+                        </>
+                      )}
                     </Typography>
                   </Box>
                   <Button
@@ -467,6 +534,16 @@ export default function Comparison({ workspace }: PageProps) {
                     </Box>
                   ))}
                 </Box>
+                <MatchingControls
+                  key={documentId}
+                  documentId={documentId}
+                  comparisonId={report.comparison_id}
+                  aiApplied={
+                    report.comparison_engine === "ai_semantic_matching"
+                  }
+                  providers={workspace.providers}
+                  onComplete={data.refresh}
+                />
               </Paper>
 
               <Tabs
@@ -494,324 +571,586 @@ export default function Comparison({ workspace }: PageProps) {
 
               {tab === "comparison" && (
                 <>
-                  <Paper variant="outlined" sx={{ overflow: "hidden", mb: 3 }}>
-                    <Stack
-                      direction="row"
-                      justifyContent="space-between"
-                      alignItems="center"
-                      spacing={2}
-                      sx={{ p: 2 }}
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "minmax(0, 1fr)",
+                        md: "290px minmax(0, 1fr)",
+                      },
+                      alignItems: "start",
+                      gap: 2.5,
+                    }}
+                  >
+                    <Paper
+                      variant="outlined"
+                      component="nav"
+                      aria-label="Requested tests"
+                      sx={{
+                        overflow: "hidden",
+                        position: { md: "sticky" },
+                        top: 80,
+                      }}
                     >
-                      <Typography variant="subtitle1">
-                        Requested tests
-                      </Typography>
-                      <FormControl size="small" sx={{ minWidth: 170 }}>
-                        <InputLabel id="comparison-result-label">
-                          Show
-                        </InputLabel>
-                        <Select
-                          labelId="comparison-result-label"
-                          label="Show"
-                          value={filter}
-                          onChange={(event) => setFilter(event.target.value)}
-                        >
-                          <MenuItem value="all">All tests</MenuItem>
-                          {Object.entries(results).map(([value, state]) => (
-                            <MenuItem key={value} value={value}>
-                              {state.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Stack>
-                    <TableContainer sx={{ maxHeight: 350 }}>
-                      <Table
-                        stickyHeader
-                        size="small"
-                        aria-label="Test capability comparison"
-                      >
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Test / method</TableCell>
-                            <TableCell>Method</TableCell>
-                            <TableCell>Conditions</TableCell>
-                            <TableCell>Criteria / reporting</TableCell>
-                            <TableCell>Overall result</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {visible.map((requirement) => (
-                            <TableRow
-                              key={requirement.requirement_id}
-                              selected={
-                                selected?.requirement_id ===
-                                requirement.requirement_id
-                              }
-                              sx={{ "&.Mui-selected": { bgcolor: "#f0f5ff" } }}
-                            >
-                              <TableCell sx={{ minWidth: 220 }}>
-                                <Button
-                                  sx={{
-                                    px: 0,
-                                    minWidth: 0,
-                                    textAlign: "left",
-                                    justifyContent: "flex-start",
-                                  }}
-                                  onClick={() =>
-                                    setSelectedId(requirement.requirement_id)
-                                  }
-                                >
-                                  {requirement.test_name}
-                                </Button>
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                  display="block"
-                                >
-                                  {requirement.methods.join(" · ") ||
-                                    "Customer procedure"}
-                                </Typography>
-                              </TableCell>
-                              {(
-                                ["method", "condition", "criterion"] as const
-                              ).map((type) => {
-                                const state = dimension(
-                                  requirement.comparison.checks,
-                                  type,
-                                );
-                                return (
-                                  <TableCell
-                                    key={type}
-                                    sx={{
-                                      whiteSpace: "nowrap",
-                                      color: state.color,
-                                    }}
-                                  >
-                                    {state.label}
-                                  </TableCell>
-                                );
-                              })}
-                              <TableCell sx={{ minWidth: 200 }}>
-                                <Chip
-                                  size="small"
-                                  color={
-                                    resultLabel(requirement.comparison.status)
-                                      .color
-                                  }
-                                  variant="outlined"
-                                  label={
-                                    resultLabel(requirement.comparison.status)
-                                      .label
-                                  }
-                                />
-                                <PrimaryReason requirement={requirement} />
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {!visible.length && (
-                            <TableRow>
-                              <TableCell
-                                colSpan={5}
-                                sx={{
-                                  py: 4,
-                                  textAlign: "center",
-                                  color: "text.secondary",
-                                }}
-                              >
-                                No tests in this group.
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Paper>
-
-                  {selected && (
-                    <Paper variant="outlined" sx={{ overflow: "hidden" }}>
                       <Box
                         sx={{
-                          p: { xs: 2, md: 2.5 },
+                          p: 2,
                           borderBottom: "1px solid",
                           borderColor: "divider",
                         }}
                       >
-                        <Stack
-                          direction={{ xs: "column", sm: "row" }}
-                          justifyContent="space-between"
-                          spacing={1.5}
-                        >
-                          <Box>
-                            <Typography variant="h6">
-                              {selected.test_name}
-                            </Typography>
+                        <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
+                          Requested tests
+                        </Typography>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          placeholder="Find a test or method"
+                          value={query}
+                          onChange={(event) => setQuery(event.target.value)}
+                          inputProps={{
+                            "aria-label": "Search requested tests",
+                          }}
+                          InputProps={{
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                <SearchRoundedIcon fontSize="small" />
+                              </InputAdornment>
+                            ),
+                          }}
+                          sx={{ mb: 1.5 }}
+                        />
+                        <FormControl fullWidth size="small">
+                          <InputLabel id="comparison-result-label">
+                            Show
+                          </InputLabel>
+                          <Select
+                            labelId="comparison-result-label"
+                            label="Show"
+                            value={filter}
+                            onChange={(event) => setFilter(event.target.value)}
+                          >
+                            <MenuItem value="all">All tests</MenuItem>
+                            {Object.entries(results).map(([value, state]) => (
+                              <MenuItem key={value} value={value}>
+                                {state.label}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Box>
+                      <List
+                        disablePadding
+                        sx={{
+                          maxHeight: { xs: 260, md: "calc(100vh - 345px)" },
+                          overflowY: "auto",
+                        }}
+                      >
+                        {visible.map((requirement) => (
+                          <ListItemButton
+                            key={requirement.requirement_id}
+                            selected={
+                              selected?.requirement_id ===
+                              requirement.requirement_id
+                            }
+                            aria-label={requirement.test_name}
+                            aria-current={
+                              selected?.requirement_id ===
+                              requirement.requirement_id
+                                ? "true"
+                                : undefined
+                            }
+                            onClick={() =>
+                              setSelectedId(requirement.requirement_id)
+                            }
+                            sx={{
+                              display: "block",
+                              p: 2,
+                              borderBottom: "1px solid",
+                              borderColor: "divider",
+                              borderLeft: "3px solid transparent",
+                              "&.Mui-selected": {
+                                bgcolor: "#edf3ff",
+                                borderLeftColor: "primary.main",
+                              },
+                              "&.Mui-selected:hover": { bgcolor: "#e4edff" },
+                            }}
+                          >
                             <Typography
                               variant="body2"
-                              color="text.secondary"
-                              sx={{ mt: 0.25 }}
+                              fontWeight={600}
+                              sx={{ overflowWrap: "anywhere" }}
                             >
-                              {selected.methods.join(" · ") ||
-                                "Customer-defined procedure"}
+                              {requirement.test_name}
                             </Typography>
-                          </Box>
-                          <Button
-                            component={RouterLink}
-                            to={sourceUrl(documentId, selected.requirement_id)}
-                            startIcon={<OpenInNewRoundedIcon />}
-                            sx={{ alignSelf: "flex-start" }}
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                display: "block",
+                                mt: 0.35,
+                                mb: 1,
+                                overflowWrap: "anywhere",
+                              }}
+                            >
+                              {requirement.methods.join(" · ") ||
+                                "Customer procedure"}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              color={
+                                resultLabel(requirement.comparison.status).color
+                              }
+                              label={
+                                resultLabel(requirement.comparison.status).label
+                              }
+                            />
+                          </ListItemButton>
+                        ))}
+                        {!visible.length && (
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ p: 3 }}
                           >
-                            Check source PDF
-                          </Button>
-                        </Stack>
-                        {selected.source_review_state === "needs_attention" ||
-                        selected.source_review_state === "needs_review" ? (
-                          <Alert severity="warning" sx={{ mt: 2 }}>
-                            The extracted text has a source question. Check the
-                            PDF before relying on this item's result.
-                          </Alert>
-                        ) : null}
-                      </Box>
-                      <TableContainer sx={{ maxHeight: 480 }}>
-                        <Table
-                          stickyHeader
-                          size="small"
-                          aria-label={`${selected.test_name} requirement details`}
+                            No tests match this filter.
+                          </Typography>
+                        )}
+                      </List>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{
+                          display: "block",
+                          px: 2,
+                          py: 1.25,
+                          bgcolor: "#f8fafc",
+                        }}
+                      >
+                        {visible.length} of {report.requirements.length} tests
+                      </Typography>
+                    </Paper>
+                    {selected ? (
+                      <Paper
+                        key={selected.requirement_id}
+                        variant="outlined"
+                        sx={{ overflow: "hidden", minWidth: 0 }}
+                      >
+                        <Box
+                          sx={{
+                            p: { xs: 2, md: 2.5 },
+                            borderBottom: "1px solid",
+                            borderColor: "divider",
+                          }}
                         >
-                          <TableHead>
-                            <TableRow>
-                              <TableCell>Requirement</TableCell>
-                              <TableCell>Customer asks for</TableCell>
-                              <TableCell>Your lab records</TableCell>
-                              <TableCell>Result and reason</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {selected.comparison.checks.map((check, index) => (
-                              <TableRow key={`${check.parameter_id}-${index}`}>
-                                <TableCell sx={{ minWidth: 140 }}>
+                          <Stack
+                            direction={{ xs: "column", sm: "row" }}
+                            justifyContent="space-between"
+                            alignItems={{ sm: "flex-start" }}
+                            spacing={1.5}
+                          >
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography
+                                variant="h6"
+                                sx={{ overflowWrap: "anywhere" }}
+                              >
+                                {selected.test_name}
+                              </Typography>
+                              <Chip
+                                sx={{ mt: 1 }}
+                                size="small"
+                                color={
+                                  resultLabel(selected.comparison.status).color
+                                }
+                                label={
+                                  resultLabel(selected.comparison.status).label
+                                }
+                              />
+                            </Box>
+                            <Button
+                              component={RouterLink}
+                              to={sourceUrl(
+                                documentId,
+                                selected.requirement_id,
+                              )}
+                              startIcon={<OpenInNewRoundedIcon />}
+                              sx={{ flexShrink: 0, alignSelf: "flex-start" }}
+                            >
+                              Check source PDF
+                            </Button>
+                          </Stack>
+                          {selected.source_review_state === "needs_attention" ||
+                          selected.source_review_state === "needs_review" ? (
+                            <Alert severity="warning" sx={{ mt: 2 }}>
+                              Check the extracted requirements against the PDF
+                              before relying on this result.
+                            </Alert>
+                          ) : null}
+                        </Box>
+                        {selected.comparison.status !== "excluded" ? (
+                          <>
+                            <TableContainer>
+                              <Table
+                                size="small"
+                                aria-label="Test capability comparison"
+                                sx={{
+                                  "& td": { verticalAlign: "top", py: 2 },
+                                  "& th": { py: 1.5 },
+                                }}
+                              >
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell sx={{ width: "23%" }}>
+                                      Compare
+                                    </TableCell>
+                                    <TableCell sx={{ width: "39%" }}>
+                                      Customer requirement
+                                    </TableCell>
+                                    <TableCell sx={{ width: "38%" }}>
+                                      Your lab
+                                    </TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {(
+                                    [
+                                      ["method", "Method"],
+                                      ["condition", "Conditions"],
+                                      ["criterion", "Criteria / reporting"],
+                                    ] as const
+                                  ).map(([type, label]) => {
+                                    const checks = groupChecks(
+                                      selected.comparison.checks,
+                                      type,
+                                    );
+                                    const state = dimension(
+                                      selected.comparison.checks,
+                                      type,
+                                    );
+                                    const methodCheck = checks.find(
+                                      (check) => check.kind === "method",
+                                    );
+                                    return (
+                                      <TableRow key={type}>
+                                        <TableCell sx={{ minWidth: 115 }}>
+                                          <Typography
+                                            variant="body2"
+                                            fontWeight={600}
+                                          >
+                                            {label}
+                                          </Typography>
+                                          <Chip
+                                            size="small"
+                                            variant="outlined"
+                                            color={state.color}
+                                            label={state.label}
+                                            sx={{
+                                              mt: 0.75,
+                                              height: "auto",
+                                              minHeight: 23,
+                                              "& .MuiChip-label": {
+                                                whiteSpace: "normal",
+                                                py: 0.25,
+                                              },
+                                            }}
+                                          />
+                                        </TableCell>
+                                        <TableCell sx={{ minWidth: 155 }}>
+                                          {type === "method" ? (
+                                            <Typography
+                                              variant="body2"
+                                              sx={{ overflowWrap: "anywhere" }}
+                                            >
+                                              {selected.methods.join(" · ") ||
+                                                methodCheck?.requested ||
+                                                "Customer-defined procedure"}
+                                            </Typography>
+                                          ) : (
+                                            <FactSummary
+                                              facts={summaryFacts(
+                                                checks,
+                                                "requested",
+                                              )}
+                                              emptyLabel={
+                                                checks.length
+                                                  ? "See source details"
+                                                  : "Not specified"
+                                              }
+                                            />
+                                          )}
+                                        </TableCell>
+                                        <TableCell sx={{ minWidth: 155 }}>
+                                          {type === "method" ? (
+                                            <Typography
+                                              variant="body2"
+                                              sx={{ overflowWrap: "anywhere" }}
+                                            >
+                                              {methodCheck?.declared ||
+                                                (methodCheck?.status ===
+                                                "supported"
+                                                  ? "Matching method listed"
+                                                  : methodCheck?.status ===
+                                                      "gap"
+                                                    ? "No matching method listed"
+                                                    : "Match not established")}
+                                            </Typography>
+                                          ) : (
+                                            <FactSummary
+                                              facts={summaryFacts(
+                                                checks,
+                                                "declared",
+                                              )}
+                                              emptyLabel="Not recorded for this request"
+                                            />
+                                          )}
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                            <Accordion
+                              expanded={detailsOpen}
+                              onChange={(_, expanded) =>
+                                setDetailsOpen(expanded)
+                              }
+                              disableGutters
+                              elevation={0}
+                              sx={{
+                                borderTop: "1px solid",
+                                borderColor: "divider",
+                                "&:before": { display: "none" },
+                              }}
+                            >
+                              <AccordionSummary
+                                expandIcon={<ExpandMoreRoundedIcon />}
+                                sx={{ px: { xs: 2, md: 2.5 } }}
+                              >
+                                <Box>
                                   <Typography variant="body2" fontWeight={600}>
-                                    {check.label}
-                                  </Typography>
-                                  {check.stage && (
-                                    <Typography
-                                      variant="caption"
-                                      color="text.secondary"
-                                    >
-                                      {stageLabel(check.stage)}
-                                    </Typography>
-                                  )}
-                                  {stepLabel(
-                                    check,
-                                    selected.comparison.checks,
-                                  ) && (
-                                    <Typography
-                                      variant="caption"
-                                      display="block"
-                                      color="text.secondary"
-                                    >
-                                      {stepLabel(
-                                        check,
-                                        selected.comparison.checks,
-                                      )}
-                                    </Typography>
-                                  )}
-                                </TableCell>
-                                <TableCell
-                                  sx={{
-                                    minWidth: 180,
-                                    maxWidth: 300,
-                                    overflowWrap: "anywhere",
-                                  }}
-                                >
-                                  {check.requested}
-                                </TableCell>
-                                <TableCell
-                                  sx={{
-                                    minWidth: 180,
-                                    maxWidth: 300,
-                                    overflowWrap: "anywhere",
-                                  }}
-                                >
-                                  {check.declared || (
-                                    <Typography
-                                      variant="body2"
-                                      color="text.secondary"
-                                    >
-                                      Not recorded
-                                    </Typography>
-                                  )}
-                                </TableCell>
-                                <TableCell
-                                  sx={{ minWidth: 230, maxWidth: 380 }}
-                                >
-                                  <Typography
-                                    variant="body2"
-                                    fontWeight={600}
-                                    color={
-                                      check.status === "supported"
-                                        ? "success.main"
-                                        : check.status === "gap"
-                                          ? "error.main"
-                                          : check.status === "unknown"
-                                            ? "warning.main"
-                                            : "text.secondary"
-                                    }
-                                  >
-                                    {check.status === "supported"
-                                      ? "Covered"
-                                      : check.status === "gap"
-                                        ? "Capability gap"
-                                        : check.status === "unknown"
-                                          ? "Needs information"
-                                          : "Recorded for reference"}
+                                    View detailed comparison (
+                                    {selected.comparison.checks.length} checks)
                                   </Typography>
                                   <Typography
                                     variant="caption"
                                     color="text.secondary"
                                   >
-                                    {check.reason}
+                                    Parameters, stages and reasons for each
+                                    result
                                   </Typography>
-                                </TableCell>
-                              </TableRow>
+                                </Box>
+                              </AccordionSummary>
+                              <AccordionDetails sx={{ p: 0 }}>
+                                <TableContainer sx={{ maxHeight: 480 }}>
+                                  <Table
+                                    stickyHeader
+                                    size="small"
+                                    aria-label={`${selected.test_name} requirement details`}
+                                  >
+                                    <TableHead>
+                                      <TableRow>
+                                        <TableCell>Requirement</TableCell>
+                                        <TableCell>Customer asks for</TableCell>
+                                        <TableCell>Your lab records</TableCell>
+                                        <TableCell>Result and reason</TableCell>
+                                      </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                      {selected.comparison.checks.map(
+                                        (check, index) => (
+                                          <TableRow
+                                            key={`${check.parameter_id}-${index}`}
+                                          >
+                                            <TableCell sx={{ minWidth: 140 }}>
+                                              <Typography
+                                                variant="body2"
+                                                fontWeight={600}
+                                              >
+                                                {check.label}
+                                              </Typography>
+                                              {check.stage && (
+                                                <Typography
+                                                  variant="caption"
+                                                  color="text.secondary"
+                                                >
+                                                  {stageLabel(check.stage)}
+                                                </Typography>
+                                              )}
+                                              {stepLabel(
+                                                check,
+                                                selected.comparison.checks,
+                                              ) && (
+                                                <Typography
+                                                  variant="caption"
+                                                  display="block"
+                                                  color="text.secondary"
+                                                >
+                                                  {stepLabel(
+                                                    check,
+                                                    selected.comparison.checks,
+                                                  )}
+                                                </Typography>
+                                              )}
+                                            </TableCell>
+                                            <TableCell
+                                              sx={{
+                                                minWidth: 180,
+                                                maxWidth: 300,
+                                                overflowWrap: "anywhere",
+                                              }}
+                                            >
+                                              {check.requested}
+                                            </TableCell>
+                                            <TableCell
+                                              sx={{
+                                                minWidth: 180,
+                                                maxWidth: 300,
+                                                overflowWrap: "anywhere",
+                                              }}
+                                            >
+                                              {check.declared || (
+                                                <Typography
+                                                  variant="body2"
+                                                  color="text.secondary"
+                                                >
+                                                  Not recorded
+                                                </Typography>
+                                              )}
+                                            </TableCell>
+                                            <TableCell
+                                              sx={{
+                                                minWidth: 230,
+                                                maxWidth: 380,
+                                              }}
+                                            >
+                                              <Typography
+                                                variant="body2"
+                                                fontWeight={600}
+                                                color={
+                                                  check.status === "supported"
+                                                    ? "success.main"
+                                                    : check.status === "gap"
+                                                      ? "error.main"
+                                                      : check.status ===
+                                                          "unknown"
+                                                        ? "warning.main"
+                                                        : "text.secondary"
+                                                }
+                                              >
+                                                {check.status === "supported"
+                                                  ? "Covered"
+                                                  : check.status === "gap"
+                                                    ? "Capability gap"
+                                                    : check.status === "unknown"
+                                                      ? "Needs information"
+                                                      : "Recorded for reference"}
+                                              </Typography>
+                                              <Typography
+                                                variant="caption"
+                                                color="text.secondary"
+                                              >
+                                                {check.reason}
+                                              </Typography>
+                                            </TableCell>
+                                          </TableRow>
+                                        ),
+                                      )}
+                                    </TableBody>
+                                  </Table>
+                                </TableContainer>
+                              </AccordionDetails>
+                            </Accordion>
+                          </>
+                        ) : (
+                          <Box sx={{ p: { xs: 2, md: 2.5 } }}>
+                            <Typography variant="body2" color="text.secondary">
+                              This test is outside the report's active scope.
+                              Its source requirements remain saved.
+                            </Typography>
+                          </Box>
+                        )}
+                        {actions.length > 0 && (
+                          <Box
+                            sx={{
+                              p: { xs: 2, md: 2.5 },
+                              bgcolor: "#f8fafc",
+                              borderTop: "1px solid",
+                              borderColor: "divider",
+                            }}
+                          >
+                            <Typography variant="body2" fontWeight={600}>
+                              Next step
+                            </Typography>
+                            {actions.map((action) => (
+                              <Box key={action.label} sx={{ mt: 1 }}>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  display="block"
+                                >
+                                  {action.description}
+                                </Typography>
+                                <Button
+                                  component={RouterLink}
+                                  to={action.to}
+                                  endIcon={<ArrowForwardRoundedIcon />}
+                                  sx={{ mt: 0.5, px: 0 }}
+                                >
+                                  {action.label}
+                                </Button>
+                              </Box>
                             ))}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                      {actions.length > 0 && (
-                        <Box
-                          sx={{
-                            p: 2.5,
-                            bgcolor: "#f8fafc",
-                            borderTop: "1px solid",
-                            borderColor: "divider",
+                          </Box>
+                        )}
+                        <ReportScopeControls
+                          key={`${documentId}-${selected.requirement_id}`}
+                          documentId={documentId}
+                          report={report}
+                          requirement={selected}
+                          onSaved={(updated) => {
+                            const next = updated.requirements.find(
+                              (item) =>
+                                item.requirement_id === selected.requirement_id,
+                            );
+                            if (
+                              filter !== "all" &&
+                              next?.comparison.status !== filter
+                            )
+                              setFilter("all");
+                            data.setData(updated);
+                          }}
+                        />
+                      </Paper>
+                    ) : (
+                      <Paper
+                        variant="outlined"
+                        sx={{ p: 5, textAlign: "center" }}
+                      >
+                        <Typography variant="subtitle1">
+                          No tests in this view
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mt: 1 }}
+                        >
+                          Change the search or filter to see the other requested
+                          tests.
+                        </Typography>
+                        <Button
+                          sx={{ mt: 1 }}
+                          onClick={() => {
+                            setFilter("all");
+                            setQuery("");
                           }}
                         >
-                          <Typography variant="body2" fontWeight={600}>
-                            Next step
-                          </Typography>
-                          {actions.map((action) => (
-                            <Box key={action.label} sx={{ mt: 1 }}>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                display="block"
-                              >
-                                {action.description}
-                              </Typography>
-                              <Button
-                                component={RouterLink}
-                                to={action.to}
-                                endIcon={<ArrowForwardRoundedIcon />}
-                                sx={{ mt: 0.5 }}
-                              >
-                                {action.label}
-                              </Button>
-                            </Box>
-                          ))}
-                        </Box>
-                      )}
-                    </Paper>
-                  )}
+                          Show all tests
+                        </Button>
+                      </Paper>
+                    )}
+                  </Box>
                   <Typography
                     variant="caption"
                     color="text.secondary"

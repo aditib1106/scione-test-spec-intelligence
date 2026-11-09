@@ -17,6 +17,7 @@ from scione.catalogs import FileLabStore, load_reference_catalog
 from scione.config import Settings
 from scione.providers.gemini import GeminiModelProvider
 from scione.providers.groq import GroqModelProvider
+from scione.providers.openai_compatible import OpenAICompatibleModelProvider
 from scione.reports.store import FileReportStore
 from scione.specifications.store import FileSpecStore
 
@@ -50,18 +51,31 @@ def main():
     parser.add_argument("--seed-review", action="store_true")
     args = parser.parse_args()
     with TemporaryDirectory(prefix="scione-browser-") as directory:
-        root = Path(directory)
+        root = Path(directory).resolve()
         os.environ["SCIONE_WORKSPACE_DIR"] = str(root)
         os.environ["GROQ_API_KEY"] = ""
         os.environ["GEMINI_API_KEY"] = ""
+        os.environ["FIREWORKS_API_KEY"] = ""
+        os.environ["SAIL_API_KEY"] = ""
         Settings.model_config["env_file"] = None
         GroqModelProvider.generate_structured = reject_provider
         GeminiModelProvider.generate_structured = reject_provider
+        OpenAICompatibleModelProvider.generate_structured = reject_provider
         if args.seed_review:
             seed_review(root)
         from scione.api.app import create_app
 
-        app = create_app(Settings(_env_file=None, scione_workspace_dir=root))
+        app = create_app(
+            Settings(
+                _env_file=None,
+                scione_workspace_dir=root,
+                scione_database_url=None,
+                groq_api_key=None,
+                gemini_api_key=None,
+                fireworks_api_key=None,
+                sail_api_key=None,
+            )
+        )
         uvicorn.run(app, host="127.0.0.1", port=args.port)
 
 

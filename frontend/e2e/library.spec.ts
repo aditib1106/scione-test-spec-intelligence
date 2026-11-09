@@ -26,7 +26,7 @@ function record(overrides: Partial<LibraryDocument>): LibraryDocument {
 
 test("library keeps source versions separate and links atomic fields to their PDF page", async ({
   page,
-}) => {
+}, testInfo) => {
   const documents = [
     record({}),
     record({
@@ -104,6 +104,20 @@ test("library keeps source versions separate and links atomic fields to their PD
 
   await listing.getByRole("button").first().click();
   await page.getByRole("button", { name: /Cross-cut adhesion/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Cross-cut adhesion" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("table", { name: "Saved requirement records" }),
+  ).not.toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("library-test-summary.png"),
+    animations: "disabled",
+    fullPage: true,
+  });
+  await page
+    .getByRole("button", { name: "View detailed requirements" })
+    .click();
   let claims = page.getByRole("table", {
     name: "Saved requirement records",
   });
@@ -117,6 +131,12 @@ test("library keeps source versions separate and links atomic fields to their PD
   await page.getByRole("combobox", { name: "Saved version" }).click();
   await page.getByRole("option", { name: /Issue A/ }).click();
   await page.getByRole("button", { name: /Cross-cut adhesion/ }).click();
+  await expect(
+    page.getByRole("table", { name: "Saved requirement records" }),
+  ).not.toBeVisible();
+  await page
+    .getByRole("button", { name: "View detailed requirements" })
+    .click();
   claims = page.getByRole("table", {
     name: "Saved requirement records",
   });

@@ -33,12 +33,49 @@ export interface OperatingLimit {
   unit: string | null;
   supported_values: string[];
 }
+export interface AtomicClaim {
+  id: string;
+  parameter_id: string | null;
+  label: string;
+  kind: "condition" | "criterion" | "reporting" | "scope" | "instruction";
+  stage: string;
+  operator:
+    "=" | "range" | "<=" | ">=" | "<" | ">" | "one_of" | "text" | "required";
+  value: string | null;
+  minimum: string | null;
+  maximum: string | null;
+  tolerance: string | null;
+  values: string[];
+  unit: string | null;
+  text_value: string | null;
+  availability: "supported" | "unsupported" | "unknown";
+  raw_text: string;
+  source_pages: number[];
+  source_context?: string | null;
+  normalization_state: "parsed" | "unresolved" | "reviewed";
+  configuration: string | null;
+  sequence: number | null;
+}
+export interface LabRecords {
+  storage: string;
+  backend: string;
+  workspace_id: string;
+  lab_version: number;
+  capability_count: number;
+  claim_count: number;
+  claims: (AtomicClaim & {
+    capability_id: string;
+    normalizer_version: string;
+  })[];
+  revisions: unknown[];
+}
 export interface Capability {
   id: string;
   canonical_test_id: string;
   method_ids: string[];
   declared_constraints: string | null;
   structured_limits: OperatingLimit[];
+  atomic_claims?: AtomicClaim[];
   notes: string | null;
   price: string | null;
   currency: string | null;
@@ -98,6 +135,7 @@ export interface Requirement {
   acceptance_criteria: RequirementValue[];
   applicability: string[];
   special_instructions: string[];
+  atomic_claims?: AtomicClaim[];
   evidence: { page: number; quote: string; section?: string | null }[];
 }
 export interface ExtractionRun {
@@ -141,9 +179,17 @@ export interface SpecificationData {
   };
   run: ExtractionRun | null;
   review: ReviewSet | null;
+  facts_version?: number;
+  facts_revision?: {
+    revision_id: string;
+    version: number;
+    changed_requirement_ids: string[];
+    note: string;
+  } | null;
   assessments: Record<string, { state: ReviewState; reasons: string[] }>;
   coverage_issues: string[];
   failure: {
+    attempt_id?: string | null;
     message: string;
     occurred_at: string;
     previous_run_id: string | null;

@@ -30,6 +30,7 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { ApiError, request } from "../api";
 import PdfPageViewer from "../components/PdfPageViewer";
+import SourceFactsEditor from "../components/SourceFactsEditor";
 import type { PageProps, Requirement, SpecificationData } from "../types";
 
 const blue = "#2459cc";
@@ -101,6 +102,16 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const [saving, setSaving] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+  const analysisSubmitting = useRef(false);
+  const analysisMounted = useRef(true);
+  const analysisController = useRef<AbortController | null>(null);
+  useEffect(() => {
+    analysisMounted.current = true;
+    return () => {
+      analysisMounted.current = false;
+      analysisController.current?.abort();
+    };
+  }, []);
   const [provider, setProvider] = useState(
     workspace.providers.find((item) => item.available)?.id ??
       workspace.providers[0]?.id ??
@@ -108,6 +119,9 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   );
   const selectedProvider = workspace.providers.find(
     (item) => item.id === provider,
+  );
+  const requiresUsageAcknowledgment = ["gemini", "fireworks", "sail"].includes(
+    provider,
   );
   const [model, setModel] = useState(selectedProvider?.model ?? "");
   const [strategy, setStrategy] = useState<
@@ -404,6 +418,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
           body: JSON.stringify({
             run_id: runId,
             version: reviewVersion,
+            facts_version: data.facts_version ?? 0,
             requirement_ids: ids,
             decision,
             note: selectedNote.trim(),
@@ -484,13 +499,17 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   };
   const analyze = async () => {
     if (
+      analysisSubmitting.current ||
       !permission ||
-      (provider === "gemini" && !freeTierConfirmed) ||
+      (requiresUsageAcknowledgment && !freeTierConfirmed) ||
       !model.trim() ||
       !data
     )
       return;
     const documentAtSubmit = documentId;
+    analysisSubmitting.current = true;
+    const controller = new AbortController();
+    analysisController.current = controller;
     setAnalyzing(true);
     setAnalysisError("");
     try {
@@ -506,17 +525,20 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         `/api/specifications/${encodeURIComponent(documentAtSubmit)}/analysis`,
         {
           method: "POST",
+          signal: controller.signal,
           body: JSON.stringify({
             provider,
             model: model.trim(),
             strategy,
             output_limit: outputLimit,
             permission,
-            free_tier_confirmed:
-              provider === "gemini" ? freeTierConfirmed : true,
+            billing_acknowledged: requiresUsageAcknowledgment
+              ? freeTierConfirmed
+              : true,
           }),
         },
       );
+      if (!analysisMounted.current || controller.signal.aborted) return;
       if (activeDocumentRef.current === documentAtSubmit) {
         const nextRequirement =
           updated.run?.extraction.requirements.find(
@@ -536,6 +558,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       }
       onRefresh();
     } catch (reason) {
+      if (!analysisMounted.current || controller.signal.aborted) return;
       const message = errorText(reason);
       if (activeDocumentRef.current === documentAtSubmit) {
         setAnalysisError(
@@ -544,17 +567,33 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         try {
           const latest = await request<SpecificationData>(
             `/api/specifications/${encodeURIComponent(documentAtSubmit)}`,
+            { signal: controller.signal },
           );
-          if (activeDocumentRef.current === documentAtSubmit) setData(latest);
+          if (
+            analysisMounted.current &&
+            activeDocumentRef.current === documentAtSubmit
+          )
+            setData(latest);
         } catch (refreshReason) {
-          if (activeDocumentRef.current === documentAtSubmit)
+          if (
+            analysisMounted.current &&
+            !controller.signal.aborted &&
+            activeDocumentRef.current === documentAtSubmit
+          )
             setAnalysisError(
               `${message} Saved data refresh also failed: ${errorText(refreshReason)}`,
             );
         }
       }
     } finally {
-      setAnalyzing(false);
+      analysisSubmitting.current = false;
+      if (analysisController.current === controller)
+        analysisController.current = null;
+      if (analysisMounted.current) {
+        setAnalyzing(false);
+        setPermission(false);
+        setFreeTierConfirmed(false);
+      }
     }
   };
 
@@ -705,6 +744,19 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
             </Alert>
           ) : null}
           <Divider sx={{ my: 2 }} />
+          {data?.run && (
+            <Box sx={{ mb: 2 }}>
+              <SourceFactsEditor
+                key={`${selected.id}-${data.facts_version ?? 0}`}
+                data={data}
+                selected={selected}
+                onSaved={(updated) => {
+                  setData(updated);
+                  onRefresh();
+                }}
+              />
+            </Box>
+          )}
           {(
             [
               ["Conditions", selected.conditions],
@@ -1058,7 +1110,11 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                       spacing={1.25}
                       sx={{ mt: 1.5 }}
                     >
-                      <FormControl size="small" sx={{ minWidth: 160 }}>
+                      <FormControl
+                        size="small"
+                        sx={{ minWidth: 160 }}
+                        disabled={analyzing}
+                      >
                         <InputLabel id="provider-label">Provider</InputLabel>
                         <Select
                           labelId="provider-label"
@@ -1078,7 +1134,11 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                           ))}
                         </Select>
                       </FormControl>
-                      <FormControl size="small" sx={{ minWidth: 200, flex: 1 }}>
+                      <FormControl
+                        size="small"
+                        sx={{ minWidth: 200, flex: 1 }}
+                        disabled={analyzing}
+                      >
                         <InputLabel id="strategy-label">
                           Reading mode
                         </InputLabel>
@@ -1086,9 +1146,11 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                           labelId="strategy-label"
                           label="Reading mode"
                           value={strategy}
-                          onChange={(event) =>
-                            setStrategy(event.target.value as typeof strategy)
-                          }
+                          onChange={(event) => {
+                            setStrategy(event.target.value as typeof strategy);
+                            setPermission(false);
+                            setFreeTierConfirmed(false);
+                          }}
                         >
                           <MenuItem value="compact_document">
                             Compact · one request
@@ -1128,7 +1190,12 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                             size="small"
                             label="Model"
                             value={model}
-                            onChange={(event) => setModel(event.target.value)}
+                            disabled={analyzing}
+                            onChange={(event) => {
+                              setModel(event.target.value);
+                              setPermission(false);
+                              setFreeTierConfirmed(false);
+                            }}
                             fullWidth
                           />
                           <TextField
@@ -1136,14 +1203,17 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                             type="number"
                             label="Max output tokens per request"
                             value={outputLimit}
-                            onChange={(event) =>
+                            disabled={analyzing}
+                            onChange={(event) => {
                               setOutputLimit(
                                 Math.max(
                                   512,
                                   Number(event.target.value) || 512,
                                 ),
-                              )
-                            }
+                              );
+                              setPermission(false);
+                              setFreeTierConfirmed(false);
+                            }}
                             sx={{ width: { sm: 240 } }}
                             inputProps={{ min: 512, step: 128 }}
                           />
@@ -1156,6 +1226,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                       control={
                         <Checkbox
                           checked={permission}
+                          disabled={analyzing}
                           onChange={(event) =>
                             setPermission(event.target.checked)
                           }
@@ -1168,11 +1239,12 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                         </Typography>
                       }
                     />
-                    {provider === "gemini" && (
+                    {requiresUsageAcknowledgment && (
                       <FormControlLabel
                         control={
                           <Checkbox
                             checked={freeTierConfirmed}
+                            disabled={analyzing}
                             onChange={(event) =>
                               setFreeTierConfirmed(event.target.checked)
                             }
@@ -1180,7 +1252,9 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                         }
                         label={
                           <Typography variant="body2">
-                            I confirmed this Google project uses the Free tier
+                            {provider === "gemini"
+                              ? "I understand this uses my Google project's API quota and may incur charges"
+                              : `I understand this uses my ${selectedProvider?.label ?? "provider"} API quota or credits and may incur charges`}
                           </Typography>
                         }
                       />
@@ -1191,7 +1265,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                       disabled={
                         analyzing ||
                         !permission ||
-                        (provider === "gemini" && !freeTierConfirmed) ||
+                        (requiresUsageAcknowledgment && !freeTierConfirmed) ||
                         !model.trim() ||
                         !selectedProvider?.available ||
                         (strategy === "focused_passes" &&
@@ -1206,6 +1280,16 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                           : "Analyze PDF"}
                     </Button>
                   </Stack>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ gridColumn: "1/-1" }}
+                  >
+                    Analysis starts only when you press the button. Failed
+                    requests are not retried automatically. Leaving this page
+                    stops waiting, but a request already accepted by the model
+                    provider may finish and use credits.
+                  </Typography>
                   {strategy === "focused_passes" && (
                     <Typography
                       variant="caption"
@@ -1241,6 +1325,45 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                         : {data.failure.message}
                       </Alert>
                     )}
+                  {data.failure?.attempt_id && (
+                    <Accordion
+                      disableGutters
+                      elevation={0}
+                      sx={{
+                        gridColumn: "1/-1",
+                        bgcolor: "transparent",
+                        "&:before": { display: "none" },
+                      }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        sx={{ px: 0 }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          Developer details · failed analysis
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ px: 0 }}>
+                        <Button
+                          size="small"
+                          component="a"
+                          href={`/api/specifications/${encodeURIComponent(documentId)}/analysis-failures/${encodeURIComponent(data.failure.attempt_id)}/artifacts`}
+                          download
+                        >
+                          Download failed attempt
+                        </Button>
+                        <Typography
+                          variant="caption"
+                          display="block"
+                          color="text.secondary"
+                        >
+                          Includes source prompts, original model output and
+                          reported usage. Review before explicitly starting
+                          another analysis.
+                        </Typography>
+                      </AccordionDetails>
+                    </Accordion>
+                  )}
                 </Box>
               </AccordionDetails>
             </Accordion>

@@ -28,14 +28,18 @@ export async function request<T>(
     const message =
       typeof detail === "string"
         ? detail
-        : Array.isArray(detail)
-          ? detail
-              .map(
-                (item: { loc: string[]; msg: string }) =>
-                  `${item.loc.slice(1).join(" · ")}: ${item.msg}`,
-              )
-              .join("; ")
-          : "The request could not be completed. Please try again.";
+        : detail &&
+            typeof detail === "object" &&
+            typeof detail.message === "string"
+          ? detail.message
+          : Array.isArray(detail)
+            ? detail
+                .map(
+                  (item: { loc: string[]; msg: string }) =>
+                    `${item.loc.slice(1).join(" · ")}: ${item.msg}`,
+                )
+                .join("; ")
+            : "The request could not be completed. Please try again.";
     throw new ApiError(message, response.status);
   }
   return response.json() as Promise<T>;
@@ -69,5 +73,5 @@ export function useResource<T>(path: string | null) {
         });
     return () => controller.abort();
   }, [path, revision]);
-  return { data, error, loading, refresh };
+  return { data, error, loading, refresh, setData };
 }

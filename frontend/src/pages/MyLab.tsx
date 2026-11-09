@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -30,14 +33,20 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import { ApiError, request } from "../api";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import { ApiError, request, useResource } from "../api";
 import type {
+  AtomicClaim,
   Capability,
+  LabRecords,
   LabProfile,
   OperatingLimit,
   PageProps,
 } from "../types";
 import CapabilityEditor from "./CapabilityEditor";
+
+const labelFor = (value: string) =>
+  value.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
 
 const money = (capability: Capability) =>
   capability.price
@@ -51,10 +60,35 @@ const previewSx = {
   overflow: "hidden",
 } as const;
 const measurements = (capability: Capability) =>
+  claimSummary(capability, "reporting") ||
   (capability.notes ?? "")
     .replace(/^Reportable outputs:\s*/i, "")
     .split(/\nSource:/i)[0]
     .trim();
+const claimValue = (claim: AtomicClaim) => {
+  if (claim.availability === "unknown") return "Not yet assessed";
+  if (claim.availability === "unsupported") return "Not available";
+  let text = claim.text_value ?? claim.raw_text;
+  if (claim.operator === "range")
+    text = `${claim.minimum ?? "…"}–${claim.maximum ?? "…"}`;
+  else if (claim.operator === "one_of") text = claim.values.join(" / ");
+  else if (claim.value !== null)
+    text = `${claim.operator === "=" ? "" : `${claim.operator} `}${claim.value}${claim.tolerance !== null ? ` ± ${claim.tolerance}` : ""}`;
+  return `${text}${claim.unit ? ` ${claim.unit}` : ""}`;
+};
+const claimSummary = (capability: Capability, kind: AtomicClaim["kind"]) => {
+  const claims = (capability.atomic_claims ?? []).filter((claim) =>
+    kind === "condition"
+      ? ["condition", "scope", "instruction"].includes(claim.kind)
+      : ["reporting", "criterion"].includes(claim.kind),
+  );
+  return (
+    claims
+      .slice(0, 2)
+      .map((claim) => `${claim.label}: ${claimValue(claim)}`)
+      .join("; ") + (claims.length > 2 ? `; +${claims.length - 2} more` : "")
+  );
+};
 const limitText = (limit: OperatingLimit) => {
   if (limit.supported_values.length) return limit.supported_values.join("; ");
   const value = limit.values.length
@@ -82,6 +116,13 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
   const [saveError, setSaveError] = useState("");
   const [example, setExample] = useState("csp301");
   const [viewingId, setViewingId] = useState<string | null>(null);
+  const [parametersOpen, setParametersOpen] = useState(false);
+  useEffect(() => setParametersOpen(false), [viewingId]);
+  const savedParameters = useResource<LabRecords>(
+    parametersOpen && viewingId
+      ? `/api/lab/records?version=${lab.version}`
+      : null,
+  );
 
   useEffect(() => {
     const id = params.get("capability");
@@ -116,7 +157,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
             `${method!.identifier} ${method!.name} ${method!.edition ?? ""} ${method!.aliases.map((a) => a.text).join(" ")}`,
         )
         .join(" ");
-      return `${test?.name ?? capability.canonical_test_id} ${test?.id ?? ""} ${test?.aliases.map((alias) => alias.text).join(" ") ?? ""} ${methodText} ${capability.declared_constraints ?? ""}`
+      return `${test?.name ?? capability.canonical_test_id} ${test?.id ?? ""} ${test?.aliases.map((alias) => alias.text).join(" ") ?? ""} ${methodText} ${capability.declared_constraints ?? ""} ${(capability.atomic_claims ?? []).map((claim) => `${claim.label} ${claim.text_value ?? ""} ${claim.source_context ?? ""}`).join(" ")}`
         .toLocaleLowerCase()
         .includes(needle);
     });
@@ -195,6 +236,12 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
   }
 
   const viewed = lab.capabilities.find((item) => item.id === viewingId);
+  const viewedClaims =
+    savedParameters.data?.lab_version === lab.version
+      ? savedParameters.data.claims.filter(
+          (claim) => claim.capability_id === viewingId,
+        )
+      : [];
   const editCapability = (capability?: Capability) => {
     setViewingId(null);
     setEditingCapability(capability);
@@ -428,7 +475,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                   <TableCell sx={{ width: "15%" }}>Method</TableCell>
                   <TableCell sx={{ width: "23%" }}>Conditions</TableCell>
                   <TableCell sx={{ width: "25%" }}>
-                    Measurements / reporting
+                    Criteria / reporting
                   </TableCell>
                   <TableCell sx={{ width: "13%" }}>Rate</TableCell>
                   <TableCell sx={{ width: "7%" }} align="right">
@@ -481,7 +528,8 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                           color="text.secondary"
                           sx={previewSx}
                         >
-                          {capability.declared_constraints ||
+                          {claimSummary(capability, "condition") ||
+                            capability.declared_constraints ||
                             (capability.structured_limits.length
                               ? `${capability.structured_limits.length} declared operating limits`
                               : "Not specified")}
@@ -574,44 +622,221 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                   Conditions and scope
                 </Typography>
                 <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                  {viewed.declared_constraints || "Not specified"}
+                  {claimSummary(viewed, "condition") ||
+                    viewed.declared_constraints ||
+                    "Not specified"}
                 </Typography>
               </Box>
               <Box>
                 <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
-                  Measurements and additional information
+                  Criteria / reporting
                 </Typography>
                 <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
                   {measurements(viewed) || "Not specified"}
                 </Typography>
               </Box>
-              {viewed.structured_limits.length > 0 && (
-                <Box>
-                  <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
-                    Declared operating limits
-                  </Typography>
-                  <TableContainer>
-                    <Table size="small" aria-label="Declared operating limits">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Parameter</TableCell>
-                          <TableCell>Declared support</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {viewed.structured_limits.map((limit, index) => (
-                          <TableRow key={`${limit.parameter}-${index}`}>
-                            <TableCell sx={{ textTransform: "capitalize" }}>
-                              {limit.parameter.replaceAll("_", " ")}
-                            </TableCell>
-                            <TableCell>{limitText(limit)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Box>
-              )}
+              <Accordion
+                expanded={parametersOpen}
+                onChange={(_, expanded) => setParametersOpen(expanded)}
+                disableGutters
+                elevation={0}
+                sx={{
+                  border: "1px solid",
+                  borderColor: "divider",
+                  "&:before": { display: "none" },
+                }}
+              >
+                <AccordionSummary
+                  id="saved-capability-parameters-heading"
+                  aria-controls="saved-capability-parameters-content"
+                  expandIcon={<ExpandMoreRoundedIcon />}
+                >
+                  <Box>
+                    <Typography variant="subtitle2">
+                      Detailed parameters
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      View saved operating conditions and reportable
+                      measurements.
+                    </Typography>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Stack spacing={2}>
+                    {savedParameters.loading && (
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <CircularProgress size={18} />
+                        <Typography variant="body2">
+                          Loading saved parameters…
+                        </Typography>
+                      </Stack>
+                    )}
+                    {savedParameters.error && (
+                      <Alert
+                        severity="error"
+                        action={
+                          <Button
+                            color="inherit"
+                            onClick={savedParameters.refresh}
+                          >
+                            Retry
+                          </Button>
+                        }
+                      >
+                        {savedParameters.error}
+                      </Alert>
+                    )}
+                    {savedParameters.data &&
+                      savedParameters.data.lab_version !== lab.version && (
+                        <Alert
+                          severity="info"
+                          action={
+                            <Button color="inherit" onClick={onRefresh}>
+                              Reload lab
+                            </Button>
+                          }
+                        >
+                          Your lab information changed. Reload to see its latest
+                          parameters.
+                        </Alert>
+                      )}
+                    {viewedClaims.length > 0 && (
+                      <TableContainer>
+                        <Table
+                          size="small"
+                          aria-label="Saved capability parameters"
+                          sx={{ minWidth: 640 }}
+                        >
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Parameter</TableCell>
+                              <TableCell>Declared capability</TableCell>
+                              <TableCell>Stage / context</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {viewedClaims.map((claim) => (
+                              <TableRow key={claim.id}>
+                                <TableCell sx={{ verticalAlign: "top" }}>
+                                  <Typography variant="body2" fontWeight={600}>
+                                    {claim.label}
+                                  </Typography>
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    {claim.kind === "reporting"
+                                      ? "Measurement / reporting"
+                                      : labelFor(claim.kind)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell
+                                  sx={{ verticalAlign: "top", maxWidth: 300 }}
+                                >
+                                  <Typography
+                                    variant="body2"
+                                    sx={{ overflowWrap: "anywhere" }}
+                                  >
+                                    {claimValue(claim)}
+                                  </Typography>
+                                  {claim.availability === "unsupported" ? (
+                                    <Chip
+                                      size="small"
+                                      label="Not available"
+                                      color="error"
+                                      variant="outlined"
+                                    />
+                                  ) : claim.availability === "unknown" ||
+                                    claim.normalization_state ===
+                                      "unresolved" ? (
+                                    <Typography
+                                      variant="caption"
+                                      color="warning.main"
+                                    >
+                                      Needs clarification
+                                    </Typography>
+                                  ) : null}
+                                </TableCell>
+                                <TableCell sx={{ verticalAlign: "top" }}>
+                                  <Typography variant="body2">
+                                    {labelFor(claim.stage)}
+                                  </Typography>
+                                  {claim.source_context && (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      sx={{ display: "block" }}
+                                    >
+                                      {claim.source_context}
+                                    </Typography>
+                                  )}
+                                  {claim.configuration && (
+                                    <Typography
+                                      variant="caption"
+                                      sx={{ display: "block" }}
+                                    >
+                                      Setup: {claim.configuration}
+                                    </Typography>
+                                  )}
+                                  {claim.sequence !== null && (
+                                    <Typography
+                                      variant="caption"
+                                      sx={{ display: "block" }}
+                                    >
+                                      Step {claim.sequence}
+                                    </Typography>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                    {!savedParameters.loading &&
+                      !savedParameters.error &&
+                      savedParameters.data?.lab_version === lab.version &&
+                      viewedClaims.length === 0 && (
+                        <Typography variant="body2" color="text.secondary">
+                          No detailed parameters have been recorded for this
+                          test. Edit the capability to add them.
+                        </Typography>
+                      )}
+                    {viewed.structured_limits.length > 0 && (
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
+                          General operating limits
+                        </Typography>
+                        <TableContainer>
+                          <Table
+                            size="small"
+                            aria-label="Declared operating limits"
+                          >
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Parameter</TableCell>
+                                <TableCell>Declared support</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {viewed.structured_limits.map((limit, index) => (
+                                <TableRow key={`${limit.parameter}-${index}`}>
+                                  <TableCell
+                                    sx={{ textTransform: "capitalize" }}
+                                  >
+                                    {limit.parameter.replaceAll("_", " ")}
+                                  </TableCell>
+                                  <TableCell>{limitText(limit)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </Box>
+                    )}
+                  </Stack>
+                </AccordionDetails>
+              </Accordion>
               <Box>
                 <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
                   Reference rate

@@ -17,6 +17,8 @@ import {
   FormControl,
   InputAdornment,
   InputLabel,
+  List,
+  ListItemButton,
   MenuItem,
   Paper,
   Select,
@@ -42,6 +44,7 @@ import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import { request, useResource } from "../api";
+import FactSummary from "../components/FactSummary";
 import type { PageProps } from "../types";
 import type {
   LibraryDetail,
@@ -237,6 +240,10 @@ export default function SpecificationLibrary({
   }, [families, query, company]);
 
   const current = detail.data?.document;
+  const selectedTest =
+    detail.data?.requirements.find(
+      (item) => item.requirement_id === selectedTestId,
+    ) || detail.data?.requirements[0];
   const selectedFamily =
     current?.family_id ||
     documents.find((document) => document.document_id === selectedId)
@@ -794,88 +801,232 @@ export default function SpecificationLibrary({
                   value="tests"
                   label={`Test items (${detail.data.requirements.length})`}
                 />
-                <Tab
-                  value="records"
-                  label={`Requirement records (${totalRecordCount})`}
-                />
+                <Tab value="records" label="Detailed records" />
               </Tabs>
               {detailTab === "tests" && (
-                <>
-                  <Box
-                    sx={{ px: { xs: 2, md: 3 }, py: 1.5, bgcolor: "#f8faff" }}
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "minmax(0, 1fr)",
+                      md: "270px minmax(0, 1fr)",
+                    },
+                  }}
+                >
+                  <List
+                    aria-label="Saved test items"
+                    disablePadding
+                    sx={{
+                      maxHeight: { xs: 240, md: 560 },
+                      overflowY: "auto",
+                      borderRight: { md: "1px solid" },
+                      borderBottom: { xs: "1px solid", md: 0 },
+                      borderColor: "divider",
+                    }}
                   >
-                    <Typography variant="body2" color="text.secondary">
-                      Select a test to open its saved requirement records.
-                    </Typography>
-                  </Box>
-                  <TableContainer>
-                    <Table size="small" aria-label="Saved test items">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ pl: { xs: 2, md: 3 } }}>
-                            Test item
-                          </TableCell>
-                          <TableCell>Requested method</TableCell>
-                          <TableCell align="right">
-                            Requirement records
-                          </TableCell>
-                          <TableCell>Source pages</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {detail.data.requirements.map((requirement) => (
-                          <TableRow
-                            key={requirement.requirement_id}
-                            selected={
-                              selectedTestId === requirement.requirement_id
-                            }
-                            sx={{ "&.Mui-selected": { bgcolor: "#edf3ff" } }}
+                    {detail.data.requirements.map((requirement) => (
+                      <ListItemButton
+                        key={requirement.requirement_id}
+                        aria-label={requirement.test_name}
+                        selected={
+                          selectedTest?.requirement_id ===
+                          requirement.requirement_id
+                        }
+                        aria-current={
+                          selectedTest?.requirement_id ===
+                          requirement.requirement_id
+                            ? "true"
+                            : undefined
+                        }
+                        onClick={() =>
+                          setSelectedTestId(requirement.requirement_id)
+                        }
+                        sx={{
+                          p: 2.5,
+                          display: "block",
+                          borderBottom: "1px solid",
+                          borderColor: "divider",
+                          borderLeft: "3px solid transparent",
+                          "&.Mui-selected": {
+                            bgcolor: "#edf3ff",
+                            borderLeftColor: "primary.main",
+                          },
+                        }}
+                      >
+                        <Typography variant="body2" fontWeight={600}>
+                          {requirement.test_name}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            display: "block",
+                            mt: 0.5,
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {requirement.methods.join(" · ") ||
+                            "Customer-defined procedure"}
+                        </Typography>
+                      </ListItemButton>
+                    ))}
+                  </List>
+                  {selectedTest && (
+                    <Box sx={{ p: { xs: 2, md: 3 }, minWidth: 0 }}>
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        justifyContent="space-between"
+                        spacing={1.5}
+                        sx={{ mb: 2.5 }}
+                      >
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography
+                            variant="h6"
+                            sx={{ overflowWrap: "anywhere" }}
                           >
-                            <TableCell sx={{ pl: { xs: 2, md: 3 } }}>
-                              <Button
-                                onClick={() => {
-                                  setSelectedTestId(requirement.requirement_id);
-                                  setDetailTab("records");
-                                }}
-                                sx={{
-                                  px: 0,
-                                  minWidth: 0,
-                                  textAlign: "left",
-                                  justifyContent: "flex-start",
-                                }}
-                              >
-                                {requirement.test_name}
-                              </Button>
-                            </TableCell>
-                            <TableCell
-                              sx={{ color: "text.secondary", maxWidth: 330 }}
-                            >
-                              {requirement.methods.join(" · ") ||
-                                "Customer-defined procedure"}
-                            </TableCell>
-                            <TableCell align="right">
-                              {requirement.claims.length}
-                            </TableCell>
-                            <TableCell sx={{ color: "text.secondary" }}>
-                              {[
-                                ...new Set(
-                                  requirement.claims
-                                    .map((claim) => claim.source_page)
-                                    .filter(Boolean),
+                            {selectedTest.test_name}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.5 }}
+                          >
+                            Saved customer requirements
+                          </Typography>
+                        </Box>
+                        <Button
+                          component={RouterLink}
+                          to={reviewUrl(
+                            current.document_id,
+                            selectedTest.requirement_id,
+                          )}
+                          startIcon={<OpenInNewRoundedIcon />}
+                          sx={{ alignSelf: "flex-start", flexShrink: 0 }}
+                        >
+                          View source PDF
+                        </Button>
+                      </Stack>
+                      <Stack
+                        spacing={2.5}
+                        divider={
+                          <Box
+                            sx={{
+                              borderBottom: "1px solid",
+                              borderColor: "divider",
+                            }}
+                          />
+                        }
+                      >
+                        <Box>
+                          <Typography
+                            variant="body2"
+                            fontWeight={600}
+                            sx={{ mb: 0.75 }}
+                          >
+                            Method
+                          </Typography>
+                          <Typography variant="body2">
+                            {selectedTest.methods.join(" · ") ||
+                              "Customer-defined procedure"}
+                          </Typography>
+                        </Box>
+                        {(
+                          [
+                            ["condition", "Conditions and scope"],
+                            ["criterion", "Criteria / reporting"],
+                          ] as const
+                        ).map(([kind, label]) => {
+                          const claims = selectedTest.claims.filter((claim) =>
+                            kind === "criterion"
+                              ? ["criterion", "reporting"].includes(
+                                  claim.kind || "",
+                                )
+                              : !["criterion", "reporting"].includes(
+                                  claim.kind || "",
                                 ),
-                              ]
-                                .sort((a, b) => Number(a) - Number(b))
-                                .join(", ") || "—"}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </>
+                          );
+                          const facts = claims
+                            .filter(
+                              (claim) =>
+                                !["unknown", "unparsed", "unresolved"].includes(
+                                  claim.status,
+                                ),
+                            )
+                            .map((claim) => ({
+                              label: claim.label,
+                              value: claim.display_value,
+                              context: claim.sequence
+                                ? `step ${claim.sequence}`
+                                : claim.stage &&
+                                    !["general", "measurement"].includes(
+                                      claim.stage,
+                                    )
+                                  ? stageLabel(claim.stage)
+                                  : undefined,
+                            }));
+                          return (
+                            <Box key={kind}>
+                              <Typography
+                                variant="body2"
+                                fontWeight={600}
+                                sx={{ mb: 0.75 }}
+                              >
+                                {label}
+                              </Typography>
+                              <FactSummary
+                                facts={facts}
+                                emptyLabel={
+                                  claims.length
+                                    ? "Additional wording is saved in the details."
+                                    : "Not recorded"
+                                }
+                                limit={3}
+                              />
+                            </Box>
+                          );
+                        })}
+                      </Stack>
+                      <Box
+                        sx={{
+                          mt: 3,
+                          pt: 2,
+                          borderTop: "1px solid",
+                          borderColor: "divider",
+                        }}
+                      >
+                        <Button
+                          variant="outlined"
+                          onClick={() => {
+                            setSelectedTestId(selectedTest.requirement_id);
+                            setDetailTab("records");
+                          }}
+                          endIcon={<ArrowForwardRoundedIcon />}
+                        >
+                          View detailed requirements
+                        </Button>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: "block", mt: 1 }}
+                        >
+                          Includes all saved parameters, stages and links to
+                          their source pages.
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
               )}
               {detailTab === "records" && (
                 <>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ px: { xs: 2, md: 3 }, pt: 2, display: "block" }}
+                  >
+                    {totalRecordCount} saved parameter records across this
+                    specification.
+                  </Typography>
                   <Box sx={{ px: { xs: 2, md: 3 }, py: 2 }}>
                     <Stack
                       direction={{ xs: "column", sm: "row" }}

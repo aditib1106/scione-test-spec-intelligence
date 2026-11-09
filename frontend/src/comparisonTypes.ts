@@ -31,6 +31,11 @@ export interface ComparisonRequirement {
   methods: string[];
   capability_id: string | null;
   source_review_state: string;
+  report_scope_exclusion?: {
+    note: string;
+    occurred_at: string;
+    actor?: string;
+  } | null;
   comparison: {
     status: ComparisonStatus;
     checks: ComparisonCheck[];
@@ -42,6 +47,11 @@ export interface ComparisonRequirement {
 
 export interface ComparisonData {
   comparison_id: string;
+  matching_run_id?: string | null;
+  comparison_engine?: "ai_semantic_matching" | "deterministic_rules";
+  source_run_id?: string;
+  report_input_fingerprint?: string;
+  report_workspace_version?: number;
   created_at: string;
   document: LibraryDocument;
   lab_name: string;

@@ -18,6 +18,7 @@ export interface LibraryDocument {
 
 export interface LibraryClaim {
   parameter_id: string | null;
+  kind?: string;
   label: string;
   display_value: string;
   unit: string | null;

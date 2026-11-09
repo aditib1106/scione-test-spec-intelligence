@@ -99,6 +99,9 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
   await dialog.getByLabel("Currency").fill("USD");
   await dialog.getByLabel("Pricing basis").fill("per panel");
   await dialog
+    .getByRole("button", { name: /Additional wording and notes/ })
+    .click();
+  await dialog
     .getByLabel("Measurements and additional capability details")
     .fill("Browser review saved note");
 
@@ -144,6 +147,9 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
     .click();
   const reopened = page.getByRole("dialog");
   await reopened
+    .getByRole("button", { name: /Additional wording and notes/ })
+    .click();
+  await reopened
     .getByLabel("Measurements and additional capability details")
     .fill("This edit should be cancelled");
   if (testInfo.project.name === "narrow")
@@ -166,6 +172,9 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
     .nth(pencilIndex)
     .click();
   const conflictDialog = page.getByRole("dialog");
+  await conflictDialog
+    .getByRole("button", { name: /Additional wording and notes/ })
+    .click();
   await conflictDialog
     .getByLabel("Measurements and additional capability details")
     .fill("Retain this unsaved conflict draft");
@@ -555,12 +564,16 @@ test("a late draft response cannot open a different document's report", async ({
 test("worked example saves atomic requirements and exports the same honest gap assessment", async ({
   page,
   request,
-}) => {
+}, testInfo) => {
   await resetEmptyWorkspace(request);
   await page.goto(`${emptyBase}/my-lab`);
   await chooseMuiOption(page, "Example", "CSP-EN-301 · four tests");
   await page.getByRole("button", { name: "Load example lab" }).click();
-  await expect(page.getByText("Specular gloss", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("table", { name: "Lab capabilities" })
+      .getByText("ASTM D1627-16", { exact: true }),
+  ).toBeVisible();
 
   await navigateTo(page, "Specifications");
   await page
@@ -602,6 +615,14 @@ test("worked example saves atomic requirements and exports the same honest gap a
   ).toBeTruthy();
 
   await page.getByRole("button", { name: /Specular gloss/ }).click();
+  await page.screenshot({
+    path: testInfo.outputPath("worked-library-summary.png"),
+    animations: "disabled",
+    fullPage: true,
+  });
+  await page
+    .getByRole("button", { name: "View detailed requirements" })
+    .click();
   await expect(
     page.getByRole("table", { name: "Saved requirement records" }),
   ).toBeVisible();
@@ -642,6 +663,12 @@ test("worked example saves atomic requirements and exports the same honest gap a
   await page
     .getByRole("button", { name: "Specular gloss", exact: true })
     .click();
+  await page.screenshot({
+    path: testInfo.outputPath("worked-report-summary.png"),
+    animations: "disabled",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: /View detailed comparison/ }).click();
   const gap = page.getByText("Capability gap", { exact: true });
   await gap.scrollIntoViewIfNeeded();
   await expect(gap).toBeVisible();
