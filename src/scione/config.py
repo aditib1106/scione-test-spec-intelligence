@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     """Load local configuration without exposing secret values in logs or run files."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", ".env.database"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     gemini_thinking_level: Literal["low", "medium", "high"] = "low"
     scione_single_attempt_mode: bool = True
     scione_workspace_dir: Path = Path("local_data")
+    # Optional cloud/local MySQL URL. None uses an embedded SQL database inside
+    # the workspace, so read-only/clone workflows require no database daemon.
+    scione_database_url: SecretStr | None = None
     scione_customer_input_character_limit: int = Field(default=60_000, gt=0)
     scione_customer_gemini_output_tokens: int = Field(default=16_000, gt=0)
 

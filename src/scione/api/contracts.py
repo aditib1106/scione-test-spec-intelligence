@@ -11,6 +11,16 @@ class WriteModel(BaseModel):
 
 class LabExample(WriteModel):
     version: int = Field(ge=1)
+    example: Literal["legacy", "csp301"] = "legacy"
+
+
+class LibraryMetadata(WriteModel):
+    company_name: str | None = Field(default=None, max_length=300)
+    specification_id: str | None = Field(default=None, max_length=300)
+    title: str | None = Field(default=None, max_length=500)
+    revision: str | None = Field(default=None, max_length=300)
+    family_id: str | None = Field(default=None, max_length=32)
+    expected_version: int = Field(default=0, ge=0)
 
 
 class SourceReview(WriteModel):

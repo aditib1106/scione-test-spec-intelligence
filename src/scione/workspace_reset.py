@@ -10,7 +10,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-_TARGETS = {"lab.json": "file", "specifications": "directory", "reports": "directory"}
+_TARGETS = {
+    "lab.json": "file",
+    "specifications": "directory",
+    "reports": "directory",
+    "library.sqlite3": "file",
+    "library.sqlite3-wal": "file",
+    "library.sqlite3-shm": "file",
+    "library.sqlite3-journal": "file",
+}
 _PROTECTED_PARTS = {".git", ".venv", ".aws", ".codex", ".agents", "src", "docs", "tests"}
 
 
@@ -99,7 +107,7 @@ def reset_demo_workspace(
     workspace_dir: str | Path,
     backup_root: str | Path | None = None,
 ) -> DemoResetResult:
-    """Move only lab.json, specifications/, and reports/ into a private backup.
+    """Move demo artifacts and the closed embedded archive into a private backup.
 
     The caller must finish active demo operations before resetting and clear its
     own in-memory UI state afterward. Existing store locks are honored. Every
@@ -137,7 +145,9 @@ def reset_demo_workspace(
     try:
         lock_targets = [(root / ".demo-reset.lock", None), (root / ".lab.lock", None)]
         lock_targets.extend(
-            (path / ".write.lock", path) for path, _ in selected if path.name != "lab.json"
+            (path / ".write.lock", path)
+            for path, _ in selected
+            if _TARGETS[path.name] == "directory"
         )
         for lock, owner in lock_targets:
             descriptor = os.open(

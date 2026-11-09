@@ -75,6 +75,7 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
     page.getByText("Start with your lab’s capabilities"),
   ).toBeVisible();
 
+  await chooseMuiOption(page, "Example", "MS-PNT-410 · pilot lab");
   await page.getByRole("button", { name: "Load example lab" }).click();
   await expect(
     page.getByText("Pencil hardness", { exact: true }),
@@ -97,7 +98,9 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
   await dialog.getByLabel("Price").fill("101.25");
   await dialog.getByLabel("Currency").fill("USD");
   await dialog.getByLabel("Pricing basis").fill("per panel");
-  await dialog.getByLabel("Internal notes").fill("Browser review saved note");
+  await dialog
+    .getByLabel("Measurements and additional capability details")
+    .fill("Browser review saved note");
 
   if (testInfo.project.name === "narrow") {
     await expect(dialog.getByRole("button", { name: "Cancel" })).toBeVisible();
@@ -141,7 +144,7 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
     .click();
   const reopened = page.getByRole("dialog");
   await reopened
-    .getByLabel("Internal notes")
+    .getByLabel("Measurements and additional capability details")
     .fill("This edit should be cancelled");
   if (testInfo.project.name === "narrow")
     await expect(
@@ -164,7 +167,7 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
     .click();
   const conflictDialog = page.getByRole("dialog");
   await conflictDialog
-    .getByLabel("Internal notes")
+    .getByLabel("Measurements and additional capability details")
     .fill("Retain this unsaved conflict draft");
   const otherSessionLab = await readJson<Record<string, unknown>>(
     request,
@@ -179,9 +182,9 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
   expect(concurrent.ok()).toBeTruthy();
   await conflictDialog.getByRole("button", { name: "Save capability" }).click();
   await expect(conflictDialog.getByRole("alert")).toContainText("changed");
-  await expect(conflictDialog.getByLabel("Internal notes")).toHaveValue(
-    "Retain this unsaved conflict draft",
-  );
+  await expect(
+    conflictDialog.getByLabel("Measurements and additional capability details"),
+  ).toHaveValue("Retain this unsaved conflict draft");
   await conflictDialog
     .getByRole("button", { name: "Discard draft & reload" })
     .click();
@@ -202,21 +205,37 @@ test("catalog search, mobile navigation, and demo PDF import do not analyze", as
 }, testInfo) => {
   await resetEmptyWorkspace(request);
   await page.goto(`${emptyBase}/catalog`);
-  const search = page.getByPlaceholder("Search tests, aliases, methods");
+  const search = page.getByPlaceholder("Search tests, aliases or method codes");
   await search.fill("ISO 15184");
   await expect(
-    page.getByRole("button", { name: /^Pencil hardness Pilot/ }),
+    page.getByRole("button", { name: "Pencil hardness", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /^Pencil hardness Pilot/ }).click();
+  await page
+    .getByRole("button", { name: "Pencil hardness", exact: true })
+    .click();
+  const catalogDetails = page.getByRole("dialog");
   await expect(
-    page.getByText("ISO 15184", { exact: false }).first(),
+    catalogDetails.getByRole("heading", {
+      name: "Pencil hardness",
+      exact: true,
+    }),
   ).toBeVisible();
+  await expect(
+    catalogDetails.getByText("ISO 15184", { exact: true }).first(),
+  ).toBeVisible();
+  await catalogDetails
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
   await search.fill("铅笔硬度");
   await expect(
-    page.getByRole("button", { name: /^Pencil hardness Pilot/ }),
+    page.getByRole("button", { name: "Pencil hardness", exact: true }),
   ).toBeVisible();
 
   await navigateTo(page, "Specifications");
+  await expect(
+    page.getByRole("heading", { name: "Specification library" }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "PDF & review", exact: true }).click();
   await page.getByRole("button", { name: "Import demo specification" }).click();
   await expect(page.getByText("No extraction yet")).toBeVisible();
   if (testInfo.project.name === "narrow") {
@@ -277,6 +296,13 @@ test("seeded source review, lab support, catalog gap, and immutable report histo
       .toBe("confirmed");
   }
   await page.getByRole("button", { name: "Continue to lab review" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Gap report", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("table", { name: "Test capability comparison" }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Advanced review", exact: true }).click();
   await expect(
     page.getByRole("tab", { name: "Review & confirm" }),
   ).toBeVisible();
@@ -508,7 +534,9 @@ test("a late draft response cannot open a different document's report", async ({
       delivered();
     },
   );
-  await page.goto(`${seededBase}/reports?document=${first.document_id}`);
+  await page.goto(
+    `${seededBase}/reports/advanced?document=${first.document_id}`,
+  );
   await page.getByRole("tab", { name: "Report", exact: true }).click();
   await page.getByRole("button", { name: "Create draft report" }).click();
   await responseReady;
@@ -522,4 +550,115 @@ test("a late draft response cannot open a different document's report", async ({
   await expect(
     page.getByRole("link", { name: "Download PDF" }),
   ).toHaveAttribute("href", new RegExp(secondSnapshot.report_id));
+});
+
+test("worked example saves atomic requirements and exports the same honest gap assessment", async ({
+  page,
+  request,
+}) => {
+  await resetEmptyWorkspace(request);
+  await page.goto(`${emptyBase}/my-lab`);
+  await chooseMuiOption(page, "Example", "CSP-EN-301 · four tests");
+  await page.getByRole("button", { name: "Load example lab" }).click();
+  await expect(page.getByText("Specular gloss", { exact: true })).toBeVisible();
+
+  await navigateTo(page, "Specifications");
+  await page
+    .getByRole("button", { name: "Try worked example", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "Manually prepared example requirements. Analyze the PDF to evaluate a model.",
+    ),
+  ).toBeVisible();
+  const archive = await readJson<{
+    documents: {
+      document_id: string;
+      provider: string;
+      requirement_count: number;
+    }[];
+  }>(request, `${emptyBase}/api/library`);
+  const document = archive.documents.find(
+    (item) => item.provider === "manual_reference",
+  );
+  expect(document).toBeTruthy();
+  expect(document!.requirement_count).toBe(4);
+  const saved = await readJson<{
+    requirements: {
+      claims: { parameter_id: string | null; source_page: number | null }[];
+    }[];
+  }>(request, `${emptyBase}/api/library/${document!.document_id}`);
+  expect(saved.requirements).toHaveLength(4);
+  expect(
+    saved.requirements.every((item) => item.claims.length > 1),
+  ).toBeTruthy();
+  expect(
+    saved.requirements.some((item) =>
+      item.claims.some(
+        (claim) =>
+          claim.parameter_id === "temperature" && claim.source_page !== null,
+      ),
+    ),
+  ).toBeTruthy();
+
+  await page.getByRole("button", { name: /Specular gloss/ }).click();
+  await expect(
+    page.getByRole("table", { name: "Saved requirement records" }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByText("Manually prepared example requirements.", { exact: false }),
+  ).toBeVisible();
+
+  await navigateTo(page, "Reports");
+  await expect(
+    page.getByRole("table", { name: "Test capability comparison" }),
+  ).toBeVisible();
+  const comparison = await readJson<{
+    comparison_id: string;
+    requirements: {
+      test_name: string;
+      comparison: { checks: { parameter_id: string | null; status: string }[] };
+    }[];
+  }>(request, `${emptyBase}/api/comparisons/${document!.document_id}`);
+  const gloss = comparison.requirements.find(
+    (item) => item.test_name === "Specular gloss",
+  )!;
+  expect(
+    gloss.comparison.checks.some(
+      (check) =>
+        check.parameter_id === "gloss_retention" && check.status === "gap",
+    ),
+  ).toBeTruthy();
+  const colour = comparison.requirements.find(
+    (item) => item.test_name === "Colour difference",
+  )!;
+  expect(
+    colour.comparison.checks.some(
+      (check) =>
+        check.parameter_id === "illuminant" && check.status === "unknown",
+    ),
+  ).toBeTruthy();
+  await page
+    .getByRole("button", { name: "Specular gloss", exact: true })
+    .click();
+  const gap = page.getByText("Capability gap", { exact: true });
+  await gap.scrollIntoViewIfNeeded();
+  await expect(gap).toBeVisible();
+  await page.getByRole("tab", { name: "PDF & download", exact: true }).click();
+  await expect(
+    page.getByRole("img", { name: "Gap report page 1" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Download PDF", exact: true }),
+  ).toHaveAttribute("href", new RegExp(comparison.comparison_id));
+  const exported = await readJson<{
+    comparison_id: string;
+    requirements: unknown[];
+  }>(
+    request,
+    `${emptyBase}/api/comparison-snapshots/${comparison.comparison_id}/json`,
+  );
+  expect(exported.comparison_id).toBe(comparison.comparison_id);
+  expect(exported.requirements).toHaveLength(4);
 });

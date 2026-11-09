@@ -108,6 +108,7 @@ test("shared PDF walkthrough keeps source review, declarations and gap results s
     page.getByRole("button", { name: "Continue to lab review" }),
   ).toBeEnabled();
   await page.getByRole("button", { name: "Continue to lab review" }).click();
+  await page.getByRole("tab", { name: "Advanced review", exact: true }).click();
   await expect(
     page.getByRole("tab", { name: "Review & confirm" }),
   ).toBeVisible();
