@@ -7,7 +7,7 @@ catalog identities, lab capabilities, or inferred requirements from standards.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -112,14 +112,25 @@ class CompactAtomicClaim(CustomerModel):
     raw_text: RequirementText
     source_pages: list[int] = Field(min_length=1)
     sequence: int | None = Field(default=None, ge=1)
+    source_context: RequirementText | None = None
+    configuration: ShortText | None = None
 
     @model_validator(mode="after")
     def numeric_shape(self) -> Self:
         count = len(self.values)
-        expected = {"range": (2,), "=": (1, 2), "<=": (1,), ">=": (1,), "<": (1,), ">": (1,)}
+        expected = {
+            "range": (2,),
+            "=": (1, 2),
+            "<=": (1,),
+            ">=": (1,),
+            "<": (1,),
+            ">": (1,),
+            "text": (0,),
+            "required": (0,),
+        }
         if self.operator in expected and count not in expected[self.operator]:
             raise ValueError("Atomic numeric values do not match the operator.")
-        if self.operator == "one_of" and not count:
+        if self.operator == "one_of" and not count and not self.text_value:
             raise ValueError("Discrete values must not be empty.")
         if any(page < 1 for page in self.source_pages):
             raise ValueError("Source pages must be positive.")
@@ -129,6 +140,7 @@ class CompactAtomicClaim(CustomerModel):
         from decimal import Decimal
 
         values = [Decimal(str(value)) for value in self.values]
+        textual_alternatives = self.operator == "one_of" and not values
         fields = {}
         if self.operator == "range":
             fields = {"minimum": values[0], "maximum": values[1]}
@@ -140,17 +152,21 @@ class CompactAtomicClaim(CustomerModel):
                 fields["tolerance"] = values[1]
         return AtomicClaim(
             id=identifier,
-            parameter_id=self.parameter_id,
+            parameter_id=None if textual_alternatives else self.parameter_id,
             label=(self.parameter_id or "Unstructured requirement").replace("_", " ").title(),
             kind=self.kind,
             stage=self.stage,
-            operator=self.operator,
+            operator="text" if textual_alternatives else self.operator,
             unit=self.unit,
             text_value=self.text_value,
             raw_text=self.raw_text,
             source_pages=self.source_pages,
             sequence=self.sequence,
-            normalization_state="parsed" if self.parameter_id else "unresolved",
+            source_context=self.source_context,
+            configuration=self.configuration,
+            normalization_state="parsed"
+            if self.parameter_id and not textual_alternatives
+            else "unresolved",
             **fields,
         )
 
@@ -193,6 +209,7 @@ class CustomerExtractionCall(CustomerModel):
     usage: TokenUsage
     raw_response: Annotated[str, StringConstraints(strip_whitespace=False)]
     provider_request_id: ShortText | None = None
+    generation_settings: dict[str, Any] = Field(default_factory=dict)
 
 
 class CustomerExtractionRun(CustomerModel):
@@ -215,4 +232,5 @@ class CustomerExtractionRun(CustomerModel):
     )
     calls: list[CustomerExtractionCall] = Field(default_factory=list)
     provider_request_id: ShortText | None = None
+    generation_settings: dict[str, Any] = Field(default_factory=dict)
     extraction: CustomerExtraction

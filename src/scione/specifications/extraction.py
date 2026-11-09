@@ -25,6 +25,11 @@ from scione.providers import (
     TokenUsage,
 )
 from scione.schemas import IngestedDocument, TextExtractionStatus
+from scione.specifications.attempts import (
+    ExtractionAttemptCall,
+    ExtractionFailureArtifact,
+    GenerationFailure,
+)
 from scione.specifications.models import (
     CompactCustomerExtraction,
     CustomerExtraction,
@@ -35,6 +40,7 @@ from scione.specifications.models import (
     RequirementEvidence,
     RequirementValue,
 )
+from scione.specifications.output_schema import constrain_compact_extraction_schema
 
 DEFAULT_CUSTOMER_INPUT_CHARACTER_LIMIT = 60_000
 ExtractionStrategy = Literal["whole_document", "focused_passes", "compact_document"]
@@ -152,9 +158,16 @@ class CustomerExtractionError(RuntimeError):
     it is never embedded in the user-facing error or accepted as a partial result.
     """
 
-    def __init__(self, message: str, *, raw_response: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        raw_response: str | None = None,
+        artifact: ExtractionFailureArtifact | None = None,
+    ) -> None:
         super().__init__(message)
         self.raw_response = raw_response
+        self.artifact = artifact
 
 
 def validate_customer_sources(
@@ -223,6 +236,11 @@ def _expand_compact_extraction(compact: CompactCustomerExtraction) -> CustomerEx
         )
         if row.uncertainty is not None:
             issues.append(f"{identifier}: {row.uncertainty}")
+        if any(claim.operator == "one_of" and not claim.values for claim in row.atomic_claims):
+            issues.append(
+                f"{identifier}: a model-proposed alternative set has text but no typed values; "
+                "the source wording is retained as unresolved rather than inferred."
+            )
     return CustomerExtraction(
         schema_version="0.1",
         document=compact.document,
@@ -269,6 +287,9 @@ class CustomerRequirementRunner:
         plan = build_plan(document, strategy)
         compact = strategy == "compact_document"
         response_model = CompactCustomerExtraction if compact else CustomerExtraction
+        wire_schema = _structured_customer_schema(response_model.model_json_schema())
+        if compact:
+            wire_schema = constrain_compact_extraction_schema(wire_schema)
         requests = [
             StructuredGenerationRequest(
                 system_prompt=(
@@ -284,7 +305,7 @@ class CustomerRequirementRunner:
                     if compact
                     else "customer_requirements_v0_1"
                 ),
-                json_schema=_structured_customer_schema(response_model.model_json_schema()),
+                json_schema=wire_schema,
             )
             for pages in plan
         ]
@@ -307,6 +328,31 @@ class CustomerRequirementRunner:
         started_at = datetime.now(UTC)
         extractions: list[CustomerExtraction] = []
         calls: list[CustomerExtractionCall] = []
+        attempt_calls: list[ExtractionAttemptCall] = []
+
+        def failure(code: str, message: str, raw_response: str | None = None):
+            return CustomerExtractionError(
+                message,
+                raw_response=raw_response,
+                artifact=ExtractionFailureArtifact(
+                    attempt_id=str(uuid4()),
+                    document_id=document.document_id,
+                    started_at=started_at,
+                    finished_at=datetime.now(UTC),
+                    requested_provider=self.provider.provider_name,
+                    requested_model=self.provider.model_name,
+                    generation_settings=self.provider.generation_settings,
+                    strategy=strategy,
+                    prompt_version=(
+                        CUSTOMER_REQUIREMENTS_COMPACT_PROMPT_VERSION
+                        if compact else CUSTOMER_REQUIREMENTS_PROMPT_VERSION
+                    ),
+                    error_code=code,
+                    error_message=message,
+                    calls=attempt_calls,
+                ),
+            )
+
         for index, (request, pages) in enumerate(zip(requests, plan, strict=True), start=1):
             progress = (
                 f"Pass {index}/{len(plan)} failed after {len(calls)} completed passes. "
@@ -317,8 +363,24 @@ class CustomerRequirementRunner:
             try:
                 response = self.provider.generate_structured(request)
             except ProviderError as exc:
-                raise CustomerExtractionError(f"{progress}Provider failed: {exc}") from exc
+                attempt_calls.append(
+                    ExtractionAttemptCall(
+                        call_index=index,
+                        focus_pages=list(pages),
+                        request=request,
+                        failure=GenerationFailure.from_provider_error(exc),
+                    )
+                )
+                raise failure("provider_error", f"{progress}Provider failed: {exc}") from exc
 
+            attempt_calls.append(
+                ExtractionAttemptCall(
+                    call_index=index,
+                    focus_pages=list(pages),
+                    request=request,
+                    response=response,
+                )
+            )
             try:
                 partial = (
                     _expand_compact_extraction(
@@ -328,7 +390,8 @@ class CustomerRequirementRunner:
                     else CustomerExtraction.model_validate(response.parsed)
                 )
             except ValidationError as exc:
-                raise CustomerExtractionError(
+                raise failure(
+                    "invalid_output_schema",
                     f"{progress}Provider output did not conform to {response_model.__name__} v0.1 "
                     f"({exc.error_count()} validation errors). No partial rows were accepted; "
                     "inspect the raw response and retry explicitly if appropriate.",
@@ -345,6 +408,9 @@ class CustomerRequirementRunner:
                     usage=response.usage,
                     raw_response=response.raw_text,
                     provider_request_id=response.provider_request_id,
+                    generation_settings=(
+                        response.generation_settings or self.provider.generation_settings
+                    ),
                 )
             )
 
@@ -353,7 +419,8 @@ class CustomerRequirementRunner:
         )
 
         if not extraction.requirements:
-            raise CustomerExtractionError(
+            raise failure(
+                "empty_extraction",
                 "No customer test requirements were extracted. This is not a completed "
                 "analysis; review the source and model response before trying again.",
                 raw_response=calls[-1].raw_response,
@@ -376,6 +443,7 @@ class CustomerRequirementRunner:
             schema_version=extraction.schema_version,
             provider=calls[0].provider,
             model=calls[0].model,
+            generation_settings=calls[0].generation_settings,
             latency_ms=sum(call.latency_ms for call in calls),
             usage=self._sum_usage(calls),
             raw_response=(

@@ -13,6 +13,13 @@ import unicodedata
 from decimal import Decimal
 
 from scione.catalogs.models import LabCapability
+from scione.parameters.registry import normalize_stage, resolve_definition
+from scione.parameters.units import (
+    canonical_unit_name,
+    resolve_unit,
+    source_numbers_for_unit,
+    unit_is_stated,
+)
 from scione.specifications.models import CustomerRequirement
 from scione.structured.models import AtomicClaim, ClaimKind, NormalizedRequirement
 
@@ -86,7 +93,7 @@ def _stage(text: str, kind: str) -> str:
     text = text.casefold()
     if re.search(r"room.temperature recovery|recovery.*between transfer", text):
         return "cycle_recovery"
-    if re.search(r"after cycling|post[- ]cycle|after (?:the )?(?:thermal )?cycl", text):
+    if re.search(r"after cycling|post[- ]cycle|after[- ](?:the )?(?:thermal )?cycl", text):
         return "after_cycle"
     if re.search(r"conditioning|condition for|allow.*days|rh.*days|days.*rh", text):
         return "conditioning"
@@ -94,7 +101,9 @@ def _stage(text: str, kind: str) -> str:
         return "initial"
     if re.search(r"cure|curing|metal temperature|oven setting", text):
         return "curing"
-    if "measurement temperature" in text:
+    if "measurement temperature" in text or re.search(
+        r"\bmeasurement\s+(?:stage|setup|acceptance|criteri(?:on|a))\b", text
+    ):
         return "measurement"
     if kind == "condition" and re.search(r"cycl|between transfers", text):
         return "thermal_cycle"
@@ -148,6 +157,26 @@ def _availability(text: str) -> str:
     return "supported"
 
 
+def _explicit_operator(match, text: str) -> str | None:
+    if match["op"]:
+        return {"≤": "<=", "≥": ">="}.get(match["op"], match["op"])
+    if match["second"]:
+        return "range"
+    if match["pm"]:
+        return "="
+    prefix = text[max(0, match.start() - 60) : match.start()]
+    if re.search(r"(?:at least|no less than|not less than)\s*$", prefix, re.I):
+        return ">="
+    if re.search(
+        r"(?:at most|no more than|not more than|may not exceed|must not exceed|"
+        r"shall not exceed|up to)\s*$",
+        prefix,
+        re.I,
+    ):
+        return "<="
+    return None
+
+
 def _unparsed_qualification(
     text: str, spans: list[tuple[int, int]], results: list[AtomicClaim]
 ) -> str:
@@ -169,10 +198,10 @@ def _unparsed_qualification(
         "cycles": r"thermal|temperature|cycling|cycles?|before|after|between\s+transfers",
         "gloss": r"specular|gloss",
         "gloss_retention": r"gloss|retention|retain|retained|its|own|original|value",
-        "measurement_angle": r"measurement|angle",
+        "measurement_angle": r"measurement|observation|angle",
         "measurement_locations": r"measurement|marked|locations?|positions?",
         "adhesion_class": r"adhesion|native|iso|class(?:es)?|only|acceptable",
-        "color_difference": r"colou?r\s+difference",
+        "color_difference": r"colou?r\s+difference|δ\s*e\*?\s*ab",
         "film_thickness": r"dry[- ]film|film|thickness|build",
         "topcoat_thickness": r"separate|topcoat|thickness",
         "illuminant": r"lighting|illuminant",
@@ -181,7 +210,25 @@ def _unparsed_qualification(
         "test_checkpoints": r"repeat|check|both|before|after|cycles?",
     }
     removable = [labels[item] for item in parameters if item in labels]
+    for parameter in parameters:
+        definition = resolve_definition(parameter)
+        if definition:
+            removable.extend(re.escape(alias) for alias in definition.aliases)
     stages = {item.stage for item in results}
+    if stages - {"general"}:
+        removable.append(r"stages?|setup")
+    if results:
+        # These are labels for a role/stage already expressed by the facts,
+        # not additional specimen requirements. Keep words after the label.
+        removable.append(r"(?:acceptance\s+)?criteri(?:on|a)")
+        for stage, words in {
+            "measurement": r"measurement",
+            "conditioning": r"conditioning|(?:预处理|调节)(?:阶段)?",
+            "curing": r"curing|cure",
+            "after_cycle": r"after[- ]cycle|post[- ]cycle",
+        }.items():
+            if stage in stages:
+                removable.append(rf"(?:{words})(?:\s+(?:stage|setup))?")
     if "conditioning" in stages:
         removable.append(r"conditioning|condition|allow|before|initial|readings?")
     if "initial" in stages:
@@ -201,12 +248,22 @@ def _unparsed_qualification(
         # "Between" connects the already represented ordered temperatures;
         # it is not a separate requirement. Other qualifiers remain visible.
         removable.append(r"between")
+    if cycle_steps:
+        # Step identifiers are syntax only when those exact step numbers are
+        # already represented. An unseen step number remains an unresolved fact.
+        numbers = "|".join(str(step) for step in sorted(cycle_steps))
+        removable.extend(
+            [rf"step\s+(?:{numbers})(?!\d)", r"execute|these|thermal[- ]cycle|stages?|order"]
+        )
     if "curing" in stages:
         removable.append(r"curing|cure")
     if any(item.operator == ">=" for item in results):
-        removable.append(r"at\s+least")
+        removable.append(r"at\s+least|no\s+less\s+than|not\s+less\s+than")
     if any(item.operator == "<=" for item in results):
-        removable.append(r"at\s+most")
+        removable.append(
+            r"at\s+most|no\s+more\s+than|not\s+more\s+than|may\s+not\s+exceed|"
+            r"must\s+not\s+exceed|shall\s+not\s+exceed|up\s+to"
+        )
     # Negation, exclusions and unbounded-language qualifiers are intentionally
     # absent: 'except nitrogen' or 'up to' must not turn into an exact value.
     removable.append(
@@ -339,8 +396,8 @@ def _atoms(
                 minimum=Decimal(match["first"]) * factor,
                 maximum=Decimal(match["second"]) * factor,
             )
-        elif match["op"]:
-            fields["operator"] = {"≥": ">=", "≤": "<="}.get(match["op"], match["op"])
+        elif explicit_operator := _explicit_operator(match, text):
+            fields["operator"] = explicit_operator
         if (
             parameter == "gloss_retention"
             and fields["operator"] == "="
@@ -360,11 +417,14 @@ def _atoms(
     # Dimensionless outputs need their named scale, not a generic numeric field.
     if re.search(r"adhesion class|\bclass(?:es)?\s*[: ]*[0-9]", text, re.I):
         match = re.search(
-            rf"class(?:es)?\s*:?\s*({_NUMBER})\s*(?:(-|to|or)\s*({_NUMBER}))?", text, re.I
+            rf"class(?:es)?\s*:?\s*(<=|>=|≤|≥|<|>)?\s*({_NUMBER})"
+            rf"\s*(?:(-|to|or)\s*({_NUMBER}))?",
+            text,
+            re.I,
         )
         if match:
             consume(match)
-            first, relation, second = match.groups()
+            operator, first, relation, second = match.groups()
             if relation == "or":
                 add("adhesion_class", operator="one_of", values=[Decimal(first), Decimal(second)])
             elif second is not None:
@@ -375,7 +435,11 @@ def _atoms(
                     maximum=Decimal(second),
                 )
             else:
-                add("adhesion_class", operator="=", value=Decimal(first))
+                add(
+                    "adhesion_class",
+                    operator={"≤": "<=", "≥": ">="}.get(operator, operator) or "=",
+                    value=Decimal(first),
+                )
     if re.search(
         r"Δ\s*E|delta\s*e|colour difference|color difference|色差", text + " " + name, re.I
     ):
@@ -449,6 +513,238 @@ def _clauses(raw: str) -> list[str]:
     return [part.strip() for part in re.split(pattern, raw, flags=re.I) if part.strip()]
 
 
+def _numeric_values(claim: AtomicClaim) -> set[Decimal]:
+    return {
+        value
+        for value in [claim.value, claim.minimum, claim.maximum, claim.tolerance, *claim.values]
+        if value is not None
+    }
+
+
+def _operator_grounded(claim: AtomicClaim) -> bool:
+    """Reject a typed operator contradicting an explicit source quantity.
+
+    Text/numeric presence alone does not prove that >= and <= mean the same
+    thing. This check only uses unambiguous source expressions; unfamiliar
+    wording is still retained for semantic review rather than rewritten here.
+    """
+    if claim.operator in {"text", "required"}:
+        return True
+    text = _text(claim.raw_text)
+    expected: set[str] = set()
+    numeric = _numeric_values(claim)
+    for match in _QUANTITY.finditer(text):
+        _, unit, _ = _parameter(match["unit"], text, claim.label)
+        if unit != claim.unit:
+            continue
+        source_values = {
+            Decimal(value)
+            for value in [match["first"], match["second"], match["tolerance"]]
+            if value is not None
+        }
+        if not numeric <= source_values:
+            continue
+        if operator := _explicit_operator(match, text):
+            expected.add(operator)
+    # The named, dimensionless colour scale has no physical-unit suffix.
+    if claim.parameter_id == "color_difference":
+        for match in re.finditer(
+            rf"(?:Δ\s*E\*?ab|Δ\s*E|delta\s*e|colou?r difference)\s*:?\s*"
+            rf"(?P<op><=|>=|≤|≥|<|>)\s*(?P<value>{_NUMBER})",
+            text,
+            re.I,
+        ):
+            if numeric <= {Decimal(match["value"])}:
+                expected.add({"≤": "<=", "≥": ">="}.get(match["op"], match["op"]))
+    return not expected or claim.operator in expected
+
+
+def _contextualize(claim: AtomicClaim, context: str | None) -> AtomicClaim:
+    """Carry field context without inventing or modifying a source quotation."""
+    if not context:
+        return claim
+    hint = _stage(context, claim.kind)
+    if _text(context).casefold() in {
+        "general",
+        "measurement",
+        "conditioning",
+        "curing",
+        "initial",
+        "after_cycle",
+        "thermal_cycle",
+        "cycle_recovery",
+    }:
+        hint = _text(context).casefold()
+    if re.fullmatch(r"cure", _text(context), re.I):
+        hint = "curing"
+    updates = {"source_context": context}
+    if hint != "general":
+        if claim.stage == "general":
+            updates["stage"] = hint
+        elif claim.stage != hint:
+            # An explicit source stage and its enclosing field disagree.
+            # Preserve both for review rather than choosing a convenient one.
+            updates.update(normalization_state="unresolved", availability="unknown")
+    return claim.model_copy(update=updates)
+
+
+def _numeric_identity(claim: AtomicClaim) -> tuple:
+    return (
+        claim.parameter_id,
+        claim.kind,
+        claim.operator,
+        claim.value,
+        claim.minimum,
+        claim.maximum,
+        claim.tolerance,
+        tuple(claim.values),
+        canonical_unit_name(claim.unit),
+        claim.text_value,
+        claim.availability,
+    )
+
+
+def _same_text_value(first: AtomicClaim, second: AtomicClaim) -> bool:
+    if first.text_value == second.text_value:
+        return True
+    if first.parameter_id not in _MEASUREMENT_SETUP:
+        # An unfamiliar code or category is not known to be case insensitive.
+        return False
+    return _text(first.text_value or "").casefold().rstrip(".;:") == _text(
+        second.text_value or ""
+    ).casefold().rstrip(".;:")
+
+
+def _quoted_sequence(raw_text: str, clause: str) -> int | None:
+    """Locate a unique short quotation within its explicit source step.
+
+    A duration fragment need not repeat its parent's "step 2" words. It may
+    inherit only the nearest preceding explicit step in this same source
+    clause, with no other step boundary inside the fragment. Repeated quotes
+    are ambiguous without offsets and deliberately remain unassociated.
+    """
+    quote, source = _text(raw_text).casefold(), _text(clause).casefold()
+    matches = list(re.finditer(re.escape(quote), source))
+    if len(matches) != 1:
+        return None
+    start, end = matches[0].span()
+    preceding = []
+    for match in re.finditer(r"\bstep\s*(\d+)\b", source):
+        if start < match.start() < end:
+            return None
+        if match.start() <= start:
+            preceding.append(int(match[1]))
+    return preceding[-1] if preceding else None
+
+
+def _local_source_texts(
+    claim: AtomicClaim,
+    clause: str,
+    requirement: CustomerRequirement,
+    context: str | None,
+    enclosing_raw: str | None = None,
+) -> list[str]:
+    """Inspect only the local quotation line, not another test stage on the page."""
+    needle = _text(claim.raw_text).casefold()
+    result = [clause, context or "", enclosing_raw or ""]
+    for evidence in requirement.evidence:
+        if evidence.page not in claim.source_pages:
+            continue
+        for line in evidence.quote.splitlines():
+            if needle in _text(line).casefold():
+                result.append(line)
+    return result
+
+
+def _represented_numeric_fallback(
+    fallback: AtomicClaim,
+    supplied: AtomicClaim,
+    *,
+    clause: str,
+    context: str | None,
+    requirement: CustomerRequirement,
+    occurrences: int,
+    enclosing_raw: str | None = None,
+) -> bool:
+    """A grounded specific atom may replace only a weaker copy of that fact.
+
+    A missing parser stage/step is not contrary evidence. Added specificity
+    nevertheless needs local source support; a plausible model label, another
+    stage elsewhere on the page, or a quarantined atom cannot hide a fallback.
+    Raw unparsed qualifications are handled separately and remain visible.
+    """
+    if (
+        fallback.normalization_state == "unresolved"
+        or supplied.normalization_state == "unresolved"
+        or not fallback.parameter_id
+        or not _numeric_values(fallback)
+        or _numeric_identity(supplied) != _numeric_identity(fallback)
+        or supplied.configuration != fallback.configuration
+        or not set(fallback.source_pages) <= set(supplied.source_pages)
+    ):
+        return False
+    model_text, clause_text = _text(supplied.raw_text).casefold(), _text(clause).casefold()
+    if not (model_text in clause_text or clause_text in model_text):
+        return False
+    model_stage, fallback_stage = normalize_stage(supplied.stage), normalize_stage(fallback.stage)
+    if model_stage != fallback_stage and fallback_stage != "general":
+        return False
+    if supplied.sequence != fallback.sequence and fallback.sequence is not None:
+        return False
+    model_context, fallback_context = (
+        _text(supplied.source_context or "").casefold(),
+        _text(fallback.source_context or "").casefold(),
+    )
+    if model_context != fallback_context and fallback_context:
+        return False
+    more_specific = (
+        model_stage != fallback_stage
+        or supplied.sequence != fallback.sequence
+        or model_context != fallback_context
+    )
+    if not more_specific:
+        return True
+    # Without source offsets, two equal quantities in one clause cannot be
+    # attributed to one narrow model quotation without hiding the other event.
+    if occurrences != 1:
+        return False
+    source_texts = _local_source_texts(supplied, clause, requirement, context, enclosing_raw)
+    if supplied.sequence != fallback.sequence:
+        steps = set(re.findall(r"\bstep\s*(\d+)\b", model_text))
+        sequence = (
+            int(next(iter(steps)))
+            if len(steps) == 1
+            else _quoted_sequence(supplied.raw_text, clause)
+            if not steps
+            else None
+        )
+        if supplied.sequence is None or sequence != supplied.sequence:
+            return False
+    if model_stage != fallback_stage:
+        stages = set()
+        for text in source_texts:
+            stage = normalize_stage(_stage(_text(text), supplied.kind))
+            if stage != "general":
+                stages.add(stage)
+            stages.update(
+                normalize_stage(match)
+                for match in re.findall(
+                    r"\b(measurement|conditioning|curing|initial|thermal[- ]cycle|after[- ]cycle)"
+                    r"\s+(?:stage|setup|acceptance|criterion|criteria)\b",
+                    text,
+                    re.I,
+                )
+            )
+        if stages != {model_stage}:
+            return False
+    if model_context != fallback_context and not any(
+        re.search(rf"(?<!\w){re.escape(model_context)}(?!\w)", _text(text).casefold())
+        for text in source_texts
+    ):
+        return False
+    return True
+
+
 def normalize_requirement(requirement: CustomerRequirement) -> NormalizedRequirement:
     """Use grounded model atoms when present; safely structure older text runs."""
     pages = sorted({item.page for item in requirement.evidence})
@@ -464,14 +760,14 @@ def normalize_requirement(requirement: CustomerRequirement) -> NormalizedRequire
             }
         )
 
-    field_values: list[tuple[ClaimKind, str, str]] = []
+    field_values: list[tuple[ClaimKind, str, str, str | None, str | None]] = []
     seen_fields: set[tuple] = set()
 
     def field(kind: ClaimKind, raw: str, name: str, context=None, unit=None) -> None:
         identity = (kind, _text(raw), name, context, unit)
         if identity not in seen_fields:
             seen_fields.add(identity)
-            field_values.append((kind, raw, name))
+            field_values.append((kind, raw, name, context, unit))
 
     for value in requirement.conditions:
         field("condition", value.raw_value, value.name, value.context, value.unit)
@@ -481,7 +777,7 @@ def normalize_requirement(requirement: CustomerRequirement) -> NormalizedRequire
         field("scope", value, "Scope")
     for value in requirement.special_instructions:
         field("instruction", value, "Instruction")
-    raw_sources = [value for _, value, _ in field_values] + [
+    raw_sources = [value for _, value, _, _, _ in field_values] + [
         item.quote for item in requirement.evidence
     ]
     atoms = []
@@ -511,20 +807,67 @@ def normalize_requirement(requirement: CustomerRequirement) -> NormalizedRequire
             if _text(claim.raw_text).casefold() in _text(evidence.quote).casefold()
         }
         # Numeric shape alone cannot turn "23 °C" into "23 hours".
-        physical_units = {"°C", "h", "min", "s", "days", "µm", "μm", "GU", "% RH", "%"}
+        physical_units = {
+            "°C",
+            "°F",
+            "K",
+            "h",
+            "min",
+            "s",
+            "days",
+            "µm",
+            "μm",
+            "nm",
+            "mm",
+            "cm",
+            "m",
+            "in",
+            "Pa",
+            "kPa",
+            "MPa",
+            "bar",
+            "N",
+            "kN",
+            "g",
+            "kg",
+            "mg",
+            "GU",
+            "% RH",
+            "%",
+        }
         source_units = {
             _parameter(match["unit"], _text(claim.raw_text), claim.label)[1]
             for match in _QUANTITY.finditer(_text(claim.raw_text))
         }
         unit_grounding = (
-            not numeric_values or claim.unit not in physical_units or (claim.unit in source_units)
+            not numeric_values
+            or claim.unit not in physical_units
+            or claim.unit in source_units
+            or unit_is_stated(claim.unit, claim.raw_text)
         )
+        if numeric_values and claim.unit in physical_units:
+            attached = source_numbers_for_unit(claim.unit, _text(claim.raw_text))
+            # Preserve the legacy "degrees C" spelling while still requiring
+            # each quantity to be attached to the claimed source unit.
+            for found in _QUANTITY.finditer(_text(claim.raw_text)):
+                source_unit = resolve_unit(found["unit"])
+                source_name = source_unit.name if source_unit else None
+                if re.fullmatch(r"degrees?\s*C", found["unit"], re.I):
+                    source_name = "°C"
+                if source_name == canonical_unit_name(claim.unit):
+                    attached.update(
+                        Decimal(value)
+                        for value in (found["first"], found["second"], found["tolerance"])
+                        if value is not None
+                    )
+            unit_grounding = unit_grounding and set(numeric_values) <= attached
         if (
             not grounded
             or not claim.source_pages
             or not set(claim.source_pages).issubset(grounded_pages)
             or not numeric_grounding
             or not unit_grounding
+            or not _operator_grounded(claim)
         ):
             # Preserve the original claim visibly; do not let fabricated values support a match.
             claim = claim.model_copy(
@@ -534,6 +877,15 @@ def normalize_requirement(requirement: CustomerRequirement) -> NormalizedRequire
                     "availability": "unknown",
                 }
             )
+        contexts = {
+            context
+            for kind, raw, _, context, _ in field_values
+            if context
+            and kind == claim.kind
+            and _text(claim.raw_text).casefold() in _text(raw).casefold()
+        }
+        if not claim.source_context and len(contexts) == 1:
+            claim = _contextualize(claim, next(iter(contexts)))
         claim = _intrinsic_stage(claim)
         identity_fields = claim.model_dump(mode="json", exclude={"id"})
         identity_fields["raw_text"] = _text(claim.raw_text)
@@ -548,17 +900,50 @@ def normalize_requirement(requirement: CustomerRequirement) -> NormalizedRequire
         model_identities[identity] = len(atoms)
         atoms.append(claim.model_copy(update={"id": f"{requirement.id}_claim_{len(atoms) + 1}"}))
     model_atoms = list(atoms)
-    for kind, raw, name in field_values:
+    for kind, raw, name, context, field_unit in field_values:
         for clause in _clauses(raw):
             clause_pages = located_pages(clause)
+            parse_clause = clause
+            if field_unit and not _QUANTITY.search(_text(clause)):
+                # Older extraction responses may separate value and unit. Use
+                # that unit only when the source evidence independently states
+                # the same physical quantity; never turn 23 hours into 23 °C.
+                proposed = _QUANTITY.fullmatch(_text(f"{clause} {field_unit}"))
+                if proposed:
+                    proposed_unit = _parameter(proposed["unit"], clause, name)[1]
+                    grounded = any(
+                        _parameter(found["unit"], evidence.quote, name)[1] == proposed_unit
+                        and found["first"] == proposed["first"]
+                        and found["second"] == proposed["second"]
+                        and found["tolerance"] == proposed["tolerance"]
+                        and found["op"] == proposed["op"]
+                        for evidence in requirement.evidence
+                        for found in _QUANTITY.finditer(_text(evidence.quote))
+                    )
+                    if grounded:
+                        parse_clause = f"{clause} {field_unit}"
             parsed = _atoms(
-                clause,
+                parse_clause,
                 kind=kind,
                 pages=clause_pages or pages,
                 prefix=f"{requirement.id}_field_{len(atoms) + 1}",
                 name=f"{name} {requirement.original_test_name}",
             )
+            if parse_clause != clause:
+                parsed = [item.model_copy(update={"raw_text": clause}) for item in parsed]
+            parsed = [_contextualize(item, context) for item in parsed]
             parsed_parameters = {item.parameter_id for item in parsed if item.parameter_id}
+            local_model_atoms = [
+                claim
+                for claim in model_atoms
+                if claim.normalization_state != "unresolved"
+                and claim.kind == kind
+                and set(clause_pages or pages) <= set(claim.source_pages)
+                and (
+                    _text(claim.raw_text).casefold() in _text(clause).casefold()
+                    or _text(clause).casefold() in _text(claim.raw_text).casefold()
+                )
+            ]
             for fallback in parsed:
                 if (
                     fallback.parameter_id is None
@@ -567,9 +952,15 @@ def normalize_requirement(requirement: CustomerRequirement) -> NormalizedRequire
                     # A grounded, separate model parameter may explain the
                     # qualifier the numeric fallback could not understand. A
                     # temperature atom quoting the whole sentence cannot do so.
-                    unexplained = set(re.findall(r"\w+", fallback.text_value or ""))
+                    residual = _unparsed_qualification(
+                        fallback.text_value or "", [], local_model_atoms
+                    )
+                    if not residual:
+                        continue
+                    fallback = fallback.model_copy(update={"text_value": residual})
+                    unexplained = set(re.findall(r"\w+", residual))
                     explained = set()
-                    for claim in model_atoms:
+                    for claim in local_model_atoms:
                         if (
                             claim.normalization_state != "unresolved"
                             and claim.parameter_id not in parsed_parameters
@@ -595,7 +986,8 @@ def normalize_requirement(requirement: CustomerRequirement) -> NormalizedRequire
                             and claim.tolerance == fallback.tolerance
                             and claim.values == fallback.values
                             and claim.unit == fallback.unit
-                            and claim.text_value == fallback.text_value
+                            and _same_text_value(claim, fallback)
+                            and claim.source_context == fallback.source_context
                         )
                         if fallback.parameter_id
                         else _text(clause).casefold() in _text(claim.raw_text).casefold()
@@ -606,6 +998,22 @@ def normalize_requirement(requirement: CustomerRequirement) -> NormalizedRequire
                     )
                     for claim in model_atoms
                 )
+                if fallback.parameter_id and _numeric_values(fallback):
+                    represented = represented or any(
+                        _represented_numeric_fallback(
+                            fallback,
+                            claim,
+                            clause=clause,
+                            context=context,
+                            requirement=requirement,
+                            occurrences=sum(
+                                _numeric_identity(candidate) == _numeric_identity(fallback)
+                                for candidate in parsed
+                            ),
+                            enclosing_raw=raw,
+                        )
+                        for claim in model_atoms
+                    )
                 if not represented:
                     atoms.append(fallback)
     return NormalizedRequirement(
@@ -617,6 +1025,10 @@ def normalize_requirement(requirement: CustomerRequirement) -> NormalizedRequire
 
 def normalize_capability(capability: LabCapability) -> list[AtomicClaim]:
     """Structure explicit declarations without assuming unstated test knowledge."""
+    if capability.atomic_claims:
+        # Reviewed structured declarations are the lab's authoritative facts.
+        # Re-parsing prose here would reintroduce guessed/duplicate limits.
+        return [_intrinsic_stage(claim) for claim in capability.atomic_claims]
     atoms = []
     for raw in _clauses(capability.declared_constraints or ""):
         atoms.extend(

@@ -55,7 +55,7 @@ _METHOD = re.compile(
     re.IGNORECASE,
 )
 _REVISION = re.compile(r"^\s*:\s*(\d{4})\s*$")
-MATCHING_POLICY_VERSION = "0.5"
+MATCHING_POLICY_VERSION = "0.6"
 
 
 @dataclass(frozen=True)
@@ -601,6 +601,8 @@ def build_report(
         warnings.append(
             "The reference catalog is synthetic demonstration metadata, not authoritative."
         )
+    if any(action.requirement_id not in source_ids for action in workspace.scope_actions):
+        raise ValueError("Report scope actions do not belong to this extraction.")
     for key in sorted((workspace.mappings.keys() | workspace.quantities.keys()) - source_ids):
         warnings.append(
             f"{key}: stale saved mapping / quantity does not belong to this extraction."
@@ -608,6 +610,7 @@ def build_report(
     lines: list[GapLine] = []
     totals: dict[str, Decimal] = {}
     current_lab_fingerprint = lab_fingerprint(lab)
+    active_exclusions = workspace.active_exclusions
     for requirement in run.extraction.requirements:
         line = _line(
             requirement,
@@ -616,7 +619,16 @@ def build_report(
             lab,
             workspace.mappings.get(requirement.id),
         )
-        problem = _attach_quote(line, workspace, current_lab_fingerprint)
+        exclusion = active_exclusions.get(requirement.id)
+        if exclusion is not None:
+            line.status = "excluded"
+            line.report_scope_exclusion = exclusion.model_copy(deep=True)
+            line.reasons.append(f"Removed from this report: {exclusion.note}")
+        problem = (
+            None
+            if line.status == "excluded"
+            else _attach_quote(line, workspace, current_lab_fingerprint)
+        )
         if problem is not None:
             warnings.append(problem)
         if line.quote is not None:

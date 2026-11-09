@@ -1,0 +1,703 @@
+{
+  "schema_version": "1.0",
+  "challenge_id": "live_synthetic_capability_v1",
+  "annotation_status": "author_written_frozen_before_live_calls",
+  "scope": "Synthetic source-text extraction and capability comparison. This does not exercise PDF/OCR ingestion. Author labels are not independently validated or a blinded statistical holdout.",
+  "limitations": [
+    "Four author-designed synthetic tests cannot establish production accuracy.",
+    "Finite approved field aliases are frozen before responses; semantically valid novel wording may require human adjudication.",
+    "Strict typed-fact metrics include role, stage, sequence, operator, source values/unit and physical page; missing/wrong extracted facts cannot count as correct unknown capability.",
+    "All method identities and procedures are fictional capstone scenarios; no standard text is supplied or inferred."
+  ],
+  "pages": [
+    {
+      "page_number": 1,
+      "text": "SYNTHETIC CAPSTONE CHALLENGE, Issue A\nAll procedures below are fictional.\n\nT1 光泽度 / Gloss — fictional ASTM D1627-16.\nConditioning stage: temprature 23 °C for 6 h（调节阶段）.\nMeasurement stage: observation angle 60°.\nMeasurement acceptance criterion: gloss 82–91 GU.\n\nT2 Scored-grid adhesion — fictional ISO 60038:2021.\nConditioning stage: 12 h at 24 °C.\nExecute these thermal-cycle stages in order: step 1 at -12 °C for 45 min; step 2 at 65 °C for 75 min.\nAfter-cycle acceptance criterion: adhesion class <=1."
+    },
+    {
+      "page_number": 2,
+      "text": "T3 Dry-film thickness — fictional ISO 60152:2025.\nMeasurement setup: clamp pre-load (the force applied by the specimen holder) 12 N.\nSpecimen material: Miralum-B (fictional material).\nRequired protective insert: QX-9 (fictional accessory).\nMeasurement acceptance criterion: film thickness 42–55 µm.\n\nT4 Colour difference — fictional ISO 60570:2025.\nConditioning stage: 31 °C for 90 min.\nMeasurement stage: D65 illuminant; compare with a master panel.\nMeasurement acceptance criterion: colour difference <=0.7 ΔE*ab.\nAcceptance thresholds describe the specimen; they do not guarantee a passing result."
+    }
+  ],
+  "tests": [
+    {
+      "id": "req_gold_gloss",
+      "name": "光泽度 / Gloss",
+      "method": "ASTM D1627-16",
+      "method_id": "synthetic_astm_d1627_16",
+      "canonical_test_id": "gloss",
+      "page": 1,
+      "source_block": "T1 光泽度 / Gloss — fictional ASTM D1627-16.\nConditioning stage: temprature 23 °C for 6 h（调节阶段）.\nMeasurement stage: observation angle 60°.\nMeasurement acceptance criterion: gloss 82–91 GU.",
+      "claims": [
+        {
+          "id": "gold_gloss_temp",
+          "parameter_id": "temperature",
+          "label": "Temperature",
+          "kind": "condition",
+          "stage": "conditioning",
+          "raw_text": "temprature 23 °C",
+          "source_pages": [
+            1
+          ],
+          "operator": "=",
+          "value": 23,
+          "unit": "°C"
+        },
+        {
+          "id": "gold_gloss_time",
+          "parameter_id": "duration",
+          "label": "Duration",
+          "kind": "condition",
+          "stage": "conditioning",
+          "raw_text": "for 6 h",
+          "source_pages": [
+            1
+          ],
+          "operator": "=",
+          "value": 6,
+          "unit": "h"
+        },
+        {
+          "id": "gold_gloss_angle",
+          "parameter_id": "measurement_angle",
+          "label": "Measurement Angle",
+          "kind": "condition",
+          "stage": "measurement",
+          "raw_text": "observation angle 60°",
+          "source_pages": [
+            1
+          ],
+          "operator": "=",
+          "value": 60,
+          "unit": "°"
+        },
+        {
+          "id": "gold_gloss_result",
+          "parameter_id": "gloss",
+          "label": "Gloss",
+          "kind": "criterion",
+          "stage": "measurement",
+          "raw_text": "gloss 82–91 GU",
+          "source_pages": [
+            1
+          ],
+          "operator": "range",
+          "minimum": 82,
+          "maximum": 91,
+          "unit": "GU"
+        }
+      ],
+      "lab_claims": [
+        {
+          "id": "lab_gloss_temp",
+          "parameter_id": "temperature",
+          "label": "Temperature",
+          "kind": "condition",
+          "stage": "conditioning",
+          "raw_text": "Conditioning temperature selectable: 20–26 °C.",
+          "source_pages": [],
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 26,
+          "unit": "°C"
+        },
+        {
+          "id": "lab_gloss_time",
+          "parameter_id": "duration",
+          "label": "Duration",
+          "kind": "condition",
+          "stage": "conditioning",
+          "raw_text": "Conditioning duration selectable: 0–12 h.",
+          "source_pages": [],
+          "operator": "range",
+          "minimum": 0,
+          "maximum": 12,
+          "unit": "h"
+        },
+        {
+          "id": "lab_gloss_angle",
+          "parameter_id": "measurement_angle",
+          "label": "Measurement Angle",
+          "kind": "condition",
+          "stage": "measurement",
+          "raw_text": "Measurement angle: 60°.",
+          "source_pages": [],
+          "operator": "=",
+          "value": 60,
+          "unit": "°"
+        },
+        {
+          "id": "lab_gloss_report",
+          "parameter_id": "gloss",
+          "label": "Gloss",
+          "kind": "reporting",
+          "stage": "measurement",
+          "raw_text": "Reportable gloss: 0–150 GU.",
+          "source_pages": [],
+          "operator": "range",
+          "minimum": 0,
+          "maximum": 150,
+          "unit": "GU"
+        }
+      ],
+      "expected_checks": {
+        "gold_gloss_temp": "supported",
+        "gold_gloss_time": "supported",
+        "gold_gloss_angle": "supported",
+        "gold_gloss_result": "supported"
+      },
+      "parameter_aliases": {}
+    },
+    {
+      "id": "req_gold_adhesion",
+      "name": "Scored-grid adhesion",
+      "method": "ISO 60038:2021",
+      "method_id": "synthetic_iso_60038_2021",
+      "canonical_test_id": "cross_cut_adhesion",
+      "page": 1,
+      "source_block": "T2 Scored-grid adhesion — fictional ISO 60038:2021.\nConditioning stage: 12 h at 24 °C.\nExecute these thermal-cycle stages in order: step 1 at -12 °C for 45 min; step 2 at 65 °C for 75 min.\nAfter-cycle acceptance criterion: adhesion class <=1.",
+      "claims": [
+        {
+          "id": "gold_adh_temp",
+          "parameter_id": "temperature",
+          "label": "Temperature",
+          "kind": "condition",
+          "stage": "conditioning",
+          "raw_text": "24 °C",
+          "source_pages": [
+            1
+          ],
+          "operator": "=",
+          "value": 24,
+          "unit": "°C"
+        },
+        {
+          "id": "gold_adh_time",
+          "parameter_id": "duration",
+          "label": "Duration",
+          "kind": "condition",
+          "stage": "conditioning",
+          "raw_text": "12 h",
+          "source_pages": [
+            1
+          ],
+          "operator": "=",
+          "value": 12,
+          "unit": "h"
+        },
+        {
+          "id": "gold_adh_low_temp",
+          "parameter_id": "temperature",
+          "label": "Temperature",
+          "kind": "condition",
+          "stage": "thermal_cycle",
+          "raw_text": "step 1 at -12 °C for 45 min",
+          "source_pages": [
+            1
+          ],
+          "operator": "=",
+          "sequence": 1,
+          "value": -12,
+          "unit": "°C"
+        },
+        {
+          "id": "gold_adh_low_time",
+          "parameter_id": "duration",
+          "label": "Duration",
+          "kind": "condition",
+          "stage": "thermal_cycle",
+          "raw_text": "step 1 at -12 °C for 45 min",
+          "source_pages": [
+            1
+          ],
+          "operator": "=",
+          "sequence": 1,
+          "value": 45,
+          "unit": "min"
+        },
+        {
+          "id": "gold_adh_high_temp",
+          "parameter_id": "temperature",
+          "label": "Temperature",
+          "kind": "condition",
+          "stage": "thermal_cycle",
+          "raw_text": "step 2 at 65 °C for 75 min",
+          "source_pages": [
+            1
+          ],
+          "operator": "=",
+          "sequence": 2,
+          "value": 65,
+          "unit": "°C"
+        },
+        {
+          "id": "gold_adh_high_time",
+          "parameter_id": "duration",
+          "label": "Duration",
+          "kind": "condition",
+          "stage": "thermal_cycle",
+          "raw_text": "step 2 at 65 °C for 75 min",
+          "source_pages": [
+            1
+          ],
+          "operator": "=",
+          "sequence": 2,
+          "value": 75,
+          "unit": "min"
+        },
+        {
+          "id": "gold_adh_class",
+          "parameter_id": "adhesion_class",
+          "label": "Adhesion Class",
+          "kind": "criterion",
+          "stage": "after_cycle",
+          "raw_text": "adhesion class <=1",
+          "source_pages": [
+            1
+          ],
+          "operator": "<=",
+          "value": 1
+        }
+      ],
+      "lab_claims": [
+        {
+          "id": "lab_adh_temp",
+          "parameter_id": "temperature",
+          "label": "Temperature",
+          "kind": "condition",
+          "stage": "conditioning",
+          "raw_text": "Conditioning temperature: 20–26 °C.",
+          "source_pages": [],
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 26,
+          "unit": "°C"
+        },
+        {
+          "id": "lab_adh_time",
+          "parameter_id": "duration",
+          "label": "Duration",
+          "kind": "condition",
+          "stage": "conditioning",
+          "raw_text": "Conditioning duration: 0–24 h.",
+          "source_pages": [],
+          "operator": "range",
+          "minimum": 0,
+          "maximum": 24,
+          "unit": "h"
+        },
+        {
+          "id": "lab_adh_low_temp",
+          "parameter_id": "temperature",
+          "label": "Temperature",
+          "kind": "condition",
+          "stage": "thermal_cycle",
+          "raw_text": "Thermal-cycle step 1 temperature: -20–0 °C.",
+          "source_pages": [],
+          "operator": "range",
+          "sequence": 1,
+          "minimum": -20,
+          "maximum": 0,
+          "unit": "°C"
+        },
+        {
+          "id": "lab_adh_low_time",
+          "parameter_id": "duration",
+          "label": "Duration",
+          "kind": "condition",
+          "stage": "thermal_cycle",
+          "raw_text": "Thermal-cycle step 1 duration: 30–60 min.",
+          "source_pages": [],
+          "operator": "range",
+          "sequence": 1,
+          "minimum": 30,
+          "maximum": 60,
+          "unit": "min"
+        },
+        {
+          "id": "lab_adh_high_temp",
+          "parameter_id": "temperature",
+          "label": "Temperature",
+          "kind": "condition",
+          "stage": "thermal_cycle",
+          "raw_text": "Thermal-cycle step 2 temperature: 55–75 °C.",
+          "source_pages": [],
+          "operator": "range",
+          "sequence": 2,
+          "minimum": 55,
+          "maximum": 75,
+          "unit": "°C"
+        },
+        {
+          "id": "lab_adh_high_time",
+          "parameter_id": "duration",
+          "label": "Duration",
+          "kind": "condition",
+          "stage": "thermal_cycle",
+          "raw_text": "Thermal-cycle step 2 duration: 60–90 min.",
+          "source_pages": [],
+          "operator": "range",
+          "sequence": 2,
+          "minimum": 60,
+          "maximum": 90,
+          "unit": "min"
+        },
+        {
+          "id": "lab_adh_report",
+          "parameter_id": "adhesion_class",
+          "label": "Adhesion Class",
+          "kind": "reporting",
+          "stage": "after_cycle",
+          "raw_text": "After-cycle reportable adhesion classes: 0–5.",
+          "source_pages": [],
+          "operator": "range",
+          "minimum": 0,
+          "maximum": 5
+        }
+      ],
+      "expected_checks": {
+        "gold_adh_temp": "supported",
+        "gold_adh_time": "supported",
+        "gold_adh_low_temp": "supported",
+        "gold_adh_low_time": "supported",
+        "gold_adh_high_temp": "supported",
+        "gold_adh_high_time": "supported",
+        "gold_adh_class": "supported"
+      },
+      "parameter_aliases": {}
+    },
+    {
+      "id": "req_gold_thickness",
+      "name": "Dry-film thickness",
+      "method": "ISO 60152:2025",
+      "method_id": "synthetic_iso_60152_2025",
+      "canonical_test_id": "dry_film_thickness",
+      "page": 2,
+      "source_block": "T3 Dry-film thickness — fictional ISO 60152:2025.\nMeasurement setup: clamp pre-load (the force applied by the specimen holder) 12 N.\nSpecimen material: Miralum-B (fictional material).\nRequired protective insert: QX-9 (fictional accessory).\nMeasurement acceptance criterion: film thickness 42–55 µm.",
+      "claims": [
+        {
+          "id": "gold_thickness_force",
+          "parameter_id": "clamp_preload",
+          "label": "Clamp Preload",
+          "kind": "condition",
+          "stage": "measurement",
+          "raw_text": "clamp pre-load (the force applied by the specimen holder) 12 N",
+          "source_pages": [
+            2
+          ],
+          "operator": "=",
+          "value": 12,
+          "unit": "N"
+        },
+        {
+          "id": "gold_thickness_material",
+          "parameter_id": "specimen_material",
+          "label": "Specimen Material",
+          "kind": "scope",
+          "stage": "measurement",
+          "raw_text": "Specimen material: Miralum-B (fictional material)",
+          "source_pages": [
+            2
+          ],
+          "operator": "text",
+          "text_value": "Miralum-B"
+        },
+        {
+          "id": "gold_thickness_insert",
+          "parameter_id": "protective_insert",
+          "label": "Protective Insert",
+          "kind": "condition",
+          "stage": "measurement",
+          "raw_text": "Required protective insert: QX-9 (fictional accessory)",
+          "source_pages": [
+            2
+          ],
+          "operator": "required",
+          "text_value": "QX-9"
+        },
+        {
+          "id": "gold_thickness_result",
+          "parameter_id": "film_thickness",
+          "label": "Film Thickness",
+          "kind": "criterion",
+          "stage": "measurement",
+          "raw_text": "film thickness 42–55 µm",
+          "source_pages": [
+            2
+          ],
+          "operator": "range",
+          "minimum": 42,
+          "maximum": 55,
+          "unit": "µm"
+        }
+      ],
+      "lab_claims": [
+        {
+          "id": "lab_thickness_force",
+          "parameter_id": "holder_applied_force",
+          "label": "Holder Applied Force",
+          "kind": "condition",
+          "stage": "measurement",
+          "raw_text": "Measurement setup: specimen-holder applied force selectable from 8 to 18 N.",
+          "source_pages": [],
+          "operator": "range",
+          "minimum": 8,
+          "maximum": 18,
+          "unit": "N"
+        },
+        {
+          "id": "lab_thickness_report",
+          "parameter_id": "film_thickness",
+          "label": "Film Thickness",
+          "kind": "reporting",
+          "stage": "measurement",
+          "raw_text": "Measurement-stage reportable film thickness: 0–200 µm.",
+          "source_pages": [],
+          "operator": "range",
+          "minimum": 0,
+          "maximum": 200,
+          "unit": "µm"
+        }
+      ],
+      "expected_checks": {
+        "gold_thickness_force": "supported",
+        "gold_thickness_material": "unknown",
+        "gold_thickness_insert": "unknown",
+        "gold_thickness_result": "supported"
+      },
+      "parameter_aliases": {
+        "clamp_preload": [
+          "clamp_preload",
+          "clamp_pre_load",
+          "clamping_preload",
+          "clamping_force",
+          "holder_force",
+          "specimen_holder_force",
+          "holder_applied_force",
+          "fixture_force"
+        ],
+        "protective_insert": [
+          "protective_insert",
+          "insert_type",
+          "protective_insert_type",
+          "required_protective_insert",
+          "accessory",
+          "required_accessory"
+        ],
+        "specimen_material": [
+          "specimen_material",
+          "material",
+          "substrate_material",
+          "test_material"
+        ]
+      }
+    },
+    {
+      "id": "req_gold_colour",
+      "name": "Colour difference",
+      "method": "ISO 60570:2025",
+      "method_id": "synthetic_iso_60570_2025",
+      "canonical_test_id": "color_difference",
+      "page": 2,
+      "source_block": "T4 Colour difference — fictional ISO 60570:2025.\nConditioning stage: 31 °C for 90 min.\nMeasurement stage: D65 illuminant; compare with a master panel.\nMeasurement acceptance criterion: colour difference <=0.7 ΔE*ab.\nAcceptance thresholds describe the specimen; they do not guarantee a passing result.",
+      "claims": [
+        {
+          "id": "gold_colour_temp",
+          "parameter_id": "temperature",
+          "label": "Temperature",
+          "kind": "condition",
+          "stage": "conditioning",
+          "raw_text": "31 °C",
+          "source_pages": [
+            2
+          ],
+          "operator": "=",
+          "value": 31,
+          "unit": "°C"
+        },
+        {
+          "id": "gold_colour_time",
+          "parameter_id": "duration",
+          "label": "Duration",
+          "kind": "condition",
+          "stage": "conditioning",
+          "raw_text": "90 min",
+          "source_pages": [
+            2
+          ],
+          "operator": "=",
+          "value": 90,
+          "unit": "min"
+        },
+        {
+          "id": "gold_colour_light",
+          "parameter_id": "illuminant",
+          "label": "Illuminant",
+          "kind": "condition",
+          "stage": "measurement",
+          "raw_text": "D65 illuminant",
+          "source_pages": [
+            2
+          ],
+          "operator": "text",
+          "text_value": "D65"
+        },
+        {
+          "id": "gold_colour_panel",
+          "parameter_id": "reference_panel",
+          "label": "Reference Panel",
+          "kind": "condition",
+          "stage": "measurement",
+          "raw_text": "compare with a master panel",
+          "source_pages": [
+            2
+          ],
+          "operator": "required",
+          "text_value": "Master panel"
+        },
+        {
+          "id": "gold_colour_result",
+          "parameter_id": "color_difference",
+          "label": "Color Difference",
+          "kind": "criterion",
+          "stage": "measurement",
+          "raw_text": "colour difference <=0.7 ΔE*ab",
+          "source_pages": [
+            2
+          ],
+          "operator": "<=",
+          "value": 0.7,
+          "unit": "ΔE*ab"
+        }
+      ],
+      "lab_claims": [
+        {
+          "id": "lab_colour_temp",
+          "parameter_id": "temperature",
+          "label": "Temperature",
+          "kind": "condition",
+          "stage": "conditioning",
+          "raw_text": "Conditioning temperature selectable: 18–27 °C.",
+          "source_pages": [],
+          "operator": "range",
+          "minimum": 18,
+          "maximum": 27,
+          "unit": "°C"
+        },
+        {
+          "id": "lab_colour_time",
+          "parameter_id": "duration",
+          "label": "Duration",
+          "kind": "condition",
+          "stage": "conditioning",
+          "raw_text": "Conditioning duration selectable: 0–4 h.",
+          "source_pages": [],
+          "operator": "range",
+          "minimum": 0,
+          "maximum": 4,
+          "unit": "h"
+        },
+        {
+          "id": "lab_colour_light",
+          "parameter_id": "illuminant",
+          "label": "Illuminant",
+          "kind": "condition",
+          "stage": "measurement",
+          "raw_text": "Measurement illuminant: D65.",
+          "source_pages": [],
+          "operator": "text",
+          "text_value": "D65"
+        },
+        {
+          "id": "lab_colour_panel",
+          "parameter_id": "reference_panel",
+          "label": "Reference Panel",
+          "kind": "condition",
+          "stage": "measurement",
+          "raw_text": "Measurement comparison uses a master panel.",
+          "source_pages": [],
+          "operator": "required",
+          "text_value": "Master panel"
+        },
+        {
+          "id": "lab_colour_report",
+          "parameter_id": "color_difference",
+          "label": "Color Difference",
+          "kind": "reporting",
+          "stage": "measurement",
+          "raw_text": "Reportable colour difference: 0–5 ΔE*ab.",
+          "source_pages": [],
+          "operator": "range",
+          "minimum": 0,
+          "maximum": 5,
+          "unit": "ΔE*ab"
+        }
+      ],
+      "expected_checks": {
+        "gold_colour_temp": "gap",
+        "gold_colour_time": "supported",
+        "gold_colour_light": "supported",
+        "gold_colour_panel": "supported",
+        "gold_colour_result": "supported"
+      },
+      "parameter_aliases": {}
+    }
+  ],
+  "parameter_aliases": {
+    "temperature": [
+      "temperature",
+      "conditioning_temperature",
+      "thermal_cycle_temperature",
+      "stage_temperature",
+      "temprature",
+      "temp",
+      "温度",
+      "度温"
+    ],
+    "duration": [
+      "duration",
+      "conditioning_duration",
+      "exposure_duration",
+      "thermal_cycle_duration",
+      "time",
+      "dwell_time"
+    ],
+    "measurement_angle": [
+      "measurement_angle",
+      "observation_angle",
+      "angle"
+    ],
+    "adhesion_class": [
+      "adhesion_class",
+      "adhesion_rating",
+      "cross_cut_class",
+      "adhesion_classification"
+    ],
+    "film_thickness": [
+      "film_thickness",
+      "dry_film_thickness",
+      "thickness"
+    ],
+    "illuminant": [
+      "illuminant",
+      "illumination",
+      "light_source"
+    ],
+    "reference_panel": [
+      "reference_panel",
+      "master_panel",
+      "reference_sample"
+    ],
+    "color_difference": [
+      "color_difference",
+      "colour_difference",
+      "delta_e",
+      "delta_e_ab"
+    ],
+    "gloss": [
+      "gloss",
+      "specular_gloss",
+      "gloss_value"
+    ]
+  }
+}

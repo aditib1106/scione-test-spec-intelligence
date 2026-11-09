@@ -3,18 +3,37 @@
 from dataclasses import asdict
 from datetime import UTC, datetime
 from decimal import Decimal
+from uuid import uuid4
 
 from fastapi import HTTPException
 
-from scione.api.contracts import MappingReview, QuantityReview, ReportEdit, ScopeReview
-from scione.catalogs import FileLabStore, load_reference_catalog
+from scione.api.contracts import (
+    ExclusionReview,
+    MappingReview,
+    QuantityReview,
+    ReportEdit,
+    ScopeReview,
+    SourceFactsEdit,
+)
+from scione.catalogs import load_reference_catalog
+from scione.catalogs.sql_lab_store import SQLLabStore
 from scione.config import Settings
+from scione.library.store import LibraryConflict, digest
 from scione.library.workspace import LibraryWorkspace
+from scione.matching.workspace import MatchingWorkspace
 from scione.reports.matching import build_report, lab_fingerprint, support_basis
-from scione.reports.models import GapLine, MappingChoice, QuoteChoice, ReportSnapshot
+from scione.reports.models import (
+    GapLine,
+    MappingChoice,
+    QuoteChoice,
+    ReportScopeAction,
+    ReportSnapshot,
+)
 from scione.reports.review import batch_eligible, needs_review, quote_eligible, scope_review_state
 from scione.reports.store import FileReportStore
+from scione.specifications.corrections import SQLFactsStore, effective_facts
 from scione.specifications.extraction import coverage_issues
+from scione.specifications.pdf_preview import inspect_pdf_highlights
 from scione.specifications.review import assess_requirements
 from scione.specifications.store import FileSpecStore
 
@@ -23,16 +42,80 @@ class Workspace:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.catalog = load_reference_catalog()
-        self.labs = FileLabStore(settings.scione_workspace_dir, self.catalog, seed_demo=False)
         self.specs = FileSpecStore(settings.scione_workspace_dir)
         self.reports = FileReportStore(settings.scione_workspace_dir)
         self.library = LibraryWorkspace(self)
+        self.labs = SQLLabStore(
+            self.library.store, self.catalog, legacy_root=settings.scione_workspace_dir
+        )
+        self.matching = MatchingWorkspace(self)
+        self.facts = SQLFactsStore(self.library.store, self.labs.workspace_id)
+
+    def effective_source(self, document_id: str, run=None):
+        run = run or self.specs.load_latest_extraction(document_id)
+        if run is None:
+            return None, None, None
+        review = self.specs.load_review(document_id, run.run_id)
+        revision = self.facts.latest(document_id, run.run_id)
+        effective, review = effective_facts(run, review, revision)
+        return effective, review, revision
+
+    def correct_facts(self, document_id: str, body: SourceFactsEdit) -> dict:
+        # The shared file guard also blocks extraction/review writes while the
+        # SQL correction is committed. No two-store update is required.
+        with self.specs.write_guard():
+            run = self.latest(document_id, body.run_id)
+            review = self.specs.load_review(document_id, run.run_id)
+            if review.version != body.expected_review_version:
+                raise LibraryConflict("Source review changed. Reload before correcting content.")
+            current, _, _ = self.effective_source(document_id, run)
+            previous = {item.id: item for item in current.extraction.requirements}
+            pdf = self.specs.read_pdf(document_id)
+            for item in body.requirements:
+                if item == previous.get(item.id):
+                    continue
+                old = previous.get(item.id)
+                if (
+                    old
+                    and (
+                        item.conditions != old.conditions
+                        or item.acceptance_criteria != old.acceptance_criteria
+                        or item.applicability != old.applicability
+                        or item.special_instructions != old.special_instructions
+                    )
+                    and item.atomic_claims == old.atomic_claims
+                ):
+                    # Old machine atoms cannot outlive a correction to the
+                    # source fields they supposedly describe.
+                    item.atomic_claims = []
+                for evidence in item.evidence:
+                    located = inspect_pdf_highlights(
+                        pdf, page_number=evidence.page, quotes=(evidence.quote,)
+                    )
+                    if not located.matches or located.matches[0].status != "matched":
+                        raise HTTPException(
+                            400,
+                            "Locate each corrected test's quotation in the "
+                            "source PDF before saving. Keep uncertain content pending.",
+                        )
+            self.facts.save(
+                run, body.requirements, body.note, expected_version=body.expected_version
+            )
+        return self.specification(document_id)
 
     def overview(self) -> dict:
         providers = []
-        for provider, label in (("groq", "Groq"), ("gemini", "Gemini")):
-            key = getattr(self.settings, f"{provider}_api_key")
-            available = bool(key and key.get_secret_value().strip())
+        choices = [
+            ("groq", "Groq"),
+            ("gemini", "Gemini"),
+            ("fireworks", "Fireworks"),
+            ("sail", "Sail"),
+        ]
+        preferred = self.settings.model_provider.strip().casefold()
+        if self.settings.provider_configured(preferred):
+            choices.sort(key=lambda item: item[0] != preferred)
+        for provider, label in choices:
+            available = self.settings.provider_configured(provider)
             providers.append(
                 {
                     "id": provider,
@@ -43,6 +126,8 @@ class Workspace:
                         self.settings.groq_max_completion_tokens
                         if provider == "groq"
                         else self.settings.scione_customer_gemini_output_tokens
+                        if provider == "gemini"
+                        else getattr(self.settings, f"{provider}_max_output_tokens")
                     ),
                 }
             )
@@ -60,7 +145,9 @@ class Workspace:
             if run_id
             else self.specs.load_latest_extraction(document_id)
         )
-        review = self.specs.load_review(document_id, run.run_id) if run else None
+        run, review, revision = (
+            self.effective_source(document_id, run) if run else (None, None, None)
+        )
         assessments = (
             assess_requirements(
                 run, stored.document, review, pdf_bytes=self.specs.read_pdf(document_id)
@@ -74,6 +161,8 @@ class Workspace:
             "document": stored.document,
             "run": run,
             "review": review,
+            "facts_revision": revision,
+            "facts_version": revision.version if revision else 0,
             "assessments": {key: asdict(value) for key, value in assessments.items()},
             "coverage_issues": coverage_issues(run.extraction, stored.document) if run else [],
             "failure": self.specs.load_failure(document_id),
@@ -90,15 +179,41 @@ class Workspace:
         run = self.specs.load_latest_extraction(document_id)
         if run is None or not run.extraction.requirements:
             raise HTTPException(400, "Analyze this PDF in Specifications before creating a report.")
-        return build_report(
+        run, review, revision = self.effective_source(document_id, run)
+        report_workspace = self.reports.load_workspace(document_id, run.run_id)
+        if revision:
+            # Earlier manual support/quantity decisions cannot approve changed
+            # facts. Their files remain intact; the effective view ignores them.
+            by_id = {item.id: item for item in run.extraction.requirements}
+            for field in ("mappings", "quantities"):
+                choices = getattr(report_workspace, field)
+                setattr(
+                    report_workspace,
+                    field,
+                    {
+                        key: choice
+                        for key, choice in choices.items()
+                        if key not in revision.item_updated_at
+                        or (
+                            key in by_id
+                            and choice.source_requirement_fingerprint
+                            == digest(by_id[key].model_dump(mode="json"))
+                        )
+                    },
+                )
+        report = build_report(
             stored,
             run,
-            self.specs.load_review(document_id, run.run_id),
+            review,
             self.labs.load_or_create(),
             self.catalog,
-            self.reports.load_workspace(document_id, run.run_id),
+            report_workspace,
             pdf_bytes=self.specs.read_pdf(document_id),
         )
+        report.source_facts_revision_id = revision.revision_id if revision else None
+        if revision:
+            report.input_fingerprint = digest([report.input_fingerprint, revision.revision_id])
+        return report
 
     def report(self, document_id: str) -> dict:
         report = self.draft(document_id)
@@ -179,10 +294,51 @@ class Workspace:
                 capability_id=line.capability.id,
                 capability_verdict="supported" if body.supported else "unsupported",
                 lab_fingerprint=lab_fingerprint(report.lab),
+                source_requirement_fingerprint=digest(line.requirement.model_dump(mode="json")),
                 note=body.note or "Lab reviewer checked this request's conditions and scope.",
             )
         self.save(report, candidate)
         return self.report(document_id)
+
+    def exclusions(self, document_id: str, body: ExclusionReview) -> dict:
+        """Change this report's scope without editing source or machine outputs."""
+
+        report = self.checked_draft(document_id, body)
+        if len(body.requirement_ids) != len(set(body.requirement_ids)):
+            raise HTTPException(400, "Select each test only once.")
+        candidate = report.workspace.model_copy(deep=True)
+        active = candidate.active_exclusions
+        for identifier in body.requirement_ids:
+            line = self.line(report, identifier)
+            previous_excluded = identifier in active
+            if previous_excluded == body.excluded:
+                continue
+            if body.excluded and line.extraction_review_state == "excluded":
+                raise HTTPException(
+                    400,
+                    "This test was excluded during source review. "
+                    "Restore it in specification review before changing its report scope.",
+                )
+            candidate.scope_actions.append(
+                ReportScopeAction(
+                    action_id=str(uuid4()),
+                    requirement_id=identifier,
+                    excluded=body.excluded,
+                    actor="local_reviewer",
+                    occurred_at=utc_now(),
+                    note=body.note
+                    or (
+                        "Removed from this report by the lab reviewer."
+                        if body.excluded
+                        else "Restored to this report by the lab reviewer."
+                    ),
+                    previous_status=line.status,
+                    previous_excluded=previous_excluded,
+                )
+            )
+        if len(candidate.scope_actions) != len(report.workspace.scope_actions):
+            self.save(report, candidate)
+        return self.library.comparison(document_id)
 
     def mapping(self, document_id: str, body: MappingReview) -> dict:
         report = self.checked_draft(document_id, body)
@@ -233,6 +389,7 @@ class Workspace:
                 "selected_method_codes": choice.selected_method_codes if original else None,
                 "note": choice.note or "Saved test and method selection.",
                 "lab_fingerprint": lab_fingerprint(report.lab),
+                "source_requirement_fingerprint": digest(line.requirement.model_dump(mode="json")),
             },
         )
         self.save(report, candidate)
@@ -257,6 +414,7 @@ class Workspace:
                 quantity=Decimal(body.quantity),
                 scope_and_basis_confirmed=True,
                 lab_fingerprint=lab_fingerprint(report.lab),
+                source_requirement_fingerprint=digest(line.requirement.model_dump(mode="json")),
                 note=body.note,
             )
         self.save(report, candidate)

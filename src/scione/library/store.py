@@ -10,6 +10,7 @@ import hashlib
 import json
 import threading
 from collections.abc import Callable
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
@@ -157,6 +158,21 @@ class LibraryStore:
     @property
     def backend(self) -> str:
         return make_url(self.url).get_backend_name() if self.url else "sqlite"
+
+    @property
+    def engine(self) -> Engine:
+        """The shared SQL connection pool, initialized lazily and without exposing its URL."""
+        return self._db()
+
+    @contextmanager
+    def schema_upgrade(self):
+        """Serialize this process's lazy schema initialization across requests.
+
+        Cloud releases execute database-upgrade before web/worker start. This
+        also protects the local app's concurrent first-use requests.
+        """
+        with self._lock:
+            yield self._db()
 
     def _db(self) -> Engine:
         with self._lock:

@@ -12,7 +12,7 @@ import os
 import re
 import stat
 import tempfile
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from scione.ingestion import IngestionError, PyMuPDFTextIngestor
 from scione.schemas import IngestedDocument, TextExtractionStatus
+from scione.specifications.attempts import ExtractionFailureArtifact
 from scione.specifications.models import CustomerExtractionRun
 
 MAX_PDF_BYTES = 25 * 1024 * 1024
@@ -70,6 +71,7 @@ class ExtractionFailure(BaseModel):
     output_limit: int = Field(gt=0)
     message: str = Field(min_length=1, max_length=4000)
     previous_run_id: str | None = None
+    attempt_id: str | None = None
 
 
 class _Metadata(BaseModel):
@@ -383,6 +385,7 @@ class FileSpecStore:
         *,
         expected_version: int | None = None,
         require_latest: bool = True,
+        validate_current: Callable[[], None] | None = None,
     ) -> RequirementReviewSet:
         """Atomically apply one explicit action to the selected run's original rows.
 
@@ -401,6 +404,8 @@ class FileSpecStore:
                         raise SpecStoreError(
                             "Extraction changed since you viewed it. Review the new result first."
                         )
+                if validate_current is not None:
+                    validate_current()
                 selected = list(requirement_ids)
                 if not selected or len(set(selected)) != len(selected):
                     raise SpecStoreError("Select one or more distinct requirements to review.")
@@ -424,13 +429,32 @@ class FileSpecStore:
         except (OSError, ValueError) as exc:
             raise SpecStoreError(f"Unable to save human review: {exc}") from exc
 
-    def save_failure(self, failure: ExtractionFailure) -> None:
-        """Persist a diagnostic without replacing any result or review."""
+    def save_failure(
+        self,
+        failure: ExtractionFailure,
+        *,
+        artifact: ExtractionFailureArtifact | None = None,
+    ) -> None:
+        """Persist a private immutable attempt before its safe latest-failure pointer."""
 
         try:
             checked = ExtractionFailure.model_validate(failure.model_dump())
             with self._locked():
                 self.load_document(checked.document_id)
+                if artifact is not None:
+                    attempt = ExtractionFailureArtifact.model_validate(artifact.model_dump())
+                    if attempt.document_id != checked.document_id:
+                        raise SpecStoreError("Failure artifact belongs to another specification.")
+                    if checked.attempt_id not in {None, attempt.attempt_id}:
+                        raise SpecStoreError("Failure artifact does not match its diagnostic.")
+                    path = self._failure_artifact_path(checked.document_id, attempt.attempt_id)
+                    path.parent.mkdir(exist_ok=True)
+                    if path.exists() or path.is_symlink():
+                        raise SpecStoreError("This failed attempt is already saved and immutable.")
+                    self._write_model(path, attempt)
+                    checked.attempt_id = attempt.attempt_id
+                elif checked.attempt_id is not None:
+                    raise SpecStoreError("An attempt pointer requires its retained artifact.")
                 self._write_model(
                     self._document_directory(checked.document_id) / "latest_failure.json", checked
                 )
@@ -449,6 +473,30 @@ class FileSpecStore:
             return failure
         except (OSError, ValueError) as exc:
             raise SpecStoreError(f"Unable to load analysis diagnostic: {exc}") from exc
+
+    def _failure_artifact_path(self, document_id: str, attempt_id: str) -> Path:
+        if not isinstance(attempt_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", attempt_id
+        ):
+            raise SpecStoreError("Invalid failed-attempt ID.")
+        directory = self._document_directory(document_id) / "failed_attempts"
+        self._check_directory(directory)
+        return directory / f"{attempt_id}.json"
+
+    def load_failure_artifact(
+        self, document_id: str, attempt_id: str
+    ) -> ExtractionFailureArtifact:
+        """Read a requested historical failure without changing accepted results."""
+        self.load_document(document_id)
+        try:
+            artifact = ExtractionFailureArtifact.model_validate_json(
+                self._read_bytes(self._failure_artifact_path(document_id, attempt_id))
+            )
+            if artifact.document_id != document_id or artifact.attempt_id != attempt_id:
+                raise SpecStoreError("Saved failed attempt does not match its identity.")
+            return artifact
+        except (OSError, ValueError) as exc:
+            raise SpecStoreError(f"Unable to load failed analysis attempt: {exc}") from exc
 
     @staticmethod
     def _validate_filename(filename: str) -> None:
@@ -538,6 +586,12 @@ class FileSpecStore:
             os.replace(temporary, path)
         finally:
             temporary.unlink(missing_ok=True)
+
+    @contextmanager
+    def write_guard(self) -> Iterator[None]:
+        """Serialize a server-side correction with source/review writes."""
+        with self._locked():
+            yield
 
     @contextmanager
     def _locked(self) -> Iterator[None]:

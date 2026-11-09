@@ -25,6 +25,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     serve_parser.add_argument("--port", type=int, default=8000, help="Local HTTP port.")
 
+    subparsers.add_parser(
+        "database-upgrade", help="Apply additive SQL lab-storage migrations; preserve saved data."
+    )
+
     ingest_parser = subparsers.add_parser(
         "ingest",
         help="Extract page-aware text and metadata from a text-based PDF.",
@@ -61,6 +65,34 @@ def main(argv: Sequence[str] | None = None) -> int:
         import uvicorn
 
         uvicorn.run("scione.api.app:app", host="127.0.0.1", port=args.port)
+        return 0
+
+    if args.command == "database-upgrade":
+        from sqlalchemy.exc import SQLAlchemyError
+
+        from scione.catalogs.sql_lab_store import upgrade_lab_schema
+        from scione.config import Settings
+        from scione.library.store import LibraryStore, LibraryStoreError
+        from scione.matching.store import upgrade_matching_schema
+        from scione.specifications.corrections import upgrade_corrections_schema
+
+        settings = Settings()
+        store = LibraryStore(
+            settings.scione_workspace_dir,
+            settings.scione_database_url.get_secret_value()
+            if settings.scione_database_url
+            else None,
+        )
+        try:
+            upgrade_lab_schema(store)
+            upgrade_matching_schema(store)
+            upgrade_corrections_schema(store)
+        except (LibraryStoreError, SQLAlchemyError):
+            print("Database upgrade failed. Check connection settings; saved data is preserved.")
+            return 1
+        finally:
+            store.close()
+        print("SQL lab-storage schema is up to date. Existing archive records were preserved.")
         return 0
 
     if args.command == "reset-demo":

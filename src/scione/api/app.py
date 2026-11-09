@@ -17,16 +17,20 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from scione.api.contracts import (
     AnalysisRequest,
+    ExclusionReview,
     LabExample,
     LibraryMetadata,
     MappingReset,
     MappingReview,
+    MatchingRequest,
     QuantityReview,
     ReportInput,
     ResetRequest,
     ScopeReview,
+    SourceFactsEdit,
     SourceReview,
 )
+from scione.api.inference_gate import InferenceBusyError, InferenceGate
 from scione.api.workspace import Workspace, utc_now
 from scione.catalogs import CatalogError, LabProfile, LabStoreError, default_demo_lab
 from scione.catalogs.lab_store import LabVersionConflict
@@ -67,6 +71,8 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
     config = settings if settings is not None else Settings()
     workspace = Workspace(config)
     app = FastAPI(title="SciOne local workspace", version="0.1.0")
+    inference_gate = InferenceGate()
+    app.state.inference_gate = inference_gate
     app.add_middleware(
         TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", "testserver"]
     )
@@ -110,6 +116,10 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
     ):
         app.add_exception_handler(error_type, domain_error)
 
+    @app.exception_handler(InferenceBusyError)
+    async def inference_busy(_request: Request, exc: InferenceBusyError):
+        return JSONResponse({"detail": str(exc)}, 409)
+
     @app.exception_handler(SQLAlchemyError)
     async def database_error(_request: Request, _exc: SQLAlchemyError):
         return JSONResponse(
@@ -144,6 +154,16 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
     @app.get("/api/lab")
     def lab():
         return workspace.labs.load_or_create()
+
+    @app.get("/api/lab/records")
+    def lab_records():
+        return workspace.labs.records()
+
+    @app.get("/api/parameters")
+    def parameter_definitions():
+        from scione.parameters.registry import definitions
+
+        return {"parameters": [item.model_dump(mode="json") for item in definitions()]}
 
     @app.put("/api/lab")
     def save_lab(body: LabProfile):
@@ -189,6 +209,55 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
     @app.get("/api/comparisons/{document_id}")
     def comparison(document_id: str):
         return workspace.library.comparison(document_id)
+
+    @app.get("/api/specifications/{document_id}/matching")
+    def matching_status(document_id: str):
+        return workspace.matching.overview(document_id)
+
+    @app.post("/api/specifications/{document_id}/matching")
+    def matching_run(document_id: str, body: MatchingRequest):
+        with inference_gate.claim(document_id, "matching"):
+            return matching_unlocked(document_id, body)
+
+    def matching_unlocked(document_id: str, body: MatchingRequest):
+        if not body.permission:
+            raise HTTPException(
+                400,
+                "Allow sending these requirements and lab declarations "
+                "to the selected model API before running matching.",
+            )
+        selected = config.model_copy(
+            update={
+                "groq_max_completion_tokens": body.output_limit,
+                "gemini_max_output_tokens": body.output_limit,
+                "fireworks_max_output_tokens": body.output_limit,
+                "sail_max_output_tokens": body.output_limit,
+                "groq_temperature": 0.0,
+                "gemini_temperature": 0.0,
+                "fireworks_temperature": 0.0,
+                "sail_temperature": 0.0,
+                "scione_single_attempt_mode": True,
+            }
+        )
+        try:
+            provider = create_configured_provider(
+                selected, provider_name=body.provider, model_name=body.model
+            )
+        except ConfigurationError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return workspace.matching.run(document_id, body, provider)
+
+    @app.get("/api/specifications/{document_id}/matching/{run_id}/artifacts")
+    def matching_artifacts(document_id: str, run_id: str):
+        import json
+
+        return Response(
+            json.dumps(workspace.matching.artifacts(document_id, run_id), ensure_ascii=False),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": 'attachment; filename="scione-matching-artifacts.json"'
+            },
+        )
 
     @app.get("/api/comparison-snapshots/{comparison_id}")
     def comparison_snapshot(comparison_id: str):
@@ -298,6 +367,8 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
                 if run_id
                 else workspace.specs.load_latest_extraction(document_id)
             )
+            if run:
+                run, _, _ = workspace.effective_source(document_id, run)
             requirement = (
                 next((row for row in run.extraction.requirements if row.id == requirement_id), None)
                 if run
@@ -324,6 +395,12 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             raise HTTPException(400, "Acknowledge the explicitly selected batch before saving.")
         if body.decision == "excluded" and not body.note:
             raise HTTPException(400, "Explain why these requirements should be excluded.")
+
+        def validate_facts():
+            revision = workspace.facts.latest(document_id, body.run_id)
+            if (revision.version if revision else 0) != body.facts_version:
+                raise LibraryConflict("Extracted content changed. Reload before confirming it.")
+
         workspace.specs.save_reviews(
             document_id,
             body.run_id,
@@ -332,14 +409,39 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             body.note,
             expected_version=body.version,
             require_latest=True,
+            validate_current=validate_facts,
         )
         return jsonable_encoder(workspace.specification(document_id))
 
+    @app.post("/api/specifications/{document_id}/facts")
+    def source_facts(document_id: str, body: SourceFactsEdit):
+        return jsonable_encoder(workspace.correct_facts(document_id, body))
+
+    @app.get("/api/specifications/{document_id}/analysis-failures/{attempt_id}/artifacts")
+    def analysis_failure_artifacts(document_id: str, attempt_id: str):
+        artifact = workspace.specs.load_failure_artifact(document_id, attempt_id)
+        return Response(
+            artifact.model_dump_json(indent=2),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": 'attachment; filename="scione-failed-analysis.json"'
+            },
+        )
+
     @app.post("/api/specifications/{document_id}/analysis")
     def analyze(document_id: str, body: AnalysisRequest):
-        if not body.permission or (body.provider == "gemini" and not body.free_tier_confirmed):
+        with inference_gate.claim(document_id, "analysis"):
+            return analyze_unlocked(document_id, body)
+
+    def analyze_unlocked(document_id: str, body: AnalysisRequest):
+        usage_acknowledged = body.billing_acknowledged or (
+            body.provider == "gemini" and body.free_tier_confirmed
+        )
+        if not body.permission or (
+            body.provider in {"gemini", "fireworks", "sail"} and not usage_acknowledged
+        ):
             raise HTTPException(
-                400, "Confirm sending permission and the provider's tier terms first."
+                400, "Confirm sending permission and acknowledge the provider's API usage terms."
             )
         stored = workspace.specs.load_document(document_id)
         previous = workspace.specs.load_latest_extraction(document_id)
@@ -351,6 +453,11 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
                         "groq_max_completion_tokens": body.output_limit,
                         "groq_temperature": 0.0,
                         "gemini_max_output_tokens": body.output_limit,
+                        "gemini_temperature": 0.0,
+                        "fireworks_max_output_tokens": body.output_limit,
+                        "sail_max_output_tokens": body.output_limit,
+                        "fireworks_temperature": 0.0,
+                        "sail_temperature": 0.0,
                         "scione_single_attempt_mode": True,
                     }
                 ),
@@ -375,11 +482,16 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
                         output_limit=body.output_limit,
                         message=message[:4000],
                         previous_run_id=previous.run_id if previous else None,
-                    )
+                    ),
+                    artifact=exc.artifact if isinstance(exc, CustomerExtractionError) else None,
                 )
             except SpecStoreError:
                 message += " Attempt details could not be saved. Existing data was not reset."
-            raise HTTPException(400, message) from exc
+            raise HTTPException(
+                400,
+                message + " No automatic retry was made. Your previous saved result is unchanged. "
+                "Review the failed attempt before starting another analysis.",
+            ) from exc
         workspace.library.index(document_id)
         return jsonable_encoder(workspace.specification(document_id))
 
@@ -390,6 +502,10 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
     @app.post("/api/reports/{document_id}/scope")
     def scope(document_id: str, body: ScopeReview):
         return jsonable_encoder(workspace.scope(document_id, body))
+
+    @app.post("/api/reports/{document_id}/exclusions")
+    def exclusions(document_id: str, body: ExclusionReview):
+        return jsonable_encoder(workspace.exclusions(document_id, body))
 
     @app.post("/api/reports/{document_id}/mapping")
     def mapping(document_id: str, body: MappingReview):

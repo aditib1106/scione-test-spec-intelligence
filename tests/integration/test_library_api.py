@@ -16,6 +16,7 @@ from sqlalchemy.exc import OperationalError
 from scione.api.app import create_app
 from scione.catalogs import FileLabStore, load_reference_catalog
 from scione.catalogs.seed import default_csp301_lab
+from scione.catalogs.sql_lab_store import SQLLabStore
 from scione.config import Settings
 from scione.library.store import LibraryStore, comparisons
 from scione.providers.gemini import GeminiModelProvider
@@ -249,9 +250,7 @@ def test_pending_method_identity_does_not_report_lab_values_as_missing(client, m
     result = response.json()["requirements"][0]["comparison"]
     assert result["checks"][0]["status"] == "unknown"
     parsed = [
-        check
-        for check in result["checks"]
-        if check["parameter_id"] in {"gloss", "gloss_retention"}
+        check for check in result["checks"] if check["parameter_id"] in {"gloss", "gloss_retention"}
     ]
     assert parsed
     assert all(check["declared"] == "Not compared: confirm test/method" for check in parsed)
@@ -458,7 +457,7 @@ def test_comparison_rejects_concurrent_input_changes_without_publishing_mixed_sn
             if changed == "extraction":
                 specs.save_extraction(source.document_id, newer)
             elif changed == "lab":
-                labs = FileLabStore(root, load_reference_catalog(), seed_demo=False)
+                labs = SQLLabStore(LibraryStore(root), load_reference_catalog(), legacy_root=root)
                 lab = labs.load_or_create()
                 lab.description = "A concurrent lab edit."
                 labs.save(lab)

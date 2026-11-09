@@ -1,0 +1,1324 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "capability_development_v1",
+  "annotation_status": "author_written_unreviewed",
+  "scope": "Parameter/comparison policy using supplied typed facts. No PDF extraction, candidate recall, actual LLM performance or method resolver accuracy is measured.",
+  "limitations": [
+    "Hand-authored synthetic development fixtures; require independent domain review before use as gold.",
+    "Challenge split is author-designed, not a blinded or statistically independent holdout.",
+    "Configuration case labels deliberate deferral when no single route is selected, not a physical impossibility proof."
+  ],
+  "cases": [
+    {
+      "id": "temperature_covered",
+      "family": "numeric_range",
+      "split": "development",
+      "requirement_statement": "Run at 60 °C.",
+      "lab_statement": "Temperature is adjustable from 20 to 70 °C.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "The requested execution setpoint is within the declared selectable range.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_temperature_covered",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Required temperature: 60 °C.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Declared adjustable temperature range: 20–70 °C.",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "temperature_exceeds",
+      "family": "numeric_range",
+      "split": "development",
+      "requirement_statement": "Run at 80 °C.",
+      "lab_statement": "Temperature is adjustable from 20 to 70 °C.",
+      "expected_checks": {
+        "request": "gap"
+      },
+      "rationale": "80 is above the maximum available setpoint.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_temperature_exceeds",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Required temperature: 80 °C.",
+            "operator": "=",
+            "value": 80,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Declared adjustable temperature range: 20–70 °C.",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "tolerance_not_covered",
+      "family": "numeric_range",
+      "split": "development",
+      "requirement_statement": "Maintain 60 ±3 °C.",
+      "lab_statement": "Temperature is adjustable from 58 to 62 °C.",
+      "expected_checks": {
+        "request": "gap"
+      },
+      "rationale": "The complete requested tolerance interval 57–63 is not covered.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_tolerance_not_covered",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Required temperature: 60 ±3 °C.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C",
+            "tolerance": 3
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Declared temperature: 58–62 °C.",
+          "operator": "range",
+          "minimum": 58,
+          "maximum": 62,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "missing_temperature",
+      "family": "missing",
+      "split": "development",
+      "requirement_statement": "Run at 60 °C.",
+      "lab_statement": "Distance is adjustable from 1 to 10 cm.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "A distance declaration establishes nothing about temperature; missing is not unavailable.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_missing_temperature",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Required temperature: 60 °C.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "distance",
+          "label": "distance",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Declared distance range: 1–10 cm.",
+          "operator": "range",
+          "minimum": 1,
+          "maximum": 10,
+          "unit": "cm"
+        }
+      ]
+    },
+    {
+      "id": "unavailable_temperature",
+      "family": "explicit_unavailable",
+      "split": "development",
+      "requirement_statement": "Run at 60 °C.",
+      "lab_statement": "Temperature control is explicitly unavailable.",
+      "expected_checks": {
+        "request": "gap"
+      },
+      "rationale": "The lab explicitly declares the requested ability unavailable.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_unavailable_temperature",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Required temperature: 60 °C.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Temperature control is unavailable.",
+          "operator": "text",
+          "text_value": "Not available",
+          "availability": "unsupported",
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "unknown_declaration",
+      "family": "missing",
+      "split": "development",
+      "requirement_statement": "Run at 60 °C.",
+      "lab_statement": "Temperature capability has not been assessed.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "Unknown capability must not be turned into either support or a proved gap.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_unknown_declaration",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Required temperature: 60 °C.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Temperature capability has not been assessed.",
+          "operator": "text",
+          "text_value": "Not assessed",
+          "availability": "unknown",
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "chinese_parameter_alias",
+      "family": "parameter_alias",
+      "split": "development",
+      "requirement_statement": "Run at 60 °C.",
+      "lab_statement": "温度可设定在20至70 °C之间。",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "温度 and temperature explicitly name the same property in the same context.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_chinese_parameter_alias",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Required temperature: 60 °C.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "温度",
+          "label": "温度",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "温度可设定在20至70 °C之间。",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "known_typo_parameter",
+      "family": "parameter_alias",
+      "split": "development",
+      "requirement_statement": "Run at 60 °C.",
+      "lab_statement": "Temprature adjustable from 20 to 70 °C.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "This deliberate misspelling still denotes temperature; no ambiguous nearest-neighbor inference is required.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_known_typo_parameter",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Required temperature: 60 °C.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temprature",
+          "label": "temprature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Temprature adjustable from 20 to 70 °C.",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "different_stage",
+      "family": "context",
+      "split": "development",
+      "requirement_statement": "Condition the sample at 60 °C.",
+      "lab_statement": "Curing temperature is adjustable from 20 to 100 °C.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "Curing capability cannot establish conditioning capability without an explicit link.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_different_stage",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "conditioning",
+            "raw_text": "Condition sample at 60 °C.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "curing",
+          "raw_text": "Curing temperature: 20–100 °C.",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 100,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "water_air_subject",
+      "family": "context",
+      "split": "development",
+      "requirement_statement": "Water temperature shall be 60 °C.",
+      "lab_statement": "Air temperature is adjustable from 20 to 100 °C.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "An air temperature declaration does not establish water temperature control.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_water_air_subject",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Water temperature shall be 60 °C.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C",
+            "source_context": "water"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Air temperature: 20–100 °C.",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 100,
+          "unit": "°C",
+          "source_context": "air"
+        }
+      ]
+    },
+    {
+      "id": "missing_material_context",
+      "family": "context",
+      "split": "development",
+      "requirement_statement": "Run at 60 °C on an aluminium substrate.",
+      "lab_statement": "Operating temperature is adjustable from 20 to 100 °C, material scope not declared.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "The required material qualifier is not established by an unqualified declaration.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_missing_material_context",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "60 °C on an aluminium substrate.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C",
+            "source_context": "aluminium substrate"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Operating temperature: 20–100 °C; material scope unrecorded.",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 100,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "sequence_different",
+      "family": "context",
+      "split": "development",
+      "requirement_statement": "Thermal cycle step 2 shall last 120 min.",
+      "lab_statement": "Only thermal cycle step 1 has an adjustable duration of 10–180 min.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "Step-specific resources cannot be borrowed across a different sequence position.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_sequence_different",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "duration",
+            "label": "duration",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "raw_text": "Thermal cycle step 2: 120 min.",
+            "sequence": 2,
+            "operator": "=",
+            "value": 120,
+            "unit": "min"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "duration",
+          "label": "duration",
+          "kind": "condition",
+          "stage": "thermal_cycle",
+          "raw_text": "Thermal cycle step 1: 10–180 min.",
+          "sequence": 1,
+          "operator": "range",
+          "minimum": 10,
+          "maximum": 180,
+          "unit": "min"
+        }
+      ]
+    },
+    {
+      "id": "seconds_minutes",
+      "family": "unit_conversion",
+      "split": "development",
+      "requirement_statement": "Apply exposure for 90 seconds.",
+      "lab_statement": "Exposure duration is adjustable from 1 to 2 minutes.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "90 seconds equals 1.5 minutes and lies within the selectable range.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_seconds_minutes",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "duration",
+            "label": "duration",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Exposure duration 90 s.",
+            "operator": "=",
+            "value": 90,
+            "unit": "s"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "duration",
+          "label": "duration",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Exposure duration 1–2 min.",
+          "operator": "range",
+          "minimum": 1,
+          "maximum": 2,
+          "unit": "min"
+        }
+      ]
+    },
+    {
+      "id": "centimeters_millimeters",
+      "family": "unit_conversion",
+      "split": "development",
+      "requirement_statement": "Use a working distance of 10 cm.",
+      "lab_statement": "Working distance is adjustable from 50 to 150 mm.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "10 centimetres equals 100 millimetres.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_centimeters_millimeters",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "distance",
+            "label": "distance",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Working distance: 10 cm.",
+            "operator": "=",
+            "value": 10,
+            "unit": "cm"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "distance",
+          "label": "distance",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Working distance: 50–150 mm.",
+          "operator": "range",
+          "minimum": 50,
+          "maximum": 150,
+          "unit": "mm"
+        }
+      ]
+    },
+    {
+      "id": "fahrenheit_celsius",
+      "family": "unit_conversion",
+      "split": "development",
+      "requirement_statement": "Run at 140 °F.",
+      "lab_statement": "Temperature is adjustable from 20 to 70 °C.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "140 Fahrenheit equals 60 Celsius; affine conversion is required.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_fahrenheit_celsius",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Required temperature: 140 °F.",
+            "operator": "=",
+            "value": 140,
+            "unit": "°F"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Declared adjustable temperature range: 20–70 °C.",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "grams_kilograms",
+      "family": "unit_conversion",
+      "split": "development",
+      "requirement_statement": "Apply a mass of 750 g.",
+      "lab_statement": "Applied mass is adjustable from 0.5 to 1 kg.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "750 grams equals 0.75 kilograms; mass is explicit on both sides.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_grams_kilograms",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "load",
+            "label": "load",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Applied mass: 750 g.",
+            "operator": "=",
+            "value": 750,
+            "unit": "g"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "load",
+          "label": "load",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Applied mass: 0.5–1 kg.",
+          "operator": "range",
+          "minimum": 0.5,
+          "maximum": 1,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": "mass_force_not_equivalent",
+      "family": "unit_dimension",
+      "split": "author_designed_challenge",
+      "requirement_statement": "Apply a force of 1 N.",
+      "lab_statement": "Applied mass available: 1 g.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "Mass and force are different dimensions; no mechanism or conversion assumption is supplied.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_mass_force_not_equivalent",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "load",
+            "label": "load",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Applied force: 1 N.",
+            "operator": "=",
+            "value": 1,
+            "unit": "N"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "load",
+          "label": "load",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Applied mass: 1 g.",
+          "operator": "=",
+          "value": 1,
+          "unit": "g"
+        }
+      ]
+    },
+    {
+      "id": "flat_panel_translation",
+      "family": "categorical",
+      "split": "development",
+      "requirement_statement": "Use a flat panel.",
+      "lab_statement": "试板形状：平板。",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "Flat panel and 平板 are explicit translations of the same supported shape.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_flat_panel_translation",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "panel_shape",
+            "label": "panel shape",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Use a flat panel.",
+            "operator": "text",
+            "text_value": "flat panel"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "panel_shape",
+          "label": "panel shape",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "试板形状：平板。",
+          "operator": "text",
+          "text_value": "平板"
+        }
+      ]
+    },
+    {
+      "id": "different_material_closed_category",
+      "family": "categorical",
+      "split": "development",
+      "requirement_statement": "Use an aluminium specimen.",
+      "lab_statement": "This method supports steel only; no other materials are supported.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "The raw source says steel only, but the supplied typed declaration has no closed-set/exclusivity field. Without that missing structured fact, a different category is unknown rather than a proved gap; this case exposes a schema/normalization limitation.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_different_material_closed_category",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "material",
+            "label": "material",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Specimen material: aluminium.",
+            "operator": "text",
+            "text_value": "aluminium"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "material",
+          "label": "material",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Supported material: steel only; exhaustive declaration.",
+          "operator": "text",
+          "text_value": "steel"
+        }
+      ]
+    },
+    {
+      "id": "resolution_lower_is_better",
+      "family": "capability_metric",
+      "split": "author_designed_challenge",
+      "requirement_statement": "Measurement resolution must be 0.1 mm or finer.",
+      "lab_statement": "Measurement resolution is 0.05 mm.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "For declared resolution smaller is better; 0.05 meets an upper bound of 0.1.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_resolution_lower_is_better",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "measurement_resolution",
+            "label": "measurement resolution",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Resolution ≤0.1 mm.",
+            "operator": "<=",
+            "value": 0.1,
+            "unit": "mm"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "measurement_resolution",
+          "label": "measurement resolution",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Resolution: 0.05 mm.",
+          "operator": "=",
+          "value": 0.05,
+          "unit": "mm"
+        }
+      ]
+    },
+    {
+      "id": "resolution_insufficient",
+      "family": "capability_metric",
+      "split": "author_designed_challenge",
+      "requirement_statement": "Measurement resolution must be 0.1 mm or finer.",
+      "lab_statement": "Measurement resolution is 0.2 mm.",
+      "expected_checks": {
+        "request": "gap"
+      },
+      "rationale": "0.2 mm is coarser than the required maximum resolution of 0.1 mm.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_resolution_insufficient",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "measurement_resolution",
+            "label": "measurement resolution",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Resolution ≤0.1 mm.",
+            "operator": "<=",
+            "value": 0.1,
+            "unit": "mm"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "measurement_resolution",
+          "label": "measurement resolution",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Resolution: 0.2 mm.",
+          "operator": "=",
+          "value": 0.2,
+          "unit": "mm"
+        }
+      ]
+    },
+    {
+      "id": "criterion_reportable",
+      "family": "reportability",
+      "split": "development",
+      "requirement_statement": "The specimen acceptance threshold is colour difference ≤1 ΔE*ab.",
+      "lab_statement": "The lab can measure and report colour difference from 0 to 10 ΔE*ab.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "The lab can report the threshold; this does not predict whether a specimen passes.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_criterion_reportable",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "color_difference",
+            "label": "color difference",
+            "kind": "criterion",
+            "stage": "general",
+            "raw_text": "Acceptance: colour difference ≤1 ΔE*ab.",
+            "operator": "<=",
+            "value": 1,
+            "unit": "ΔE*ab"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "color_difference",
+          "label": "color difference",
+          "kind": "reporting",
+          "stage": "general",
+          "raw_text": "Reportable colour difference: 0–10 ΔE*ab.",
+          "operator": "range",
+          "minimum": 0,
+          "maximum": 10,
+          "unit": "ΔE*ab"
+        }
+      ]
+    },
+    {
+      "id": "criterion_not_reportable",
+      "family": "reportability",
+      "split": "development",
+      "requirement_statement": "After cycling, gloss retention shall be ≥90%.",
+      "lab_statement": "The lab explicitly cannot report gloss retention after cycling.",
+      "expected_checks": {
+        "request": "gap"
+      },
+      "rationale": "An explicit inability to report the requested result is a capability gap, not specimen failure.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_criterion_not_reportable",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "gloss_retention",
+            "label": "gloss retention",
+            "kind": "criterion",
+            "stage": "after_cycle",
+            "raw_text": "After cycle acceptance: gloss retention ≥90%.",
+            "operator": ">=",
+            "value": 90,
+            "unit": "%"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "gloss_retention",
+          "label": "gloss retention",
+          "kind": "reporting",
+          "stage": "after_cycle",
+          "raw_text": "Cannot report gloss retention after cycling.",
+          "operator": "text",
+          "text_value": "Not reportable",
+          "availability": "unsupported",
+          "unit": "%"
+        }
+      ]
+    },
+    {
+      "id": "unknown_custom_text",
+      "family": "custom_attribute",
+      "split": "author_designed_challenge",
+      "requirement_statement": "Use the fictional surface protocol XQ-7.",
+      "lab_statement": "No surface protocol information has been supplied.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "An unfamiliar missing attribute cannot be guessed as supported.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_unknown_custom_text",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "surface_protocol",
+            "label": "surface protocol",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Surface protocol: XQ-7 (fictional).",
+            "operator": "text",
+            "text_value": "XQ-7"
+          }
+        ]
+      },
+      "lab_claims": []
+    },
+    {
+      "id": "custom_execution_numeric",
+      "family": "custom_attribute",
+      "split": "author_designed_challenge",
+      "requirement_statement": "Set fictional execution control z to 7 quanta.",
+      "lab_statement": "Fictional execution control z is selectable from 3 to 9 quanta.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "The same explicit execution property and unit can use interval containment without a scientific inference.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_custom_execution_numeric",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "z_execution_setting",
+            "label": "z execution setting",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Set execution control z to 7 quanta.",
+            "operator": "=",
+            "value": 7,
+            "unit": "quanta"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "z_execution_setting",
+          "label": "z execution setting",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Selectable execution control z: 3–9 quanta.",
+          "operator": "range",
+          "minimum": 3,
+          "maximum": 9,
+          "unit": "quanta"
+        }
+      ]
+    },
+    {
+      "id": "configuration_not_mixed",
+      "family": "configuration",
+      "split": "author_designed_challenge",
+      "requirement_statement": "Use 60 °C and 120 min together in one setup.",
+      "lab_statement": "Route A: 20–70 °C and 10–30 min. Route B: 20–40 °C and 10–180 min. No route has been selected.",
+      "expected_checks": {
+        "request_temperature": "unknown",
+        "request_duration": "unknown"
+      },
+      "rationale": "The comparator must defer or assess a complete route; it must not combine temperature from A with duration from B. This label evaluates deliberate deferral, not a physical impossibility proof.",
+      "method_status": "supported",
+      "expected_overall": "needs_information",
+      "normalized": {
+        "requirement_id": "req_configuration_not_mixed",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request_temperature",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "One setup: 60 °C for 120 min.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          },
+          {
+            "id": "request_duration",
+            "parameter_id": "duration",
+            "label": "duration",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "One setup: 60 °C for 120 min.",
+            "operator": "=",
+            "value": 120,
+            "unit": "min"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "a_temperature",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Route A temperature: 20–70 °C.",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C",
+          "configuration": "a"
+        },
+        {
+          "id": "a_duration",
+          "parameter_id": "duration",
+          "label": "duration",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Route A duration: 10–30 min.",
+          "operator": "range",
+          "minimum": 10,
+          "maximum": 30,
+          "unit": "min",
+          "configuration": "a"
+        },
+        {
+          "id": "b_temperature",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Route B temperature: 20–40 °C.",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 40,
+          "unit": "°C",
+          "configuration": "b"
+        },
+        {
+          "id": "b_duration",
+          "parameter_id": "duration",
+          "label": "duration",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Route B duration: 10–180 min.",
+          "operator": "range",
+          "minimum": 10,
+          "maximum": 180,
+          "unit": "min",
+          "configuration": "b"
+        }
+      ]
+    },
+    {
+      "id": "source_unresolved",
+      "family": "source_quality",
+      "split": "development",
+      "requirement_statement": "The source says 60? but its property/unit are unreadable.",
+      "lab_statement": "Temperature is adjustable from 20 to 70 °C.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "Unresolved source interpretation must not become a supported typed claim.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_source_unresolved",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": null,
+            "label": "Unresolved source",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Unreadable source: 60?",
+            "operator": "text",
+            "text_value": "60?",
+            "normalization_state": "unresolved"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Declared adjustable temperature range: 20–70 °C.",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "unapproved_alternative_method",
+      "family": "method_gate",
+      "split": "development",
+      "requirement_statement": "Run at 60 °C, but approval for the proposed alternative method is missing.",
+      "lab_statement": "Temperature is adjustable from 20 to 70 °C under the alternative method.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "A supported temperature must not override an unresolved method gate. This tests supplied gate propagation, not actual method resolution.",
+      "method_status": "unknown",
+      "expected_overall": "needs_information",
+      "normalized": {
+        "requirement_id": "req_unapproved_alternative_method",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Required temperature: 60 °C.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Declared adjustable temperature range: 20–70 °C.",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "method_not_supported",
+      "family": "method_gate",
+      "split": "development",
+      "requirement_statement": "Run method M at 60 °C.",
+      "lab_statement": "Temperature is adjustable from 20 to 70 °C, but method M is explicitly not offered.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "Parameter support must not override a known method gap. This tests supplied gate propagation, not actual method resolution.",
+      "method_status": "gap",
+      "expected_overall": "not_matched",
+      "normalized": {
+        "requirement_id": "req_method_not_supported",
+        "test_name": "Synthetic capability scenario",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "raw_text": "Required temperature: 60 °C.",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "kind": "condition",
+          "stage": "general",
+          "raw_text": "Declared adjustable temperature range: 20–70 °C.",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C"
+        }
+      ]
+    }
+  ]
+}

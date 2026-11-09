@@ -13,9 +13,12 @@ import pytest
 from scione.api.app import create_app
 from scione.catalogs import FileLabStore, LabCapability, load_reference_catalog
 from scione.catalogs.models import LabOperatingLimit, LabProfile
+from scione.catalogs.sql_lab_store import SQLLabStore
 from scione.config import Settings
+from scione.library.store import LibraryStore
 from scione.providers.gemini import GeminiModelProvider
 from scione.providers.groq import GroqModelProvider
+from scione.providers.openai_compatible import OpenAICompatibleModelProvider
 from scione.providers.static import StaticModelProvider
 from scione.reports.store import FileReportStore
 from scione.specifications.models import CustomerExtractionRun
@@ -72,6 +75,8 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         scione_workspace_dir=root,
         groq_api_key=None,
         gemini_api_key=None,
+        fireworks_api_key=None,
+        sail_api_key=None,
     )
 
     def reject_model_call(*_args: object, **_kwargs: object) -> None:
@@ -79,6 +84,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(GroqModelProvider, "generate_structured", reject_model_call)
     monkeypatch.setattr(GeminiModelProvider, "generate_structured", reject_model_call)
+    monkeypatch.setattr(OpenAICompatibleModelProvider, "generate_structured", reject_model_call)
     app = create_app(settings, frontend_dir=tmp_path / "missing-frontend")
     yield LocalHTTPClient(app), root
 
@@ -144,7 +150,7 @@ def seed_source(
         )
     ]
     lab_store.save(lab)
-    return source, run, lab_store
+    return source, run, SQLLabStore(LibraryStore(root), catalog, legacy_root=root)
 
 
 def edit_body(response, **changes):
@@ -198,6 +204,20 @@ def test_empty_workspace_is_local_and_does_not_seed_demo_or_analyze(client):
             "model": "gemini-3.5-flash-lite",
             "available": False,
             "output_limit": overview.json()["providers"][1]["output_limit"],
+        },
+        {
+            "id": "fireworks",
+            "label": "Fireworks",
+            "model": "accounts/fireworks/models/deepseek-v4p1-flash-1017",
+            "available": False,
+            "output_limit": 8192,
+        },
+        {
+            "id": "sail",
+            "label": "Sail",
+            "model": "zai-org/GLM-5.3",
+            "available": False,
+            "output_limit": 8192,
         },
     ]
     lab = http.get("/api/lab").json()
@@ -603,8 +623,8 @@ def test_local_origin_and_invalid_lab_write_do_not_overwrite_saved_data(client):
     invalid = http.put("/api/lab", json={**before, "capabilities": [{"id": "invalid id"}]})
     assert invalid.status_code == 422
     assert http.get("/api/lab").json() == before
-    assert FileLabStore(
-        root, load_reference_catalog()
+    assert SQLLabStore(
+        LibraryStore(root), load_reference_catalog(), legacy_root=root
     ).load_or_create() == LabProfile.model_validate(before)
 
 
@@ -663,8 +683,9 @@ def test_analysis_checks_permission_and_gemini_tier_before_provider_creation(
     assert specs.load_document(source.document_id) == source_before
 
 
+@pytest.mark.parametrize("provider", ["groq", "gemini"])
 def test_offline_analysis_and_failed_reanalysis_preserve_latest_run_and_review(
-    client, monkeypatch: pytest.MonkeyPatch
+    client, monkeypatch: pytest.MonkeyPatch, provider: str
 ):
     import scione.api.app as api_module
 
@@ -675,12 +696,13 @@ def test_offline_analysis_and_failed_reanalysis_preserve_latest_run_and_review(
     pdf_before = specs.read_pdf(source.document_id)
     endpoint = f"/api/specifications/{source.document_id}/analysis"
     request_body = {
-        "provider": "groq",
+        "provider": provider,
         "model": "offline-model",
         "strategy": "whole_document",
         "output_limit": 4096,
         "permission": True,
         "free_tier_confirmed": False,
+        "billing_acknowledged": True,
     }
     monkeypatch.setattr(
         api_module,

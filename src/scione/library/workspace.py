@@ -7,10 +7,13 @@ from collections import Counter
 from fastapi import HTTPException
 
 from scione.library.store import LibraryStore, digest
+from scione.parameters import REGISTRY_VERSION
 from scione.reports.matching import lab_fingerprint
 from scione.specifications.review import assess_requirements
 from scione.structured import compare_requirement, normalize_capability, normalize_requirement
 from scione.structured.models import NORMALIZER_VERSION, AtomicClaim
+
+COMPARISON_POLICY_VERSION = "decisive_rules_first_v1"
 
 
 class LibraryWorkspace:
@@ -35,7 +38,9 @@ class LibraryWorkspace:
 
     def document(self, document_id: str) -> dict:
         stored, run = self.index(document_id)
-        review = self.workspace.specs.load_review(document_id, run.run_id) if run else None
+        run, review, _revision = (
+            self.workspace.effective_source(document_id, run) if run else (None, None, None)
+        )
         return self._document_view(stored, run, review)
 
     def _document_view(self, stored, run, review) -> dict:
@@ -68,8 +73,29 @@ class LibraryWorkspace:
         }
 
     def detail(self, document_id: str) -> dict:
-        document = self.document(document_id)
-        rows = self.store.load_requirements(document["run_id"]) if document["run_id"] else []
+        stored, machine = self.index(document_id)
+        effective, review, revision = (
+            self.workspace.effective_source(document_id, machine) if machine else (None, None, None)
+        )
+        document = self._document_view(stored, effective, review)
+        rows = (
+            [
+                {
+                    "requirement_id": item.id,
+                    "test_name": item.original_test_name,
+                    "methods": [method.code for method in item.requested_methods],
+                    "claims": [
+                        claim.model_dump(mode="json")
+                        for claim in normalize_requirement(item).claims
+                    ],
+                }
+                for item in effective.extraction.requirements
+            ]
+            if revision
+            else self.store.load_requirements(document["run_id"])
+            if document["run_id"]
+            else []
+        )
         for row in rows:
             row["claims"] = [
                 self.present_claim(AtomicClaim.model_validate(item)) for item in row["claims"]
@@ -79,7 +105,12 @@ class LibraryWorkspace:
             for item in self.listing()["documents"]
             if item["family_id"] == document["family_id"]
         ]
-        return {"document": document, "versions": versions, "requirements": rows}
+        return {
+            "document": document,
+            "versions": versions,
+            "requirements": rows,
+            "facts_revision_id": revision.revision_id if revision else None,
+        }
 
     @staticmethod
     def present_claim(claim: AtomicClaim) -> dict:
@@ -104,14 +135,55 @@ class LibraryWorkspace:
         stored = self.workspace.specs.load_document(document_id)
         self.store.ensure_document(stored, run.extraction.document)
         document = self._document_view(stored, run, report.source_review)
+        # Machine extraction rows are immutable. Reviewed facts have their own
+        # SQL revision and normalized snapshot, never overwrite this raw index.
+        machine = self.workspace.specs.load_extraction(document_id, run.run_id)
         self.store.save_requirements(
-            run, [normalize_requirement(item) for item in run.extraction.requirements]
+            machine, [normalize_requirement(item) for item in machine.extraction.requirements]
         )
         fingerprint = lab_fingerprint(report.lab)
         self.store.save_capability_revision(report.lab, fingerprint)
+        matching_run, semantic_comparisons, semantic_capabilities = (
+            self.workspace.matching.compiled(report)
+        )
         rows = []
         for line in report.lines:
             requirement = line.requirement
+            method_status = "unknown"
+            if line.status in {"test_gap", "method_gap"}:
+                method_status = "gap"
+            elif line.capability and not line.unknown_methods and line.status != "needs_review":
+                method_status = "supported"
+            rule_claims = normalize_capability(line.capability) if line.capability else []
+            rule_comparison = compare_requirement(
+                normalize_requirement(requirement), rule_claims, method_status
+            )
+            # An AI deferral must not undo a complete, independently grounded
+            # comparison. This is deliberately item-scoped: unresolved claims
+            # still use only validated semantic links, never a per-claim fallback
+            # to another similarly named or differently configured declaration.
+            decisive_rules = (
+                line.mapping_choice is None
+                and line.match_basis == "Exact curated name / alias"
+                and line.status in {"in_house", "condition_gap"}
+                and line.capability is not None
+                and not line.unknown_methods
+                and len({claim.configuration for claim in rule_claims if claim.configuration}) <= 1
+                and rule_comparison.unknown_count == 0
+                and line.extraction_review_state != "needs_attention"
+            )
+            # Explicit human identity choices remain authoritative. Machine
+            # proposals are independently saved and must not replace reviews.
+            use_semantic = (
+                matching_run is not None
+                and line.mapping_choice is None
+                and not decisive_rules
+                and line.status != "excluded"
+                and line.extraction_review_state != "excluded"
+            )
+            capability = (
+                semantic_capabilities.get(requirement.id) if use_semantic else line.capability
+            )
             methods = line.considered_method_codes or [
                 item.code for item in requirement.requested_methods
             ]
@@ -125,16 +197,12 @@ class LibraryWorkspace:
                     "unknown_count": 0,
                 }
             else:
-                method_status = "unknown"
-                if line.status in {"test_gap", "method_gap"}:
-                    method_status = "gap"
-                elif line.capability and not line.unknown_methods and line.status != "needs_review":
-                    method_status = "supported"
-                atoms = normalize_capability(line.capability) if line.capability else []
-                result = compare_requirement(
-                    normalize_requirement(requirement), atoms, method_status
+                result = (
+                    semantic_comparisons[requirement.id].model_copy(deep=True)
+                    if use_semantic
+                    else rule_comparison
                 )
-                if line.capability is None and method_status == "unknown":
+                if capability is None and method_status == "unknown":
                     for check in result.checks:
                         claim = check.requirement_claim
                         if (
@@ -151,7 +219,14 @@ class LibraryWorkspace:
                             )
                 if result.checks:
                     result.checks[0].requested = ", ".join(methods) or "Customer-defined procedure"
-                    result.checks[0].declared = ", ".join(line.lab_method_identifiers) or None
+                    result.checks[0].declared = (
+                        ", ".join(
+                            report.catalog.method_by_id(identifier).identifier
+                            for identifier in capability.method_ids
+                        )
+                        if use_semantic and capability
+                        else ", ".join(line.lab_method_identifiers)
+                    ) or None
                 comparison = result.model_dump(mode="json")
                 choice = line.mapping_choice
                 if (
@@ -226,8 +301,16 @@ class LibraryWorkspace:
                     "requirement_id": requirement.id,
                     "test_name": requirement.original_test_name,
                     "methods": methods,
-                    "capability_id": line.capability.id if line.capability else None,
+                    "capability_id": capability.id if capability else None,
                     "source_review_state": line.extraction_review_state,
+                    "comparison_engine": (
+                        "ai_semantic_matching" if use_semantic else "deterministic_rules"
+                    ),
+                    "report_scope_exclusion": (
+                        line.report_scope_exclusion.model_dump(mode="json")
+                        if line.report_scope_exclusion
+                        else None
+                    ),
                     "comparison": comparison,
                 }
             )
@@ -247,6 +330,8 @@ class LibraryWorkspace:
             "lab_name": report.lab.name,
             "lab_version": report.lab.version,
             "normalizer_version": NORMALIZER_VERSION,
+            "parameter_policy_version": REGISTRY_VERSION,
+            "comparison_policy_version": COMPARISON_POLICY_VERSION,
             "requirements": rows,
             "summary": summary,
             "notes": [
@@ -254,10 +339,24 @@ class LibraryWorkspace:
                 "Missing lab information remains unresolved; it is not an explicit limitation.",
             ],
             "source_run_id": run.run_id,
+            "source_facts_revision_id": report.source_facts_revision_id,
             "lab_fingerprint": fingerprint,
+            "matching_run_id": matching_run.run_id if matching_run else None,
+            "comparison_engine": "ai_semantic_matching" if matching_run else "deterministic_rules",
+            "report_input_fingerprint": report.input_fingerprint,
+            "report_workspace_version": report.workspace.version,
         }
         self._assert_comparison_inputs_current(report, document)
-        identity = digest([report.input_fingerprint, document, NORMALIZER_VERSION])
+        identity = digest(
+            [
+                report.input_fingerprint,
+                document,
+                NORMALIZER_VERSION,
+                REGISTRY_VERSION,
+                COMPARISON_POLICY_VERSION,
+                matching_run.run_id if matching_run else None,
+            ]
+        )
         saved = self.store.save_comparison(identity, payload)
         # Pagination is presentation metadata; the persisted comparison remains immutable.
         return saved

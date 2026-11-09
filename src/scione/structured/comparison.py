@@ -7,6 +7,13 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Literal
 
+from scione.parameters import (
+    contexts_match,
+    evaluate_pair,
+    generic_reporting_unavailable,
+    normalize_claim,
+    normalize_claims,
+)
 from scione.structured.models import (
     AtomicClaim,
     ClaimCheck,
@@ -31,36 +38,11 @@ _UNIT_FACTORS = {
 
 
 def _context_matches(request: AtomicClaim, declaration: AtomicClaim) -> bool:
-    if request.sequence != declaration.sequence and (request.sequence or declaration.sequence):
-        return False
-    intrinsic_measurement = request.parameter_id in {
-        "measurement_angle",
-        "measurement_locations",
-        "illuminant",
-        "reference_panel",
-    }
-    request_stage = (
-        "measurement" if intrinsic_measurement and request.stage == "general" else request.stage
-    )
-    declaration_stage = (
-        "measurement"
-        if intrinsic_measurement and declaration.stage == "general"
-        else declaration.stage
-    )
-    if request_stage == declaration_stage:
-        return True
-    # A native output scale can be used at a separately assessed exposure stage;
-    # a generic operating temperature must never be borrowed for another stage.
-    return (
-        request.kind == "criterion"
-        and declaration.kind == "reporting"
-        and declaration.stage == "general"
-        and request.parameter_id in {"adhesion_class", "color_difference", "film_thickness"}
-    )
+    return contexts_match(request, declaration)
 
 
 def _factor(request: AtomicClaim, declaration: AtomicClaim) -> Fraction | None:
-    if request.unit == declaration.unit:
+    if request.unit is not None and request.unit == declaration.unit:
         return Fraction(1)
     # Counts can be expressed without repeating the parameter's own count label.
     # This does not make a missing physical unit (such as hours) comparable.
@@ -95,6 +77,9 @@ def _points(claim: AtomicClaim) -> tuple[Decimal | None, Decimal | None]:
 
 
 def _one(request: AtomicClaim, declaration: AtomicClaim) -> tuple[str, str]:
+    typed = evaluate_pair(request, declaration)
+    if typed is not None:
+        return typed.status, typed.reason
     if declaration.availability == "unsupported":
         return "gap", "The lab explicitly declares this output or condition unavailable."
     if declaration.availability == "unknown" or declaration.normalization_state == "unresolved":
@@ -126,6 +111,8 @@ def _one(request: AtomicClaim, declaration: AtomicClaim) -> tuple[str, str]:
         return "unknown", "The wording differs; a matching declaration has not been established."
     if declaration.operator in {"required", "text"}:
         return "unknown", "A numeric operating range or reportable output range is not recorded."
+    if declaration.operator == "=" and declaration.tolerance and declaration.kind == "condition":
+        return "unknown", "A nominal setting with tolerance does not establish a selectable range."
     factor = _factor(request, declaration)
     if factor is None:
         return "unknown", "The units or measurement scales do not establish a valid comparison."
@@ -207,6 +194,9 @@ def compare_requirement(
             reason=method_reasons[method_status],
         )
     ]
+    # Work on canonical copies. Exported requirement/source claims retain their
+    # original names, units and values for provenance and extraction evaluation.
+    capability_claims = normalize_claims(capability_claims)
     selected_configs = {claim.configuration for claim in capability_claims if claim.configuration}
     operating_clauses = {
         claim.raw_text
@@ -214,7 +204,8 @@ def compare_requirement(
         if claim.parameter_id in {"temperature", "duration", "relative_humidity", "cycles"}
         and claim.operator not in {"text", "required"}
     }
-    for claim in normalized.claims:
+    for source_claim in normalized.claims:
+        claim = normalize_claim(source_claim)
         check = ClaimCheck(
             id=claim.id,
             parameter_id=claim.parameter_id,
@@ -226,10 +217,15 @@ def compare_requirement(
             status="unknown",
             reason="The lab has no declaration for this parameter in the requested stage.",
             source_pages=claim.source_pages,
-            requirement_claim=claim,
+            requirement_claim=source_claim,
         )
         workflow = (
             claim.kind == "instruction"
+            and not any(
+                value is not None
+                for value in (claim.value, claim.minimum, claim.maximum, claim.tolerance)
+            )
+            and not claim.values
             and claim.raw_text not in operating_clauses
             and re.search(
                 r"written approval|customer.*sign.off|deviations? before testing|"
@@ -267,7 +263,12 @@ def compare_requirement(
             )
         ]
         if claim.configuration:
-            candidates = [item for item in candidates if item.configuration == claim.configuration]
+            candidates = [
+                item
+                for item in candidates
+                if item.configuration == claim.configuration
+                or generic_reporting_unavailable(claim, item)
+            ]
         elif len(selected_configs) > 1:
             check.reason = (
                 "Several lab configurations are present. Select one configuration before comparing."

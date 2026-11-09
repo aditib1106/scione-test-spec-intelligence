@@ -422,7 +422,11 @@ def _report_html(snapshot: ReportSnapshot) -> str:
         parts.append("<p class='meta'>Not included in capability assessment or pricing.</p>")
         for line in excluded:
             decision = snapshot.source_review.decisions.get(line.requirement.id)
-            note = f" — {decision.note}" if decision and decision.note else ""
+            reason = (
+                line.report_scope_exclusion.note
+                if line.report_scope_exclusion else decision.note if decision else ""
+            )
+            note = f" — {reason}" if reason else ""
             parts.append(f"<p>{_text(line.requirement.original_test_name + note)}</p>")
     parts.append("</body></html>")
     return "".join(parts)

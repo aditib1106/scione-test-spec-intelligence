@@ -11,6 +11,8 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from scione.structured.models import AtomicClaim
+
 
 class CatalogError(ValueError):
     """Raised when a lab declaration references unknown or unrelated identities."""
@@ -161,11 +163,12 @@ class LabOperatingLimit(CatalogModel):
 class LabCapability(CatalogModel):
     """A lab's own declaration, not verification or accreditation evidence."""
 
-    id: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    id: str = Field(pattern=r"^[a-z][a-z0-9_]*$", max_length=100)
     canonical_test_id: str = Field(min_length=1)
     method_ids: list[str] = Field(default_factory=list)
     declared_constraints: str | None = None
     structured_limits: list[LabOperatingLimit] = Field(default_factory=list)
+    atomic_claims: list[AtomicClaim] = Field(default_factory=list)
     notes: str | None = None
     price: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
     currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
@@ -180,14 +183,17 @@ class LabCapability(CatalogModel):
 
     @model_validator(mode="after")
     def complete_pricing(self) -> Self:
+        identifiers = [claim.id for claim in self.atomic_claims]
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("Capability claim IDs must be unique within each capability.")
         if self.price is not None and (not self.currency or not self.pricing_basis):
             raise ValueError("A price requires both currency and pricing_basis.")
         return self
 
 
 class LabProfile(CatalogModel):
-    id: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
-    name: str = Field(min_length=1)
+    id: str = Field(pattern=r"^[a-z][a-z0-9_]*$", max_length=200)
+    name: str = Field(min_length=1, max_length=300)
     description: str = ""
     version: int = Field(default=1, ge=1)
     capabilities: list[LabCapability] = Field(default_factory=list)

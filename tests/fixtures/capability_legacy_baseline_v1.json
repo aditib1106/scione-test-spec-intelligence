@@ -1,0 +1,1931 @@
+{
+  "schema_version": "1.0",
+  "strategy": "legacy_comparator_before_parameter_engine",
+  "input_kind": "supplied_typed_facts",
+  "captured_at": "2026-11-09T10:35:29.130142+00:00",
+  "dataset_id": "capability_development_v1",
+  "dataset_sha256": "746f4a5bec55aa39d58c3aa3e9ebaeddd618e02a752da14a069521c00cfc9fee",
+  "source_path": "src/scione/structured/comparison.py",
+  "source_sha256": "26c2c143a1271c9b634289c87bd7d4052e728f8990799f918e623862df2dd667",
+  "annotation_status": "author_written_unreviewed",
+  "predictions": [
+    {
+      "case_id": "temperature_covered",
+      "comparison": {
+        "requirement_id": "req_temperature_covered",
+        "status": "fully_matched",
+        "checks": [
+          {
+            "id": "req_temperature_covered_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "60 °C",
+            "declared": "20–70 °C",
+            "status": "supported",
+            "reason": "The requested value or range is covered by this lab declaration in the same stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Required temperature: 60 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 2,
+        "gap_count": 0,
+        "unknown_count": 0
+      }
+    },
+    {
+      "case_id": "temperature_exceeds",
+      "comparison": {
+        "requirement_id": "req_temperature_exceeds",
+        "status": "partially_matched",
+        "checks": [
+          {
+            "id": "req_temperature_exceeds_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "80 °C",
+            "declared": "20–70 °C",
+            "status": "gap",
+            "reason": "The requested value or range lies outside the lab's declared capability.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "80",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Required temperature: 80 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 1,
+        "unknown_count": 0
+      }
+    },
+    {
+      "case_id": "tolerance_not_covered",
+      "comparison": {
+        "requirement_id": "req_tolerance_not_covered",
+        "status": "partially_matched",
+        "checks": [
+          {
+            "id": "req_tolerance_not_covered_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "60 ± 3 °C",
+            "declared": "58–62 °C",
+            "status": "gap",
+            "reason": "The requested value or range lies outside the lab's declared capability.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "3",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Required temperature: 60 ±3 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 1,
+        "unknown_count": 0
+      }
+    },
+    {
+      "case_id": "missing_temperature",
+      "comparison": {
+        "requirement_id": "req_missing_temperature",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_missing_temperature_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "60 °C",
+            "declared": null,
+            "status": "unknown",
+            "reason": "The lab has no declaration for this parameter in the requested stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Required temperature: 60 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": []
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "unavailable_temperature",
+      "comparison": {
+        "requirement_id": "req_unavailable_temperature",
+        "status": "partially_matched",
+        "checks": [
+          {
+            "id": "req_unavailable_temperature_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "60 °C",
+            "declared": "Not available °C",
+            "status": "gap",
+            "reason": "The lab explicitly declares this output or condition unavailable.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Required temperature: 60 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 1,
+        "unknown_count": 0
+      }
+    },
+    {
+      "case_id": "unknown_declaration",
+      "comparison": {
+        "requirement_id": "req_unknown_declaration",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_unknown_declaration_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "60 °C",
+            "declared": "Not assessed °C",
+            "status": "unknown",
+            "reason": "The lab has not declared a usable value for this requirement.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Required temperature: 60 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "chinese_parameter_alias",
+      "comparison": {
+        "requirement_id": "req_chinese_parameter_alias",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_chinese_parameter_alias_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "60 °C",
+            "declared": null,
+            "status": "unknown",
+            "reason": "The lab has no declaration for this parameter in the requested stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Required temperature: 60 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": []
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "known_typo_parameter",
+      "comparison": {
+        "requirement_id": "req_known_typo_parameter",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_known_typo_parameter_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "60 °C",
+            "declared": null,
+            "status": "unknown",
+            "reason": "The lab has no declaration for this parameter in the requested stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Required temperature: 60 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": []
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "different_stage",
+      "comparison": {
+        "requirement_id": "req_different_stage",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_different_stage_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "conditioning",
+            "unit": "°C",
+            "requested": "60 °C",
+            "declared": null,
+            "status": "unknown",
+            "reason": "The lab has no declaration for this parameter in the requested stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Condition sample at 60 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": []
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "water_air_subject",
+      "comparison": {
+        "requirement_id": "req_water_air_subject",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_water_air_subject_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "60 °C",
+            "declared": null,
+            "status": "unknown",
+            "reason": "The lab has no declaration for this parameter in the requested stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Water temperature shall be 60 °C.",
+              "source_context": "water",
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": []
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "missing_material_context",
+      "comparison": {
+        "requirement_id": "req_missing_material_context",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_missing_material_context_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "60 °C",
+            "declared": null,
+            "status": "unknown",
+            "reason": "The lab has no declaration for this parameter in the requested stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "60 °C on an aluminium substrate.",
+              "source_context": "aluminium substrate",
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": []
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "sequence_different",
+      "comparison": {
+        "requirement_id": "req_sequence_different",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_sequence_different_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "duration",
+            "label": "duration",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "unit": "min",
+            "requested": "120 min",
+            "declared": null,
+            "status": "unknown",
+            "reason": "The lab has no declaration for this parameter in the requested stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "duration",
+              "label": "duration",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "=",
+              "value": "120",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Thermal cycle step 2: 120 min.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 2
+            },
+            "capability_claim_ids": []
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "seconds_minutes",
+      "comparison": {
+        "requirement_id": "req_seconds_minutes",
+        "status": "fully_matched",
+        "checks": [
+          {
+            "id": "req_seconds_minutes_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "duration",
+            "label": "duration",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "s",
+            "requested": "90 s",
+            "declared": "1–2 min",
+            "status": "supported",
+            "reason": "The requested value or range is covered by this lab declaration in the same stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "duration",
+              "label": "duration",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "90",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "s",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Exposure duration 90 s.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 2,
+        "gap_count": 0,
+        "unknown_count": 0
+      }
+    },
+    {
+      "case_id": "centimeters_millimeters",
+      "comparison": {
+        "requirement_id": "req_centimeters_millimeters",
+        "status": "fully_matched",
+        "checks": [
+          {
+            "id": "req_centimeters_millimeters_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "distance",
+            "label": "distance",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "cm",
+            "requested": "10 cm",
+            "declared": "50–150 mm",
+            "status": "supported",
+            "reason": "The requested value or range is covered by this lab declaration in the same stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "distance",
+              "label": "distance",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "10",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "cm",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Working distance: 10 cm.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 2,
+        "gap_count": 0,
+        "unknown_count": 0
+      }
+    },
+    {
+      "case_id": "fahrenheit_celsius",
+      "comparison": {
+        "requirement_id": "req_fahrenheit_celsius",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_fahrenheit_celsius_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°F",
+            "requested": "140 °F",
+            "declared": "20–70 °C",
+            "status": "unknown",
+            "reason": "The units or measurement scales do not establish a valid comparison.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "140",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°F",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Required temperature: 140 °F.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "grams_kilograms",
+      "comparison": {
+        "requirement_id": "req_grams_kilograms",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_grams_kilograms_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "load",
+            "label": "load",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "g",
+            "requested": "750 g",
+            "declared": "0.5–1 kg",
+            "status": "unknown",
+            "reason": "The units or measurement scales do not establish a valid comparison.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "load",
+              "label": "load",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "750",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "g",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Applied mass: 750 g.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "mass_force_not_equivalent",
+      "comparison": {
+        "requirement_id": "req_mass_force_not_equivalent",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_mass_force_not_equivalent_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "load",
+            "label": "load",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "N",
+            "requested": "1 N",
+            "declared": "1 g",
+            "status": "unknown",
+            "reason": "The units or measurement scales do not establish a valid comparison.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "load",
+              "label": "load",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "1",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "N",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Applied force: 1 N.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "flat_panel_translation",
+      "comparison": {
+        "requirement_id": "req_flat_panel_translation",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_flat_panel_translation_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "panel_shape",
+            "label": "panel shape",
+            "kind": "condition",
+            "stage": "general",
+            "unit": null,
+            "requested": "flat panel",
+            "declared": "平板",
+            "status": "unknown",
+            "reason": "The wording differs; a matching declaration has not been established.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "panel_shape",
+              "label": "panel shape",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "text",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "flat panel",
+              "availability": "supported",
+              "raw_text": "Use a flat panel.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "different_material_closed_category",
+      "comparison": {
+        "requirement_id": "req_different_material_closed_category",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_different_material_closed_category_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "material",
+            "label": "material",
+            "kind": "condition",
+            "stage": "general",
+            "unit": null,
+            "requested": "aluminium",
+            "declared": "steel",
+            "status": "unknown",
+            "reason": "The wording differs; a matching declaration has not been established.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "material",
+              "label": "material",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "text",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "aluminium",
+              "availability": "supported",
+              "raw_text": "Specimen material: aluminium.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "resolution_lower_is_better",
+      "comparison": {
+        "requirement_id": "req_resolution_lower_is_better",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_resolution_lower_is_better_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "measurement_resolution",
+            "label": "measurement resolution",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "mm",
+            "requested": "<= 0.1 mm",
+            "declared": "0.05 mm",
+            "status": "unknown",
+            "reason": "The operational inequality does not specify a complete requested operating range.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "measurement_resolution",
+              "label": "measurement resolution",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "<=",
+              "value": "0.1",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "mm",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Resolution ≤0.1 mm.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "resolution_insufficient",
+      "comparison": {
+        "requirement_id": "req_resolution_insufficient",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_resolution_insufficient_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "measurement_resolution",
+            "label": "measurement resolution",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "mm",
+            "requested": "<= 0.1 mm",
+            "declared": "0.2 mm",
+            "status": "unknown",
+            "reason": "The operational inequality does not specify a complete requested operating range.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "measurement_resolution",
+              "label": "measurement resolution",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "<=",
+              "value": "0.1",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "mm",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Resolution ≤0.1 mm.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "criterion_reportable",
+      "comparison": {
+        "requirement_id": "req_criterion_reportable",
+        "status": "fully_matched",
+        "checks": [
+          {
+            "id": "req_criterion_reportable_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "color_difference",
+            "label": "color difference",
+            "kind": "criterion",
+            "stage": "general",
+            "unit": "ΔE*ab",
+            "requested": "<= 1 ΔE*ab",
+            "declared": "0–10 ΔE*ab",
+            "status": "supported",
+            "reason": "The lab can measure/report the requested threshold or scale; specimen pass/fail is not predicted.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "color_difference",
+              "label": "color difference",
+              "kind": "criterion",
+              "stage": "general",
+              "operator": "<=",
+              "value": "1",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "ΔE*ab",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Acceptance: colour difference ≤1 ΔE*ab.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 2,
+        "gap_count": 0,
+        "unknown_count": 0
+      }
+    },
+    {
+      "case_id": "criterion_not_reportable",
+      "comparison": {
+        "requirement_id": "req_criterion_not_reportable",
+        "status": "partially_matched",
+        "checks": [
+          {
+            "id": "req_criterion_not_reportable_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "gloss_retention",
+            "label": "gloss retention",
+            "kind": "criterion",
+            "stage": "after_cycle",
+            "unit": "%",
+            "requested": ">= 90 %",
+            "declared": "Not reportable %",
+            "status": "gap",
+            "reason": "The lab explicitly declares this output or condition unavailable.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "gloss_retention",
+              "label": "gloss retention",
+              "kind": "criterion",
+              "stage": "after_cycle",
+              "operator": ">=",
+              "value": "90",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "%",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "After cycle acceptance: gloss retention ≥90%.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 1,
+        "unknown_count": 0
+      }
+    },
+    {
+      "case_id": "unknown_custom_text",
+      "comparison": {
+        "requirement_id": "req_unknown_custom_text",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_unknown_custom_text_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "surface_protocol",
+            "label": "surface protocol",
+            "kind": "condition",
+            "stage": "general",
+            "unit": null,
+            "requested": "XQ-7",
+            "declared": null,
+            "status": "unknown",
+            "reason": "The lab has no declaration for this parameter in the requested stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "surface_protocol",
+              "label": "surface protocol",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "text",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "XQ-7",
+              "availability": "supported",
+              "raw_text": "Surface protocol: XQ-7 (fictional).",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": []
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "custom_execution_numeric",
+      "comparison": {
+        "requirement_id": "req_custom_execution_numeric",
+        "status": "fully_matched",
+        "checks": [
+          {
+            "id": "req_custom_execution_numeric_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "z_execution_setting",
+            "label": "z execution setting",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "quanta",
+            "requested": "7 quanta",
+            "declared": "3–9 quanta",
+            "status": "supported",
+            "reason": "The requested value or range is covered by this lab declaration in the same stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "z_execution_setting",
+              "label": "z execution setting",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "7",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "quanta",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Set execution control z to 7 quanta.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 2,
+        "gap_count": 0,
+        "unknown_count": 0
+      }
+    },
+    {
+      "case_id": "configuration_not_mixed",
+      "comparison": {
+        "requirement_id": "req_configuration_not_mixed",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_configuration_not_mixed_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request_temperature",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "60 °C",
+            "declared": null,
+            "status": "unknown",
+            "reason": "Several lab configurations are present. Select one configuration before comparing.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request_temperature",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "One setup: 60 °C for 120 min.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request_duration",
+            "parameter_id": "duration",
+            "label": "duration",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "min",
+            "requested": "120 min",
+            "declared": null,
+            "status": "unknown",
+            "reason": "Several lab configurations are present. Select one configuration before comparing.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request_duration",
+              "parameter_id": "duration",
+              "label": "duration",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "120",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "One setup: 60 °C for 120 min.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": []
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 2
+      }
+    },
+    {
+      "case_id": "source_unresolved",
+      "comparison": {
+        "requirement_id": "req_source_unresolved",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_source_unresolved_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "supported",
+            "reason": "The requested test/method is present in the selected lab declaration.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": null,
+            "label": "Unresolved source",
+            "kind": "condition",
+            "stage": "general",
+            "unit": null,
+            "requested": "60?",
+            "declared": null,
+            "status": "unknown",
+            "reason": "This source clause has been retained but has not been normalized reliably.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": null,
+              "label": "Unresolved source",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "text",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "60?",
+              "availability": "supported",
+              "raw_text": "Unreadable source: 60?",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "unresolved",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": []
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "unapproved_alternative_method",
+      "comparison": {
+        "requirement_id": "req_unapproved_alternative_method",
+        "status": "needs_information",
+        "checks": [
+          {
+            "id": "req_unapproved_alternative_method_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "unknown",
+            "reason": "The requested test/method still needs an identity decision.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "60 °C",
+            "declared": "20–70 °C",
+            "status": "supported",
+            "reason": "The requested value or range is covered by this lab declaration in the same stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Required temperature: 60 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 0,
+        "unknown_count": 1
+      }
+    },
+    {
+      "case_id": "method_not_supported",
+      "comparison": {
+        "requirement_id": "req_method_not_supported",
+        "status": "not_matched",
+        "checks": [
+          {
+            "id": "req_method_not_supported_method",
+            "parameter_id": "test_method",
+            "label": "Test / method",
+            "kind": "method",
+            "stage": "general",
+            "unit": null,
+            "requested": "Synthetic capability scenario",
+            "declared": null,
+            "status": "gap",
+            "reason": "The requested test/method is not listed by this lab.",
+            "source_pages": [],
+            "requirement_claim": null,
+            "capability_claim_ids": []
+          },
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "kind": "condition",
+            "stage": "general",
+            "unit": "°C",
+            "requested": "60 °C",
+            "declared": "20–70 °C",
+            "status": "supported",
+            "reason": "The requested value or range is covered by this lab declaration in the same stage.",
+            "source_pages": [],
+            "requirement_claim": {
+              "id": "request",
+              "parameter_id": "temperature",
+              "label": "temperature",
+              "kind": "condition",
+              "stage": "general",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Required temperature: 60 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            "capability_claim_ids": [
+              "declared"
+            ]
+          }
+        ],
+        "supported_count": 1,
+        "gap_count": 1,
+        "unknown_count": 0
+      }
+    }
+  ],
+  "label_corrections": [
+    {
+      "case_id": "different_material_closed_category",
+      "from": "gap",
+      "to": "unknown",
+      "reason": "Closed-set semantics present only in raw prose, absent from typed input; comparison inputs and baseline outputs unchanged.",
+      "previous_dataset_sha256": "28c3802e31659049a706e82f78c7be7cb9961658d7d1df1f7097d568d8d18d50"
+    }
+  ],
+  "source_policy": {
+    "normalizer_version": "atomic_requirements_v0_5",
+    "parameter_registry_version": null,
+    "source_sha256": {
+      "scione/structured/comparison.py": "26c2c143a1271c9b634289c87bd7d4052e728f8990799f918e623862df2dd667"
+    },
+    "note": "Historical capture recorded the comparator hash, not hashes of all transitive policy files."
+  }
+}

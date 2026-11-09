@@ -7,7 +7,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-NORMALIZER_VERSION = "atomic_requirements_v0_4"
+NORMALIZER_VERSION = "atomic_requirements_v0_9"
 ClaimKind = Literal["condition", "criterion", "reporting", "scope", "instruction"]
 
 
@@ -36,6 +36,7 @@ class AtomicClaim(BaseModel):
     text_value: str | None = Field(default=None, max_length=2000)
     availability: Literal["supported", "unsupported", "unknown"] = "supported"
     raw_text: str = Field(min_length=1, max_length=8000)
+    source_context: str | None = Field(default=None, max_length=8000)
     source_pages: list[int] = Field(default_factory=list)
     normalization_state: Literal["parsed", "unresolved", "reviewed"] = "parsed"
     configuration: str | None = Field(default=None, max_length=160)

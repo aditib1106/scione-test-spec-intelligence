@@ -4,6 +4,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from scione.specifications.models import CustomerRequirement
+
+ProviderName = Literal["groq", "gemini", "fireworks", "sail"]
+
 
 class WriteModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -30,15 +34,25 @@ class SourceReview(WriteModel):
     decision: Literal["confirmed", "excluded", "needs_review"]
     note: str = Field(default="", max_length=4000)
     acknowledged: bool = False
+    facts_version: int = Field(default=0, ge=0)
+
+
+class SourceFactsEdit(WriteModel):
+    run_id: str
+    expected_version: int = Field(ge=0)
+    expected_review_version: int = Field(ge=0)
+    requirements: list[CustomerRequirement] = Field(min_length=1, max_length=1000)
+    note: str = Field(min_length=1, max_length=4000)
 
 
 class AnalysisRequest(WriteModel):
-    provider: Literal["groq", "gemini"]
+    provider: ProviderName
     model: str = Field(min_length=1, max_length=500)
     strategy: Literal["compact_document", "whole_document", "focused_passes"] = "compact_document"
     output_limit: int = Field(ge=512, le=65536)
     permission: bool = False
     free_tier_confirmed: bool = False
+    billing_acknowledged: bool = False
 
 
 class ReportInput(WriteModel):
@@ -46,8 +60,22 @@ class ReportInput(WriteModel):
     input_fingerprint: str
 
 
+class MatchingRequest(ReportInput):
+    provider: ProviderName
+    model: str = Field(min_length=1, max_length=200)
+    output_limit: int = Field(default=8000, ge=512, le=65536)
+    permission: bool = False
+    rerun: bool = False
+
+
 class ReportEdit(ReportInput):
     version: int = Field(ge=0)
+
+
+class ExclusionReview(ReportEdit):
+    requirement_ids: list[str] = Field(min_length=1)
+    excluded: bool
+    note: str = Field(default="", max_length=4000)
 
 
 class ScopeReview(ReportEdit):
