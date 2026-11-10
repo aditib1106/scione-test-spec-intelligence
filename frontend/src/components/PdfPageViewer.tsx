@@ -52,12 +52,54 @@ export default function PdfPageViewer({
 }: Props) {
   const [zoom, setZoom] = useState(100);
   const [expanded, setExpanded] = useState(false);
+  const [viewportWidths, setViewportWidths] = useState({
+    normal: 0,
+    expanded: 0,
+  });
   const normalViewport = useRef<HTMLDivElement>(null);
   const expandedViewport = useRef<HTMLDivElement>(null);
   const normalImage = useRef<HTMLImageElement>(null);
   const expandedImage = useRef<HTMLImageElement>(null);
   const lastNormalFocus = useRef<number | string | undefined>(undefined);
   const lastExpandedFocus = useRef<number | string | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const observe = (
+      node: HTMLDivElement | null,
+      key: "normal" | "expanded",
+    ) => {
+      if (!node) return null;
+      const measure = () =>
+        setViewportWidths((previous) => {
+          const width = node.clientWidth;
+          return previous[key] === width
+            ? previous
+            : { ...previous, [key]: width };
+        });
+      measure();
+      const observer = new ResizeObserver(measure);
+      observer.observe(node);
+      return observer;
+    };
+    const normal = observe(normalViewport.current, "normal");
+    const fullscreen = observe(expandedViewport.current, "expanded");
+    return () => {
+      normal?.disconnect();
+      fullscreen?.disconnect();
+    };
+  }, [expanded, imageUrl, loading]);
+
+  const fitWidth = (fullscreen: boolean) => {
+    setZoom(100);
+    const viewport = (fullscreen ? expandedViewport : normalViewport).current;
+    if (viewport) {
+      setViewportWidths((previous) => ({
+        ...previous,
+        [fullscreen ? "expanded" : "normal"]: viewport.clientWidth,
+      }));
+      viewport.scrollTo({ left: 0 });
+    }
+  };
 
   useLayoutEffect(() => {
     normalViewport.current?.scrollTo({ top: 0, left: 0 });
@@ -204,7 +246,8 @@ export default function PdfPageViewer({
           <Button
             size="small"
             startIcon={<FitScreenRoundedIcon fontSize="small" />}
-            onClick={() => setZoom(100)}
+            onClick={() => fitWidth(fullscreen)}
+            aria-pressed={zoom === 100}
             sx={{ ml: 0.5, whiteSpace: "nowrap" }}
           >
             Fit width
@@ -244,8 +287,10 @@ export default function PdfPageViewer({
         {!loading && imageUrl && (
           <Box
             sx={{
-              width: `${zoom}%`,
-              minWidth: `${zoom}%`,
+              width: viewportWidths[fullscreen ? "expanded" : "normal"]
+                ? `${(viewportWidths[fullscreen ? "expanded" : "normal"] * zoom) / 100}px`
+                : `${zoom}%`,
+              minWidth: 0,
               mx: zoom <= 100 ? "auto" : 0,
               p: { xs: 0.5, sm: 1 },
               boxSizing: "border-box",

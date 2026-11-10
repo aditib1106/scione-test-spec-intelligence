@@ -124,6 +124,12 @@ test("source review generates a report once and refresh does not repeat inferenc
 }) => {
   const { documentId, state } = await prepareReport(page, request);
   state.hold = true;
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "scione:completed-duration:matching:v1",
+      JSON.stringify([{ seconds: 120, units: 1 }]),
+    );
+  });
   await page.goto(`/specifications?document=${documentId}`);
   const generate = page.getByRole("button", {
     name: "Generate report",
@@ -143,6 +149,10 @@ test("source review generates a report once and refresh does not repeat inferenc
   await expect(
     progress.getByRole("progressbar", { name: "AI request in progress" }),
   ).not.toHaveAttribute("aria-valuenow");
+  await expect(
+    progress.getByText(/Reference time:.*based on a previous completed run/),
+  ).toBeVisible();
+  await expect(progress.getByText("Elapsed", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("combobox", { name: "Model provider" }),
   ).toHaveCount(0);

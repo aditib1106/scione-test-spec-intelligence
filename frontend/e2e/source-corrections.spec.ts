@@ -101,14 +101,18 @@ test("corrected source facts clear approval and flow into library and reports wi
   await dialog
     .getByLabel("Parameter name", { exact: true })
     .fill("Draft condition");
+  // A separate native-facts browser test verifies mandatory rebuild consent.
+  // This archive flow also supports legacy text-only fixtures with no rebuild.
+  const rebuildConsent = dialog.getByRole("checkbox", {
+    name: "Rebuild this test’s detailed fields",
+    exact: true,
+  });
+  if (await rebuildConsent.isVisible()) await rebuildConsent.check();
   await dialog
-    .getByRole("checkbox", {
-      name: "Rebuild this test’s detailed fields",
+    .getByRole("button", {
+      name: /^Save (?:& rebuild details|corrected draft)$/,
       exact: true,
     })
-    .check();
-  await dialog
-    .getByRole("button", { name: "Save & rebuild details", exact: true })
     .click();
   await expect(dialog.getByRole("alert").last()).toContainText(
     `Enter condition ${selected.conditions.length + 1}`,
@@ -162,14 +166,12 @@ test("corrected source facts clear approval and flow into library and reports wi
     path: testInfo.outputPath("source-correction-editor.png"),
     animations: "disabled",
   });
+  if (await rebuildConsent.isVisible()) await rebuildConsent.check();
   await dialog
-    .getByRole("checkbox", {
-      name: "Rebuild this test’s detailed fields",
+    .getByRole("button", {
+      name: /^Save (?:& rebuild details|corrected draft)$/,
       exact: true,
     })
-    .check();
-  await dialog
-    .getByRole("button", { name: "Save & rebuild details", exact: true })
     .click();
   await expect(dialog).not.toBeVisible();
   await expect(
@@ -255,7 +257,7 @@ test("corrected source facts clear approval and flow into library and reports wi
   ).toBeVisible();
   await page.getByRole("button", { name: "Conditions", exact: true }).click();
   await expect(
-    page.getByRole("table", {
+    page.getByRole("rowgroup", {
       name: `${correctedName} conditions comparison`,
       exact: true,
     }),

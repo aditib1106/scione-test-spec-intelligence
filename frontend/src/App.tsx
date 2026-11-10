@@ -202,6 +202,11 @@ export default function App() {
                 px: compact ? 0 : 1.5,
                 justifyContent: compact ? "center" : undefined,
                 minHeight: 44,
+                whiteSpace: "nowrap",
+                transition: "padding 220ms ease, background-color 160ms ease",
+                "@media (prefers-reduced-motion: reduce)": {
+                  transition: "none",
+                },
                 color: "text.secondary",
                 ...((path === "/specifications/library" &&
                   location.pathname.startsWith("/specifications")) ||
@@ -221,14 +226,25 @@ export default function App() {
               }}
             >
               <ListItemIcon
-                sx={{ minWidth: compact ? 0 : 34, color: "#7d899a" }}
+                sx={{
+                  minWidth: compact ? 0 : 34,
+                  color: "#7d899a",
+                  transition: "min-width 220ms ease",
+                  "@media (prefers-reduced-motion: reduce)": {
+                    transition: "none",
+                  },
+                }}
               >
                 <Icon sx={{ fontSize: 20 }} />
               </ListItemIcon>
               {!compact && (
                 <ListItemText
                   primary={label}
-                  primaryTypographyProps={{ fontSize: 13, fontWeight: 600 }}
+                  primaryTypographyProps={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    noWrap: true,
+                  }}
                 />
               )}
             </ListItemButton>
@@ -333,10 +349,14 @@ export default function App() {
         }}
         sx={{
           width: sidebarWidth,
+          transition: "width 220ms cubic-bezier(.2,.8,.2,1)",
+          "@media (prefers-reduced-motion: reduce)": { transition: "none" },
           flexShrink: 0,
           display: { xs: "none", lg: "block" },
           "& .MuiDrawer-paper": {
             width: sidebarWidth,
+            transition: "width 220ms cubic-bezier(.2,.8,.2,1)",
+            "@media (prefers-reduced-motion: reduce)": { transition: "none" },
             boxSizing: "border-box",
             overflowX: "hidden",
             borderRightColor: "divider",

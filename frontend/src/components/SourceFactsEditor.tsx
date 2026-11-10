@@ -18,12 +18,6 @@ import {
   MenuItem,
   Stack,
   Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tabs,
   TextField,
   Typography,
@@ -32,7 +26,6 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { request, useResource } from "../api";
 import type {
@@ -106,7 +99,6 @@ export default function SourceFactsEditor({
   const [selectedRawIndex, setSelectedRawIndex] = useState(0);
   const [evidenceIndex, setEvidenceIndex] = useState(0);
   const [rawEditExpanded, setRawEditExpanded] = useState(false);
-  const [parameterListExpanded, setParameterListExpanded] = useState(false);
   const registry = useResource<{
     parameters: (ParameterDefinition & { aliases?: string[] })[];
   }>(open ? "/api/parameters" : null);
@@ -150,7 +142,6 @@ export default function SourceFactsEditor({
     setRebuildDetails(false);
     setWordingRebuildAcknowledged(false);
     setAtomEdits({});
-    setParameterListExpanded(false);
     setSelectedRawIndex(0);
     setEvidenceIndex(0);
     const atom = sourceAtoms.find((item) => item.id === claimId);
@@ -398,7 +389,6 @@ export default function SourceFactsEditor({
   }
   function selectSection(value: Section) {
     setSection(value);
-    setParameterListExpanded(true);
     setSelectedRawIndex(0);
     setRawEditExpanded(false);
     const first = sourceAtoms.find(
@@ -455,10 +445,9 @@ export default function SourceFactsEditor({
       <Stack
         gap={1.25}
         sx={{
-          p: 2,
-          bgcolor: "#f7faff",
-          border: "1px solid #cfdcf0",
-          borderRadius: 2,
+          p: 0,
+          bgcolor: "#fff",
+          borderRadius: 0,
         }}
       >
         <Stack
@@ -732,8 +721,8 @@ export default function SourceFactsEditor({
         <Box
           sx={{
             p: 1.25,
-            bgcolor: "#fff",
-            borderRadius: 1.5,
+            bgcolor: "#f5f8fc",
+            borderRadius: 1,
             borderLeft: "3px solid #90acd9",
           }}
         >
@@ -874,7 +863,7 @@ export default function SourceFactsEditor({
           aria-label={adding ? "Add missing test" : "Correct extracted content"}
           onClick={() => begin()}
         >
-          {adding ? "Add missing test" : "Edit"}
+          {adding ? "Add missing test" : "Edit test"}
         </Button>
         {data.facts_revision?.changed_requirement_ids.includes(selected.id) && (
           <Chip
@@ -903,7 +892,7 @@ export default function SourceFactsEditor({
                 ? "auto"
                 : "min(790px, 92dvh)",
             maxHeight: fullScreen ? "100dvh" : "92dvh",
-            borderRadius: fullScreen ? 0 : 3,
+            borderRadius: fullScreen ? 0 : "14px",
           },
         }}
       >
@@ -913,7 +902,7 @@ export default function SourceFactsEditor({
             alignItems="center"
             justifyContent="space-between"
           >
-            <Box>
+            <Box sx={{ minWidth: 0, pr: 1 }}>
               <Typography
                 component="span"
                 id="source-editor-title"
@@ -922,6 +911,17 @@ export default function SourceFactsEditor({
               >
                 {adding ? "Add missing test" : "Correct extracted content"}
               </Typography>
+              {!adding && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 0.25 }}
+                  noWrap
+                  title={selected.original_test_name}
+                >
+                  {selected.original_test_name}
+                </Typography>
+              )}
             </Box>
             <IconButton
               aria-label="Close editor"
@@ -954,8 +954,8 @@ export default function SourceFactsEditor({
           )}
           <Tab value="source" label="Source evidence" />
         </Tabs>
-        <DialogContent sx={{ pt: 2, bgcolor: "#fcfdff", minHeight: 0 }}>
-          <Stack spacing={2}>
+        <DialogContent sx={{ pt: 2, bgcolor: "#fff", minHeight: 0 }}>
+          <Stack spacing={1.5}>
             {error && (
               <Alert severity="error" ref={errorRef} tabIndex={-1}>
                 {error}
@@ -1133,106 +1133,66 @@ export default function SourceFactsEditor({
               <>
                 {activeAtoms.length > 0 && (
                   <>
-                    <Accordion
-                      disableGutters
-                      elevation={0}
-                      expanded={parameterListExpanded}
-                      onChange={(_, expanded) =>
-                        setParameterListExpanded(expanded)
+                    <TextField
+                      select
+                      size="small"
+                      fullWidth
+                      label="Choose requirement"
+                      value={selectedAtomId ?? ""}
+                      onChange={(event) =>
+                        setSelectedAtomId(event.target.value)
                       }
-                      sx={{
-                        border: "1px solid #e0e7f0",
-                        borderRadius: "8px !important",
-                        "&:before": { display: "none" },
+                      SelectProps={{
+                        renderValue: (id) => {
+                          const original = activeAtoms.find(
+                            (item) => item.id === id,
+                          );
+                          const value =
+                            original && (atomEdits[original.id] ?? original);
+                          if (!value) return "Choose a requirement";
+                          const stage =
+                            value.stage !== "general"
+                              ? ` · ${value.stage.replaceAll("_", " ")}`
+                              : "";
+                          return `${value.label}${stage}`;
+                        },
+                        MenuProps: { PaperProps: { sx: { maxHeight: 340 } } },
                       }}
                     >
-                      <AccordionSummary
-                        expandIcon={<ExpandMoreIcon />}
-                        sx={{ minHeight: 38 }}
-                      >
-                        <Typography variant="body2" fontWeight={600}>
-                          Choose another parameter ({activeAtoms.length})
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ p: 0 }}>
-                        <TableContainer
-                          sx={{
-                            border: "1px solid #dce4ef",
-                            borderRadius: 2,
-                            maxHeight: activeAtom ? 150 : 420,
-                          }}
-                        >
-                          <Table
-                            size="small"
-                            stickyHeader
-                            aria-label="Editable parameter list"
+                      {activeAtoms.map((original) => {
+                        const value = atomEdits[original.id] ?? original;
+                        return (
+                          <MenuItem
+                            key={original.id}
+                            value={original.id}
+                            sx={{ whiteSpace: "normal", py: 1 }}
                           >
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Parameter</TableCell>
-                                <TableCell>Requirement</TableCell>
-                                <TableCell sx={{ width: 35 }} />
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {activeAtoms.map((original) => {
-                                const value =
-                                  atomEdits[original.id] ?? original;
-                                return (
-                                  <TableRow
-                                    key={original.id}
-                                    selected={selectedAtomId === original.id}
-                                    sx={{
-                                      "&.Mui-selected": { bgcolor: "#eaf1ff" },
-                                    }}
-                                  >
-                                    <TableCell>
-                                      <Typography
-                                        variant="body2"
-                                        fontWeight={600}
-                                      >
-                                        {value.label}
-                                      </Typography>
-                                      <Typography
-                                        variant="caption"
-                                        color="text.secondary"
-                                      >
-                                        {claimContext(value)}
-                                      </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                      <Typography
-                                        variant="body2"
-                                        sx={{
-                                          display: "-webkit-box",
-                                          WebkitLineClamp: 2,
-                                          WebkitBoxOrient: "vertical",
-                                          overflow: "hidden",
-                                        }}
-                                      >
-                                        {claimValue(value)}
-                                      </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                      <IconButton
-                                        size="small"
-                                        aria-label={`Edit parameter ${value.label}`}
-                                        onClick={() => {
-                                          setSelectedAtomId(original.id);
-                                          setParameterListExpanded(false);
-                                        }}
-                                      >
-                                        <EditOutlinedIcon fontSize="small" />
-                                      </IconButton>
-                                    </TableCell>
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                      </AccordionDetails>
-                    </Accordion>
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography variant="body2" fontWeight={600}>
+                                {value.label}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{
+                                  display: "-webkit-box",
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: "vertical",
+                                  overflow: "hidden",
+                                  overflowWrap: "anywhere",
+                                }}
+                              >
+                                {claimValue(value)}
+                                {claimContext(value)
+                                  ? ` · ${claimContext(value)}`
+                                  : ""}
+                              </Typography>
+                            </Box>
+                          </MenuItem>
+                        );
+                      })}
+                    </TextField>
+                    <Divider />
                     {parameterForm()}
                     {section !== "planning" && (
                       <Accordion

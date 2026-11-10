@@ -69,4 +69,19 @@ export interface ComparisonData {
   requirements: ComparisonRequirement[];
   summary: Partial<Record<ComparisonStatus, number>>;
   pdf_page_count?: number;
+  assessment_reviews?: Record<string, AssessmentReview>;
+}
+
+export interface AssessmentReview {
+  review_id: string;
+  comparison_id: string;
+  requirement_id: string;
+  version: number;
+  review_status: "accepted" | "pending";
+  decision: "keep" | "clarify_customer" | "outsource" | "decline";
+  note: string;
+  actor: string;
+  created_at: string;
+  machine_status: ComparisonStatus;
+  input_fingerprint: string;
 }

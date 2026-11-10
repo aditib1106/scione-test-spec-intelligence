@@ -65,7 +65,7 @@ async function chooseMuiOption(
   await page.getByRole("option", { name: option }).click();
 }
 
-test("empty lab can load, edit, save, reload, and cancel a capability", async ({
+test("lab capability edits persist and can be cancelled", async ({
   page,
   request,
 }, testInfo) => {
@@ -75,8 +75,18 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
     page.getByText("Start with your lab’s capabilities"),
   ).toBeVisible();
 
-  await chooseMuiOption(page, "Example", "MS-PNT-410 · pilot lab");
-  await page.getByRole("button", { name: "Load example lab" }).click();
+  const profile = await readJson<{ version: number }>(
+    request,
+    `${emptyBase}/api/lab`,
+  );
+  expect(
+    (
+      await request.post(`${emptyBase}/api/lab/example`, {
+        data: { version: profile.version, example: "legacy" },
+      })
+    ).ok(),
+  ).toBeTruthy();
+  await page.reload();
   await expect(
     page.getByText("Pencil hardness", { exact: true }),
   ).toBeVisible();
@@ -208,7 +218,7 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
   });
 });
 
-test("catalog search, mobile navigation, and demo PDF import do not analyze", async ({
+test("catalog search, mobile navigation, and real PDF upload do not analyze", async ({
   page,
   request,
 }, testInfo) => {
@@ -225,7 +235,7 @@ test("catalog search, mobile navigation, and demo PDF import do not analyze", as
   const catalogDetails = page.getByRole("dialog");
   await expect(
     catalogDetails.getByRole("heading", {
-      name: "Pencil hardness",
+      name: "Test reference Pencil hardness",
       exact: true,
     }),
   ).toBeVisible();
@@ -245,7 +255,10 @@ test("catalog search, mobile navigation, and demo PDF import do not analyze", as
     page.getByRole("heading", { name: "Specification library" }),
   ).toBeVisible();
   await page.getByRole("tab", { name: "PDF & review", exact: true }).click();
-  await page.getByRole("button", { name: "Import demo specification" }).click();
+  await page
+    .locator("input[type=file]")
+    .first()
+    .setInputFiles("../docs/samples/MS-PNT-410_demo_spec.pdf");
   await expect(page.getByText("No extraction yet")).toBeVisible();
   if (testInfo.project.name === "narrow") {
     await page.getByRole("button", { name: /Source PDF preview/ }).click();
@@ -566,29 +579,29 @@ test("a late draft response cannot open a different document's report", async ({
   ).toHaveAttribute("href", new RegExp(secondSnapshot.report_id));
 });
 
-test("worked example saves atomic requirements and exports the same honest gap assessment", async ({
+test("saved source fixtures retain atomic requirements and export the same gap assessment", async ({
   page,
   request,
 }, testInfo) => {
   await resetEmptyWorkspace(request);
-  await page.goto(`${emptyBase}/my-lab`);
-  await chooseMuiOption(page, "Example", "CSP-EN-301 · four tests");
-  await page.getByRole("button", { name: "Load example lab" }).click();
+  const lab = await readJson<{ version: number }>(
+    request,
+    `${emptyBase}/api/lab`,
+  );
+  expect(
+    (
+      await request.post(`${emptyBase}/api/lab/example`, {
+        data: { version: lab.version, example: "csp301" },
+      })
+    ).ok(),
+  ).toBeTruthy();
+  expect(
+    (await request.post(`${emptyBase}/api/specifications/worked-example`)).ok(),
+  ).toBeTruthy();
+  await page.goto(`${emptyBase}/specifications/library`);
   await expect(
-    page
-      .getByRole("table", { name: "Lab capabilities" })
-      .getByText("ASTM D1627-16", { exact: true }),
-  ).toBeVisible();
-
-  await navigateTo(page, "Specifications");
-  await page
-    .getByRole("button", { name: "Try worked example", exact: true })
-    .click();
-  await expect(
-    page.getByText(
-      "Manually prepared example requirements. Analyze the PDF to evaluate a model.",
-    ),
-  ).toBeVisible();
+    page.getByRole("button", { name: "Try worked example", exact: true }),
+  ).toHaveCount(0);
   const archive = await readJson<{
     documents: {
       document_id: string;
@@ -619,6 +632,9 @@ test("worked example saves atomic requirements and exports the same honest gap a
     ),
   ).toBeTruthy();
 
+  await page.goto(
+    `${emptyBase}/specifications/library?document=${document!.document_id}`,
+  );
   await page.getByRole("button", { name: /Specular gloss/ }).click();
   await page.screenshot({
     path: testInfo.outputPath("worked-library-summary.png"),
@@ -677,7 +693,7 @@ test("worked example saves atomic requirements and exports the same honest gap a
     .getByRole("button", { name: "Criteria / reporting", exact: true })
     .click();
   const gap = page
-    .getByRole("table", {
+    .getByRole("rowgroup", {
       name: "Specular gloss criteria / reporting comparison",
       exact: true,
     })

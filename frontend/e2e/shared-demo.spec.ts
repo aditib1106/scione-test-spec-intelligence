@@ -84,13 +84,11 @@ test("shared PDF walkthrough keeps source review, declarations and gap results s
   await expect(
     page.getByRole("heading", { name: "Cross-cut adhesion", exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Source quotations & review note" })
-    .click();
+  await page.getByRole("button", { name: "Source evidence & notes" }).click();
   const pendingNote =
     "Check all bake conditions and substrate scope against the shared PDF.";
   await page
-    .getByRole("textbox", { name: "Review note / corrections to resolve" })
+    .getByRole("textbox", { name: "Review note (optional)" })
     .fill(pendingNote);
   let releaseSave!: () => void;
   const savedResponse = new Promise<void>((resolve) => {
@@ -113,22 +111,18 @@ test("shared PDF walkthrough keeps source review, declarations and gap results s
     // The persisted write can finish before its response reaches the browser.
     // Navigation must wait for that response to avoid an old review navigating back.
     await expect(
-      page.getByRole("button", { name: "Continue to lab review" }),
+      page.getByRole("button", { name: "Generate report" }),
     ).toBeDisabled();
   } finally {
     releaseSave();
   }
 
   await expect(
-    page.getByRole("button", { name: "Continue to lab review" }),
+    page.getByRole("button", { name: "Generate report" }),
   ).toBeEnabled();
-  await page.getByRole("button", { name: "Continue to lab review" }).click();
-  await page
-    .getByRole("button", { name: "Report options", exact: true })
-    .click();
-  await page
-    .getByRole("menuitem", { name: "Review test matching", exact: true })
-    .click();
+  // The automatic generation entry is covered separately; this offline fixture
+  // exercises the retained manual scope review without invoking a provider.
+  await page.goto(`${base}/reports/advanced?document=${id}`);
   await expect(
     page.getByRole("tab", { name: "Review & confirm" }),
   ).toBeVisible();

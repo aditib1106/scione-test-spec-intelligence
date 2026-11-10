@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { SpecificationData } from "../src/types";
+import { editRequirement } from "./sourceEditor";
 
 test.use({ actionTimeout: 15_000 });
 
@@ -25,20 +26,15 @@ test("source coverage guidance supports correcting scope and instructions withou
     route.fulfill({ json: { ...source, coverage_issues: [issue] } }),
   );
   await page.goto(`/specifications?document=${id}`);
-  const title = page.getByText("Some source information may be missing", {
+  const title = page.getByText("Check extracted requirements", {
     exact: true,
   });
   await expect(title).toHaveCount(1);
   const warning = page.getByRole("alert").filter({ has: title });
-  await expect(
-    warning.getByText(
-      "Check the PDF. Edit the scope or instructions, or add a missing test.",
-      { exact: true },
-    ),
-  ).toBeVisible();
+  await expect(warning).toContainText("1 source check to review");
   await expect(warning.getByText(issue, { exact: true })).not.toBeVisible();
   await warning
-    .getByRole("button", { name: "See coverage notes", exact: true })
+    .getByRole("button", { name: "Review notes", exact: true })
     .click();
   await expect(warning.getByText(issue, { exact: true })).toBeVisible();
   await expect(
@@ -224,19 +220,10 @@ test("source references stay compact, notes expand on demand, and editing focuse
   await expect(
     page.getByRole("tab", { name: "PDF & review", exact: true }),
   ).toBeInViewport();
-  await table
-    .getByRole("button", {
-      name: `Edit parameter ${parameter.label}`,
-      exact: true,
-    })
-    .click();
-  const dialog = page.getByRole("dialog", {
-    name: "Correct extracted content",
-    exact: true,
-  });
+  const dialog = await editRequirement(page, "Conditions", parameter.label);
   await expect(
-    dialog.getByRole("button", { name: /^Choose another parameter/ }),
-  ).toHaveAttribute("aria-expanded", "false");
+    dialog.getByLabel("Choose requirement", { exact: true }),
+  ).toBeVisible();
   await expect(dialog.getByLabel("Parameter", { exact: true })).toBeVisible();
   await expect(dialog.getByLabel("Reason for correction")).not.toBeVisible();
   await expect(

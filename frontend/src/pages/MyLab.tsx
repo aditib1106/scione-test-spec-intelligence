@@ -18,7 +18,6 @@ import {
   Divider,
   IconButton,
   InputAdornment,
-  MenuItem,
   Stack,
   Table,
   TableBody,
@@ -44,6 +43,11 @@ import type {
   PageProps,
 } from "../types";
 import CapabilityEditor from "./CapabilityEditor";
+import {
+  serviceClaims,
+  sharedDeclarationKey,
+  sharedDeclarations,
+} from "../components/labCapabilityPresentation";
 
 const labelFor = (value: string) =>
   value.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
@@ -59,12 +63,14 @@ const previewSx = {
   WebkitBoxOrient: "vertical",
   overflow: "hidden",
 } as const;
-const measurements = (capability: Capability) =>
-  claimSummary(capability, "reporting") ||
-  (capability.notes ?? "")
-    .replace(/^Reportable outputs:\s*/i, "")
-    .split(/\nSource:/i)[0]
-    .trim();
+const measurements = (capability: Capability, sharedKeys: Set<string>) =>
+  claimSummary(capability, "reporting", sharedKeys) ||
+  ((capability.atomic_claims ?? []).length
+    ? ""
+    : (capability.notes ?? "")
+        .replace(/^Reportable outputs:\s*/i, "")
+        .split(/\nSource:/i)[0]
+        .trim());
 const claimValue = (claim: AtomicClaim) => {
   if (claim.availability === "unknown") return "Not yet assessed";
   if (claim.availability === "unsupported") return "Not available";
@@ -76,17 +82,31 @@ const claimValue = (claim: AtomicClaim) => {
     text = `${claim.operator === "=" ? "" : `${claim.operator} `}${claim.value}${claim.tolerance !== null ? ` ± ${claim.tolerance}` : ""}`;
   return `${text}${claim.unit ? ` ${claim.unit}` : ""}`;
 };
-const claimSummary = (capability: Capability, kind: AtomicClaim["kind"]) => {
-  const claims = (capability.atomic_claims ?? []).filter((claim) =>
+const claimSummary = (
+  capability: Capability,
+  kind: AtomicClaim["kind"],
+  sharedKeys: Set<string>,
+) => {
+  const claims = serviceClaims(
+    capability.atomic_claims ?? [],
+    sharedKeys,
+  ).filter((claim) =>
     kind === "condition"
       ? ["condition", "scope", "instruction"].includes(claim.kind)
       : ["reporting", "criterion"].includes(claim.kind),
   );
+  const quantitative = claims.find(
+    (claim) => !["text", "required"].includes(claim.operator),
+  );
+  const preview = quantitative
+    ? [quantitative, ...claims.filter((claim) => claim !== quantitative)].slice(
+        0,
+        2,
+      )
+    : claims.slice(0, 2);
   return (
-    claims
-      .slice(0, 2)
-      .map((claim) => `${claim.label}: ${claimValue(claim)}`)
-      .join("; ") + (claims.length > 2 ? `; +${claims.length - 2} more` : "")
+    preview.map((claim) => `${claim.label}: ${claimValue(claim)}`).join("; ") +
+    (claims.length > 2 ? `; +${claims.length - 2} more` : "")
   );
 };
 const limitText = (limit: OperatingLimit) => {
@@ -97,9 +117,69 @@ const limitText = (limit: OperatingLimit) => {
   return `${value}${limit.unit ? ` ${limit.unit}` : ""}`;
 };
 
+function SharedLabDeclarations({
+  claims,
+  count,
+}: {
+  claims: AtomicClaim[];
+  count: number;
+}) {
+  if (!claims.length) return null;
+  return (
+    <Accordion
+      disableGutters
+      elevation={0}
+      sx={{
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: "10px !important",
+        "&:before": { display: "none" },
+      }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+        <Box>
+          <Typography variant="subtitle2">
+            Shared lab services ({claims.length})
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Recorded for all {count} services · shown once here
+          </Typography>
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails>
+        <Stack spacing={1.75}>
+          {claims.map((claim) => (
+            <Box key={claim.id}>
+              <Typography variant="body2" fontWeight={600}>
+                {claim.label}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {claimValue(claim)}
+              </Typography>
+            </Box>
+          ))}
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
+  );
+}
+
 export default function MyLab({ workspace, onRefresh }: PageProps) {
   const [params, setParams] = useSearchParams();
   const { lab, catalog } = workspace;
+  const sharedClaims = useMemo(
+    () => sharedDeclarations(lab.capabilities),
+    [lab.capabilities],
+  );
+  const sharedKeys = useMemo(
+    () =>
+      new Set(
+        sharedClaims
+          .map(sharedDeclarationKey)
+          .filter((key): key is string => key !== null),
+      ),
+    [sharedClaims],
+  );
   const [query, setQuery] = useState("");
   const [editingCapability, setEditingCapability] = useState<
     Capability | undefined
@@ -110,11 +190,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
   const [profileDescription, setProfileDescription] = useState(lab.description);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState("");
-  const [busyExample, setBusyExample] = useState(false);
-  const [exampleError, setExampleError] = useState("");
-  const [exampleNotice, setExampleNotice] = useState("");
   const [saveError, setSaveError] = useState("");
-  const [example, setExample] = useState("csp301");
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [parametersOpen, setParametersOpen] = useState(false);
   useEffect(() => setParametersOpen(false), [viewingId]);
@@ -209,37 +285,14 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
     }
   }
 
-  async function loadExample() {
-    setBusyExample(true);
-    setExampleError("");
-    setExampleNotice("");
-    try {
-      await request<LabProfile>("/api/lab/example", {
-        method: "POST",
-        body: JSON.stringify({ version: lab.version, example }),
-      });
-      setExampleNotice("Example capabilities loaded.");
-      onRefresh();
-    } catch (reason) {
-      const message =
-        reason instanceof Error
-          ? reason.message
-          : "Example capabilities could not be loaded.";
-      setExampleError(
-        reason instanceof ApiError && reason.status === 409
-          ? `${message} Reload the latest lab and try again.`
-          : message,
-      );
-    } finally {
-      setBusyExample(false);
-    }
-  }
-
   const viewed = lab.capabilities.find((item) => item.id === viewingId);
   const viewedClaims =
     savedParameters.data?.lab_version === lab.version
-      ? savedParameters.data.claims.filter(
-          (claim) => claim.capability_id === viewingId,
+      ? serviceClaims(
+          savedParameters.data.claims.filter(
+            (claim) => claim.capability_id === viewingId,
+          ),
+          sharedKeys,
         )
       : [];
   const editCapability = (capability?: Capability) => {
@@ -341,29 +394,6 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
           {saveError}
         </Alert>
       )}
-      {exampleError && (
-        <Alert
-          severity="error"
-          sx={{ mb: 2 }}
-          action={
-            <Button color="inherit" size="small" onClick={onRefresh}>
-              Reload lab
-            </Button>
-          }
-        >
-          {exampleError}
-        </Alert>
-      )}
-      {exampleNotice && (
-        <Alert
-          severity="success"
-          sx={{ mb: 2 }}
-          onClose={() => setExampleNotice("")}
-        >
-          {exampleNotice}
-        </Alert>
-      )}
-
       <Card
         variant="outlined"
         sx={{ borderColor: "divider", overflow: "hidden" }}
@@ -430,34 +460,6 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                 onClick={() => editCapability()}
               >
                 Add a test
-              </Button>
-              <TextField
-                select
-                size="small"
-                label="Example"
-                value={example}
-                onChange={(event) => setExample(event.target.value)}
-                sx={{ minWidth: 185 }}
-              >
-                <MenuItem value="csp301_demo">
-                  CSP-EN-301 · updated demonstration lab
-                </MenuItem>
-                <MenuItem value="csp301">CSP-EN-301 · four tests</MenuItem>
-                <MenuItem value="csp301_detailed">
-                  CSP-EN-301 · detailed synthetic capabilities
-                </MenuItem>
-                <MenuItem value="legacy">MS-PNT-410 · pilot lab</MenuItem>
-              </TextField>
-              <Button
-                variant="outlined"
-                onClick={loadExample}
-                disabled={busyExample}
-              >
-                {busyExample ? (
-                  <CircularProgress size={18} />
-                ) : (
-                  "Load example lab"
-                )}
               </Button>
             </Stack>
           </Stack>
@@ -534,8 +536,9 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                           color="text.secondary"
                           sx={previewSx}
                         >
-                          {claimSummary(capability, "condition") ||
-                            capability.declared_constraints ||
+                          {claimSummary(capability, "condition", sharedKeys) ||
+                            (!(capability.atomic_claims ?? []).length &&
+                              capability.declared_constraints) ||
                             (capability.structured_limits.length
                               ? `${capability.structured_limits.length} declared operating limits`
                               : "Not specified")}
@@ -547,7 +550,8 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                           color="text.secondary"
                           sx={previewSx}
                         >
-                          {measurements(capability) || "Not specified"}
+                          {measurements(capability, sharedKeys) ||
+                            "Not specified"}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -577,13 +581,21 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
           </TableContainer>
         )}
       </Card>
+      {sharedClaims.length > 0 && (
+        <Box sx={{ mt: 2 }}>
+          <SharedLabDeclarations
+            claims={sharedClaims}
+            count={lab.capabilities.length}
+          />
+        </Box>
+      )}
       <Typography
         variant="caption"
         color="text.secondary"
         sx={{ display: "block", mt: 1.5 }}
       >
         Lab declarations and reference rates require review before use in a
-        quote. Example capabilities are illustrative.
+        quote.
       </Typography>
 
       <Dialog
@@ -628,8 +640,9 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                   Conditions and scope
                 </Typography>
                 <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                  {claimSummary(viewed, "condition") ||
-                    viewed.declared_constraints ||
+                  {claimSummary(viewed, "condition", sharedKeys) ||
+                    (!(viewed.atomic_claims ?? []).length &&
+                      viewed.declared_constraints) ||
                     "Not specified"}
                 </Typography>
               </Box>
@@ -638,9 +651,13 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                   Criteria / reporting
                 </Typography>
                 <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                  {measurements(viewed) || "Not specified"}
+                  {measurements(viewed, sharedKeys) || "Not specified"}
                 </Typography>
               </Box>
+              <SharedLabDeclarations
+                claims={sharedClaims}
+                count={lab.capabilities.length}
+              />
               <Accordion
                 expanded={parametersOpen}
                 onChange={(_, expanded) => setParametersOpen(expanded)}

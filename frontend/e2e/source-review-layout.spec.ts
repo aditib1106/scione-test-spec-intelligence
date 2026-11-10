@@ -1,5 +1,68 @@
 import { expect, test } from "@playwright/test";
 import type { SpecificationData } from "../src/types";
+import { editRequirement } from "./sourceEditor";
+
+test("PDF width follows the reading panel after zoom and navigation resize", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "Desktop navigation width is the relevant layout boundary.",
+  );
+  const imported = await request.post("/api/specifications/worked-example");
+  expect(imported.ok()).toBeTruthy();
+  const { document_id: id } = await imported.json();
+  await page.goto(`/specifications?document=${id}`);
+  const image = page.getByRole("img", { name: /PDF page/ }).first();
+  const viewport = page
+    .getByRole("region", { name: "Source document scroll area" })
+    .first();
+  await expect(image).toBeVisible();
+  await page
+    .getByRole("button", { name: "Zoom in", exact: true })
+    .first()
+    .click();
+  await page
+    .getByRole("button", { name: "Fit width", exact: true })
+    .first()
+    .click();
+  await expect
+    .poll(async () =>
+      Math.abs(
+        (await image.boundingBox())!.width -
+          (await viewport.evaluate((element) => element.clientWidth)) +
+          16,
+      ),
+    )
+    .toBeLessThan(3);
+  const initial = (await image.boundingBox())!.width;
+  const collapsed = page.getByRole("button", {
+    name: "Collapse navigation",
+    exact: true,
+  });
+  if (await collapsed.isVisible()) await collapsed.click();
+  else
+    await page
+      .getByRole("button", { name: "Expand navigation", exact: true })
+      .click();
+  await expect
+    .poll(async () => Math.abs((await image.boundingBox())!.width - initial))
+    .toBeGreaterThan(30);
+  await expect
+    .poll(async () =>
+      Math.abs(
+        (await image.boundingBox())!.width -
+          (await viewport.evaluate((element) => element.clientWidth)) +
+          16,
+      ),
+    )
+    .toBeLessThan(3);
+  await page.screenshot({
+    path: testInfo.outputPath("source-review-width-fit.png"),
+    fullPage: true,
+  });
+});
 
 test("planning count metadata stays outside operating conditions without rewriting its source role", async ({
   page,
@@ -60,16 +123,11 @@ test("planning count metadata stays outside operating conditions without rewriti
       exact: true,
     })
     .click();
-  const edit = page.getByRole("button", {
-    name: "Edit sample plan Submitted lot count",
-    exact: true,
-  });
-  await expect(edit).toBeVisible();
-  await edit.click();
-  const dialog = page.getByRole("dialog", {
-    name: "Correct extracted content",
-    exact: true,
-  });
+  const dialog = await editRequirement(
+    page,
+    "Sample plan",
+    "Submitted lot count",
+  );
   await expect(
     dialog.getByRole("tab", { name: "Sample plan", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
@@ -78,11 +136,13 @@ test("planning count metadata stays outside operating conditions without rewriti
   ).toBeVisible();
   await expect(dialog.getByLabel("Value", { exact: true })).toHaveValue("2");
   await dialog.getByRole("tab", { name: "Conditions", exact: true }).click();
+  await dialog.getByLabel("Choose requirement", { exact: true }).click();
   await expect(
-    dialog
-      .getByRole("table", { name: "Editable parameter list" })
-      .getByText("Submitted lot count", { exact: true }),
+    page
+      .getByRole("option")
+      .filter({ has: page.getByText("Submitted lot count", { exact: true }) }),
   ).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   const after = await (
     await request.get(`/api/specifications/${documentId}`)
@@ -163,18 +223,10 @@ test("review keeps a tall PDF, separates parameters from prose, and opens one fo
     expect(await viewport.evaluate((element) => element.scrollTop)).toBe(30);
     await page.getByRole("tab", { name: /^Conditions \(/ }).click();
   }
-  await table
-    .getByRole("button", {
-      name: `Edit parameter ${parameter.label}`,
-      exact: true,
-    })
-    .first()
-    .click();
-  const dialog = page.getByRole("dialog", {
-    name: "Correct extracted content",
-    exact: true,
-  });
-  await expect(dialog).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^Edit parameter / }),
+  ).toHaveCount(0);
+  const dialog = await editRequirement(page, "Conditions", parameter.label);
   await expect(
     dialog.getByRole("tab", { name: "Conditions", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
@@ -185,7 +237,16 @@ test("review keeps a tall PDF, separates parameters from prose, and opens one fo
   await expect(
     dialog.getByText(parameter.raw_text, { exact: true }).first(),
   ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("source-editor-focused.png"),
+    animations: "disabled",
+  });
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.screenshot({
+    path: testInfo.outputPath("source-review-single-edit.png"),
+    animations: "disabled",
+  });
   const after = (await (
     await request.get(`/api/specifications/${documentId}`)
   ).json()) as SpecificationData;
@@ -269,13 +330,7 @@ test("a guarded numeric draft stays visible and can be corrected without duplica
   await expect(
     row.getByText("Check interpretation", { exact: true }),
   ).toBeVisible();
-  await row
-    .getByRole("button", { name: "Edit parameter Cycles", exact: true })
-    .click();
-  const dialog = page.getByRole("dialog", {
-    name: "Correct extracted content",
-    exact: true,
-  });
+  const dialog = await editRequirement(page, "Conditions", "Cycles");
   await dialog.getByLabel("Parameter", { exact: true }).click();
   await page.getByRole("option", { name: "Cycle count", exact: true }).click();
   await dialog.getByLabel("Value", { exact: true }).fill("999");

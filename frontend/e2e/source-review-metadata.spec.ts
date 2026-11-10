@@ -55,7 +55,7 @@ test("a document revision question appears once without marking each extracted t
   ).toBeVisible();
   await expect(page.getByText(issue, { exact: true })).not.toBeVisible();
   await expect(
-    page.getByText("Some source information may be missing", { exact: true }),
+    page.getByText("Check extracted requirements", { exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "View revision details", exact: true })

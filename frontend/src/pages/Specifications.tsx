@@ -44,12 +44,14 @@ import SourceFactsEditor from "../components/SourceFactsEditor";
 import ExtractionReviewTable, {
   type SourceField,
 } from "../components/ExtractionReviewTable";
-import InferenceProgress from "../components/InferenceProgress";
+import InferenceProgress, {
+  recordInferenceDuration,
+} from "../components/InferenceProgress";
 import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
+import SourceCoverageNotice from "../components/SourceCoverageNotice";
 import {
   claimContext,
   claimValue,
-  isReviewParameter,
   isSamplePlanClaim,
 } from "../components/sourceReviewClaims";
 import type { PageProps, Requirement, SpecificationData } from "../types";
@@ -61,7 +63,7 @@ type Filter = "pending" | "all";
 
 const panelSx = {
   border: "1px solid #e2e7f0",
-  borderRadius: 2.5,
+  borderRadius: "14px",
   bgcolor: "#fff",
   boxShadow: "0 1px 3px rgba(20,35,70,.04)",
 };
@@ -131,10 +133,6 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const [pageLoading, setPageLoading] = useState(false);
   const [sourceField, setSourceField] = useState<SourceField | null>(null);
   const [sourceClaimId, setSourceClaimId] = useState<string | null>(null);
-  const [editClaimRequest, setEditClaimRequest] = useState<{
-    claimId: string;
-    nonce: number;
-  } | null>(null);
   const [highlightScope, setHighlightScope] = useState("none");
   const [highlightFocus, setHighlightFocus] = useState<number | null>(null);
   const [sourceLocateRequest, setSourceLocateRequest] = useState<
@@ -186,6 +184,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const [freeTierConfirmed, setFreeTierConfirmed] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [uploadNotice, setUploadNotice] = useState("");
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchIds, setBatchIds] = useState<string[]>([]);
   const [batchNote, setBatchNote] = useState("");
@@ -593,6 +592,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     if (!file) return;
     setUploading(true);
     setUploadError("");
+    setUploadNotice("");
     try {
       const form = new FormData();
       form.append("file", file);
@@ -600,23 +600,13 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         "/api/specifications",
         { method: "POST", body: form },
       );
-      onRefresh();
-      lastRequirementParam.current = null;
-      setParams({ document: result.document_id });
-    } catch (reason) {
-      setUploadError(errorText(reason));
-    } finally {
-      setUploading(false);
-    }
-  };
-  const importDemo = async () => {
-    setUploading(true);
-    setUploadError("");
-    try {
-      const result = await request<{ document_id: string }>(
-        "/api/specifications/demo",
-        { method: "POST" },
+      const existing = docs.find(
+        (item) => item.document_id === result.document_id,
       );
+      if (existing)
+        setUploadNotice(
+          `This PDF is already saved as ${existing.original_name}. Opened the existing record${existing.latest_run_id ? " and its saved analysis" : ""}. You can run a new analysis from Analysis settings.`,
+        );
       onRefresh();
       lastRequirementParam.current = null;
       setParams({ document: result.document_id });
@@ -638,6 +628,8 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       return;
     const documentAtSubmit = documentId;
     analysisSubmitting.current = true;
+    const analysisStartedAt = performance.now();
+    const analysisPages = data.document.page_count;
     const controller = new AbortController();
     analysisController.current = controller;
     setAnalyzing(true);
@@ -670,6 +662,11 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         },
       );
       if (!analysisMounted.current || controller.signal.aborted) return;
+      recordInferenceDuration(
+        "analysis",
+        (performance.now() - analysisStartedAt) / 1000,
+        analysisPages,
+      );
       if (activeDocumentRef.current === documentAtSubmit) {
         const nextRequirement =
           updated.run?.extraction.requirements.find(
@@ -838,7 +835,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
           {pageLoading
             ? "Locating the source…"
             : highlightScope === "none"
-              ? "No exact passage located on this page. Use a View source link or open the original PDF."
+              ? "Passage not located on this page. Select its source icon or open the original PDF."
               : highlightScope === "parameter"
                 ? "Highlighted: the selected parameter’s source."
                 : sourceField && highlightScope === "field"
@@ -939,7 +936,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       />
     ) : null;
   const detail = selected ? (
-    <Stack spacing={1.75}>
+    <Stack spacing={1.25}>
       {state === "needs_attention" && (
         <Box
           sx={{
@@ -995,9 +992,6 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         sourceField={sourceField}
         sourceClaimId={sourceClaimId}
         onSource={locateSource}
-        onEditClaim={(claimId) =>
-          setEditClaimRequest({ claimId, nonce: Date.now() })
-        }
       />
       {sourceNotices.length > 0 && (
         <Accordion
@@ -1084,21 +1078,6 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                         onClick={() => locateSource(null, sourcePage, claim.id)}
                       />
                     ))}
-                    {isReviewParameter(claim) && (
-                      <Button
-                        size="small"
-                        aria-label={`Edit sample plan ${claim.label}`}
-                        onClick={() =>
-                          setEditClaimRequest({
-                            claimId: claim.id,
-                            nonce: Date.now(),
-                          })
-                        }
-                        sx={{ p: 0, mt: 0.4, fontSize: 11 }}
-                      >
-                        Edit
-                      </Button>
-                    )}
                   </Box>
                 </Box>
               ))}
@@ -1140,14 +1119,14 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         disableGutters
         elevation={0}
         sx={{
-          border: "1px solid #e2e8f0",
-          borderRadius: "10px !important",
+          borderTop: "1px solid #e2e8f0",
+          borderRadius: "0 !important",
           "&:before": { display: "none" },
         }}
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Typography variant="body2" fontWeight={600}>
-            Source quotations & review note
+            Source evidence & notes
           </Typography>
         </AccordionSummary>
         <AccordionDetails>
@@ -1155,7 +1134,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
             {selected.evidence.map((evidence, index) => (
               <Box
                 key={index}
-                sx={{ p: 1.25, bgcolor: "#f6f8fb", borderRadius: 1 }}
+                sx={{ pb: 1.25, borderBottom: "1px solid #e5ebf2" }}
               >
                 <Button
                   size="small"
@@ -1178,7 +1157,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               minRows={2}
               maxRows={5}
               fullWidth
-              label="Review note / corrections to resolve"
+              label="Review note (optional)"
               value={note}
               onChange={(event) => setNote(event.target.value)}
               inputProps={{ maxLength: 4000 }}
@@ -1241,13 +1220,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
             }}
           />
         </Button>
-        <Button
-          variant="outlined"
-          onClick={() => void importDemo()}
-          disabled={uploading}
-        >
-          Import demo
-        </Button>
+
         <Tooltip title="Scanned and handwritten PDFs will be supported here when OCR is connected.">
           <span>
             <Button
@@ -1265,6 +1238,11 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         </Tooltip>
       </Stack>
       {uploadError && <Alert severity="error">{uploadError}</Alert>}
+      {uploadNotice && (
+        <Alert severity="info" onClose={() => setUploadNotice("")}>
+          {uploadNotice}
+        </Alert>
+      )}
     </Stack>
   );
 
@@ -1330,13 +1308,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                   }}
                 />
               </Button>
-              <Button
-                variant="outlined"
-                onClick={() => void importDemo()}
-                disabled={uploading}
-              >
-                Import demo specification
-              </Button>
+
               <Tooltip title="Scanned and handwritten PDFs will be supported here when OCR is connected.">
                 <span>
                   <Button
@@ -1398,7 +1370,11 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               expanded={analysisOpen}
               onChange={(_, expanded) => setAnalysisOpen(expanded)}
               disableGutters
-              sx={{ ...panelSx, "&:before": { display: "none" } }}
+              sx={{
+                ...panelSx,
+                borderRadius: "12px !important",
+                "&:before": { display: "none" },
+              }}
             >
               <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 2 }}>
                 <Box>
@@ -1697,42 +1673,17 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
             {analyzing && (
               <InferenceProgress
                 title="Document analysis in progress"
-                detail={`${analysisDocumentName} · Extracting test requirements and checking the output. This may take a few minutes.`}
+                detail={`${analysisDocumentName} · Reading test requirements and validating the extracted details.`}
+                estimateKey="analysis"
+                workUnits={data.document.page_count}
               />
             )}
 
-            {data.run && data.coverage_issues.length > 0 && (
-              <Alert severity="warning">
-                <Typography variant="body2" fontWeight={650}>
-                  Some source information may be missing
-                </Typography>
-                <Typography variant="body2">
-                  Check the PDF. Edit the scope or instructions, or add a
-                  missing test.
-                </Typography>
-                <Accordion
-                  disableGutters
-                  elevation={0}
-                  sx={{
-                    bgcolor: "transparent",
-                    "&:before": { display: "none" },
-                  }}
-                >
-                  <AccordionSummary
-                    expandIcon={<ExpandMoreIcon />}
-                    sx={{ p: 0, minHeight: 32 }}
-                  >
-                    <Typography variant="caption">
-                      See coverage notes
-                    </Typography>
-                  </AccordionSummary>
-                  <AccordionDetails sx={{ p: 0 }}>
-                    <Typography variant="caption">
-                      {data.coverage_issues.join(" · ")}
-                    </Typography>
-                  </AccordionDetails>
-                </Accordion>
-              </Alert>
+            {data.run && (
+              <SourceCoverageNotice
+                key={`coverage-${documentId}`}
+                issues={data.coverage_issues}
+              />
             )}
             <Stack
               direction={compact ? "column" : "row"}
@@ -1882,7 +1833,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                         onSaved={onAdded}
                       />
                     </Box>
-                    <Divider sx={{ my: 1 }} />
+                    <Divider sx={{ my: 0.75 }} />
                     <Box
                       sx={{
                         flex: 1,
@@ -1904,7 +1855,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                     <Divider sx={{ mt: 1 }} />
                     <Box
                       sx={{
-                        p: 1.25,
+                        p: 0.75,
                         bgcolor: "#fff",
                         flexShrink: 0,
                       }}
@@ -1913,14 +1864,14 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                         variant="caption"
                         color="text.secondary"
                         display="block"
-                        sx={{ mb: 1 }}
+                        sx={{ mb: 0.75 }}
                       >
                         {state === "confirmed"
-                          ? "Checked against the PDF."
+                          ? "Reviewed"
                           : state === "excluded"
                             ? "Removed from this request. The original is kept."
                             : state === "ready"
-                              ? "Ready for comparison. Reviewing this item is optional."
+                              ? "Ready for comparison"
                               : "Check this extraction against the PDF. Lab capability is compared in the report."}
                       </Typography>
                       {error && (
@@ -1974,17 +1925,12 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                             key={`${documentId}-${selected.id}-${data.facts_version ?? 0}`}
                             data={data}
                             selected={selected}
-                            editRequest={editClaimRequest}
-                            onEditRequestHandled={() =>
-                              setEditClaimRequest(null)
-                            }
                             onSaved={(updated) => {
                               if (
                                 activeDocumentRef.current !== documentId ||
                                 updated.document_id !== documentId
                               )
                                 return;
-                              setEditClaimRequest(null);
                               setData(updated);
                               onRefresh();
                             }}

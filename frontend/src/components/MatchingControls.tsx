@@ -31,7 +31,9 @@ import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import { request, useResource } from "../api";
 import type { ProviderOption } from "../types";
-import InferenceProgress from "./InferenceProgress";
+import InferenceProgress, {
+  recordInferenceDuration,
+} from "./InferenceProgress";
 
 interface MatchingAttempt {
   run_id: string;
@@ -130,6 +132,7 @@ export default function MatchingControls({
     requestController.current = controller;
     setBusy(true);
     setError("");
+    const inferenceStarted = performance.now();
     try {
       const result = await request<{
         run_id: string;
@@ -157,6 +160,11 @@ export default function MatchingControls({
       if (result.status !== "completed")
         throw new Error(
           "Matching did not complete. Check the saved attempt before trying again.",
+        );
+      if (!result.cached)
+        recordInferenceDuration(
+          "matching",
+          (performance.now() - inferenceStarted) / 1000,
         );
       setOpen(false);
       setPermission(false);

@@ -19,7 +19,9 @@ import CodeRoundedIcon from "@mui/icons-material/CodeRounded";
 import { ApiError, request } from "../api";
 import type { ProviderOption } from "../types";
 import { claimReportGenerationIntent } from "../reportGeneration";
-import InferenceProgress from "./InferenceProgress";
+import InferenceProgress, {
+  recordInferenceDuration,
+} from "./InferenceProgress";
 import MatchingControls from "./MatchingControls";
 
 interface MatchingInputs {
@@ -57,6 +59,7 @@ export default function ReportGenerationControls({
   comparisonId,
   aiApplied,
   providers,
+  requirementCount = 1,
   generationIntentId,
   onComplete,
 }: {
@@ -64,6 +67,7 @@ export default function ReportGenerationControls({
   comparisonId: string;
   aiApplied: boolean;
   providers: ProviderOption[];
+  requirementCount?: number;
   generationIntentId?: string | null;
   onComplete: () => void;
 }) {
@@ -122,6 +126,7 @@ export default function ReportGenerationControls({
           "Report generation is not configured. Your saved information is available; contact your workspace administrator.",
         );
       setPhase("comparing");
+      const inferenceStarted = performance.now();
       const result = await request<{ status: string; cached: boolean }>(path, {
         method: "POST",
         signal: controller.signal,
@@ -139,6 +144,12 @@ export default function ReportGenerationControls({
       if (result.status !== "completed")
         throw new Error(
           "The comparison did not finish. Your saved report is still available.",
+        );
+      if (!result.cached)
+        recordInferenceDuration(
+          "matching",
+          (performance.now() - inferenceStarted) / 1000,
+          requirementCount,
         );
       setProgressOpen(false);
       setNotice(
@@ -235,6 +246,7 @@ export default function ReportGenerationControls({
         <DialogContent>
           {busy ? (
             <InferenceProgress
+              workUnits={requirementCount}
               title={
                 phase === "preparing"
                   ? "Preparing your comparison"

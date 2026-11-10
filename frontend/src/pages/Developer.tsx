@@ -99,11 +99,6 @@ export default function Developer({ workspace, onRefresh }: PageProps) {
   const [resetting, setResetting] = useState(false);
   const [notice, setNotice] = useState("");
   const [resetError, setResetError] = useState("");
-  const [exampleOpen, setExampleOpen] = useState(false);
-  const [exampleAcknowledged, setExampleAcknowledged] = useState(false);
-  const [exampleBusy, setExampleBusy] = useState(false);
-  const [exampleError, setExampleError] = useState("");
-  const [exampleKind, setExampleKind] = useState("csp301_detailed");
   const query = new URLSearchParams();
   if (runId) query.set("run_id", runId);
   if (baseline) query.set("baseline_id", baseline);
@@ -139,36 +134,6 @@ export default function Developer({ workspace, onRefresh }: PageProps) {
     }
   }
   const selectedRun = data?.selected.run;
-  async function loadDetailedExample() {
-    if (!exampleAcknowledged || exampleBusy) return;
-    setExampleBusy(true);
-    setExampleError("");
-    try {
-      await request("/api/lab/example", {
-        method: "POST",
-        body: JSON.stringify({
-          version: workspace.lab.version,
-          example: exampleKind,
-          replace_existing: true,
-          acknowledged: true,
-        }),
-      });
-      setExampleOpen(false);
-      setNotice(
-        "Synthetic lab loaded. Generate a report for the updated lab declarations.",
-      );
-      onRefresh();
-      refresh();
-    } catch (reason) {
-      setExampleError(
-        reason instanceof Error
-          ? reason.message
-          : "Example data could not be loaded.",
-      );
-    } finally {
-      setExampleBusy(false);
-    }
-  }
   return (
     <Box sx={{ maxWidth: 1440, mx: "auto", p: { xs: 2, md: 4 } }}>
       <Typography variant="overline" color="primary">
@@ -184,97 +149,6 @@ export default function Developer({ workspace, onRefresh }: PageProps) {
           {notice}
         </Alert>
       )}
-      <Accordion
-        disableGutters
-        elevation={0}
-        sx={{
-          mb: 2,
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2,
-          "&:before": { display: "none" },
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreRounded />}>
-          <Typography fontWeight={650}>Synthetic lab example</Typography>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Load fictional lab declarations for CSP-EN-301. The updated demo
-            includes panel preparation, dimensions and reporting, with an
-            explicit post-cycle gloss limitation.
-          </Typography>
-          <Button
-            variant="outlined"
-            onClick={() => {
-              setExampleKind("csp301_detailed");
-              setExampleAcknowledged(false);
-              setExampleError("");
-              setExampleOpen(true);
-            }}
-          >
-            Load detailed lab example
-          </Button>
-          <Button
-            variant="contained"
-            sx={{ ml: 1 }}
-            onClick={() => {
-              setExampleKind("csp301_demo");
-              setExampleAcknowledged(false);
-              setExampleError("");
-              setExampleOpen(true);
-            }}
-          >
-            Load updated demo lab
-          </Button>
-        </AccordionDetails>
-      </Accordion>
-      <Dialog
-        open={exampleOpen}
-        onClose={() => {
-          if (!exampleBusy) setExampleOpen(false);
-        }}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Load synthetic lab capabilities?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            This replaces the current lab capabilities with the CSP-EN-301
-            synthetic example. Documents, extractions and saved reports are
-            kept. The previous lab revision remains in the database.
-          </Typography>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={exampleAcknowledged}
-                disabled={exampleBusy}
-                onChange={(event) =>
-                  setExampleAcknowledged(event.target.checked)
-                }
-              />
-            }
-            label="Replace my lab capabilities with the synthetic example"
-          />
-          {exampleError && (
-            <Alert severity="error" sx={{ mt: 1 }}>
-              {exampleError}
-            </Alert>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button disabled={exampleBusy} onClick={() => setExampleOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            disabled={exampleBusy || !exampleAcknowledged}
-            onClick={() => void loadDetailedExample()}
-          >
-            {exampleBusy ? "Loading…" : "Load example"}
-          </Button>
-        </DialogActions>
-      </Dialog>
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
           <TextField

@@ -195,22 +195,18 @@ test("document source coverage stays visible while filtering extracted report it
       modelCalls += 1;
   });
   await page.goto(`${base}/reports?document=summary-source`);
-  const title = page.getByText("Check source coverage before finalizing", {
+  const title = page.getByText("Check extracted requirements", {
     exact: true,
   });
   const warning = page.getByRole("alert").filter({ has: title });
   await expect(title).toHaveCount(1);
-  await expect(
-    warning.getByText("These results cover extracted items only.", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(warning).toContainText("1 source check to review");
   await expect(
     warning.getByRole("link", { name: "Review specification", exact: true }),
   ).toHaveAttribute("href", "/specifications?document=summary-source");
   await expect(warning.getByText(issue, { exact: true })).not.toBeVisible();
   await warning
-    .getByRole("button", { name: "See coverage notes", exact: true })
+    .getByRole("button", { name: "Review notes", exact: true })
     .click();
   await expect(warning.getByText(issue, { exact: true })).toBeVisible();
   await selectFilter(page, "Fully matched");
@@ -235,11 +231,11 @@ test("unconfirmed lab candidates are visible without being reported as matches",
   await page.goto(`${base}/reports?document=summary-source`);
   await page.getByRole("button", { name: "Conditions", exact: true }).click();
   const duration = page
-    .getByRole("table", { name: "Water jet adhesion conditions comparison" })
+    .getByRole("rowgroup", { name: "Water jet adhesion conditions comparison" })
     .getByRole("row")
     .filter({ has: page.getByText("Duration", { exact: true }) });
   await expect(
-    duration.getByText("Possible lab entry", { exact: true }),
+    duration.getByText("Lab information to review", { exact: true }),
   ).toBeVisible();
   await expect(
     duration.getByText("Dry nitrogen", { exact: true }),
@@ -259,7 +255,7 @@ test("report expands conditions and criteria in their own groups", async ({
   await mockReport(page);
   await page.goto(`${base}/reports?document=summary-source`);
   await expect(
-    page.getByText("Check source coverage before finalizing", { exact: true }),
+    page.getByText("Check extracted requirements", { exact: true }),
   ).toHaveCount(0);
   const list = page.getByRole("navigation", { name: "Requested tests" });
   const conditionsButton = page.getByRole("button", {
@@ -290,7 +286,7 @@ test("report expands conditions and criteria in their own groups", async ({
   ).toHaveCount(0);
 
   await conditionsButton.click();
-  const conditions = page.getByRole("table", {
+  const conditions = page.getByRole("rowgroup", {
     name: "Water jet adhesion conditions comparison",
     exact: true,
   });
@@ -441,10 +437,25 @@ for (const height of [900, 760]) {
     await page
       .getByRole("button", { name: "Criteria / reporting", exact: true })
       .click();
-    const criteria = pane.getByRole("table", {
+    const criteria = pane.getByRole("rowgroup", {
       name: "Water jet adhesion criteria / reporting comparison",
       exact: true,
     });
+    // A single shared table keeps expanded fields under the same headings.
+    await expect(comparison.getByRole("columnheader")).toHaveCount(4);
+    const methodRow = comparison
+      .getByRole("row")
+      .filter({ has: page.getByText("Method", { exact: true }) })
+      .first();
+    const methodCells = methodRow.getByRole("cell");
+    const ratingCells = criteria.getByRole("row").last().getByRole("cell");
+    for (const column of [1, 2, 3]) {
+      const methodBox = await methodCells.nth(column).boundingBox();
+      const ratingBox = await ratingCells.nth(column).boundingBox();
+      expect(Math.abs((methodBox?.x ?? 0) - (ratingBox?.x ?? 0))).toBeLessThan(
+        2,
+      );
+    }
     const lastRow = criteria.getByRole("row").last();
     await lastRow.scrollIntoViewIfNeeded();
     await expect(lastRow.getByText("Rating", { exact: true })).toBeVisible();

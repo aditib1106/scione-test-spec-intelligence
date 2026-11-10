@@ -6,9 +6,6 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -40,7 +37,6 @@ import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
-import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import { useResource } from "../api";
 import PdfPageViewer from "../components/PdfPageViewer";
 import ReportGenerationControls from "../components/ReportGenerationControls";
@@ -48,7 +44,9 @@ import ReportDimensions, {
   type ReportDimension,
 } from "../components/ReportDimensions";
 import ReportScopeControls from "../components/ReportScopeControls";
+import ReportAssessmentReview from "../components/ReportAssessmentReview";
 import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
+import SourceCoverageNotice from "../components/SourceCoverageNotice";
 import type { PageProps } from "../types";
 import type { LibraryDocument } from "../libraryTypes";
 import type {
@@ -79,13 +77,15 @@ const results: Record<
   needs_information: {
     label: "Needs information",
     color: "default",
-    tone: "#66758b",
+    tone: "#315c9f",
   },
   excluded: { label: "Excluded", color: "default", tone: "#66758b" },
 };
 const filters = [
   { value: "all", label: "All tests" },
   { value: "attention", label: "Needs attention" },
+  { value: "pending_review", label: "Not reviewed" },
+  { value: "reviewed", label: "Reviewed" },
   ...Object.entries(results).map(([value, status]) => ({
     value,
     label: status.label,
@@ -126,11 +126,20 @@ function selectRequirements(report: ComparisonData | null, view: ReportView) {
   const items = (report?.requirements ?? []).filter(
     (item) =>
       (view.filter === "all" ||
-        (view.filter === "attention"
-          ? ["partially_matched", "not_matched", "needs_information"].includes(
-              item.comparison.status,
-            )
-          : item.comparison.status === view.filter)) &&
+        (view.filter === "pending_review"
+          ? item.comparison.status !== "excluded" &&
+            report?.assessment_reviews?.[item.requirement_id]?.review_status !==
+              "accepted"
+          : view.filter === "reviewed"
+            ? report?.assessment_reviews?.[item.requirement_id]
+                ?.review_status === "accepted"
+            : view.filter === "attention"
+              ? [
+                  "partially_matched",
+                  "not_matched",
+                  "needs_information",
+                ].includes(item.comparison.status)
+              : item.comparison.status === view.filter)) &&
       [item.test_name, ...item.methods]
         .join(" ")
         .toLocaleLowerCase()
@@ -191,36 +200,32 @@ function nextActions(documentId: string, requirement: ComparisonRequirement) {
       description:
         "Check the source text and any unclear requirements before reassessing this test.",
     });
-  if (methodQuestion)
+  if (methodQuestion && !sourceQuestion)
     actions.push({
       label: "Review test and method",
-      to: `/reports/advanced?${new URLSearchParams({ document: documentId })}`,
-      description: "Confirm which test and method the customer requests.",
+      to: sourceUrl(documentId, requirement.requirement_id),
+      description:
+        "Check the requested test and method against the original source.",
     });
-  if (actions.length) return actions;
   const methodGap = requirement.comparison.checks.some(
     (check) =>
       check.status === "gap" &&
       (check.kind === "method" || check.parameter_id === "test_method"),
   );
   if (!requirement.capability_id && methodGap)
-    return [
-      {
-        label: "Add a lab capability",
-        to: "/my-lab",
-        description:
-          "This method is not listed. Add a declaration if your lab can offer it.",
-      },
-    ];
+    actions.push({
+      label: "Add a lab capability",
+      to: "/my-lab",
+      description:
+        "This method is not listed. Add a declaration if your lab can offer it.",
+    });
   if (unknown.length && requirement.capability_id)
-    return [
-      {
-        label: "Update lab information",
-        to: `/my-lab?${new URLSearchParams({ capability: requirement.capability_id })}`,
-        description:
-          "Add the missing lab details, then recompare without analyzing the customer PDF again.",
-      },
-    ];
+    actions.push({
+      label: "Update lab information",
+      to: `/my-lab?${new URLSearchParams({ capability: requirement.capability_id })}`,
+      description:
+        "Add the missing lab details, then recompare without analyzing the customer PDF again.",
+    });
   return actions;
 }
 
@@ -519,6 +524,7 @@ export default function Comparison({ workspace }: PageProps) {
               comparisonId={report.comparison_id}
               aiApplied={report.comparison_engine === "ai_semantic_matching"}
               providers={workspace.providers}
+              requirementCount={report.requirements.length}
               generationIntentId={
                 generationIntent?.generateReportFor === documentId
                   ? generationIntent.generationIntentId
@@ -568,52 +574,12 @@ export default function Comparison({ workspace }: PageProps) {
           sourceReviewUrl={`/specifications?${new URLSearchParams({ document: documentId })}`}
         />
       )}
-      {!!report?.source_coverage_issues?.length && (
-        <Alert
-          severity="warning"
-          sx={{ flexShrink: 0, mb: 1 }}
-          action={
-            <Button
-              component={RouterLink}
-              to={`/specifications?${new URLSearchParams({ document: documentId })}`}
-              size="small"
-            >
-              Review specification
-            </Button>
-          }
-        >
-          <Typography variant="body2" fontWeight={650}>
-            Check source coverage before finalizing
-          </Typography>
-          <Typography variant="caption">
-            These results cover extracted items only.
-          </Typography>
-          <Accordion
-            disableGutters
-            elevation={0}
-            sx={{ bgcolor: "transparent", "&:before": { display: "none" } }}
-          >
-            <AccordionSummary
-              expandIcon={<ExpandMoreRoundedIcon />}
-              sx={{ p: 0, minHeight: 28 }}
-            >
-              <Typography variant="caption">See coverage notes</Typography>
-            </AccordionSummary>
-            <AccordionDetails sx={{ p: 0 }}>
-              <Stack gap={0.75}>
-                {report.source_coverage_issues.map((issue, index) => (
-                  <Typography
-                    key={index}
-                    variant="body2"
-                    sx={{ overflowWrap: "anywhere" }}
-                  >
-                    {issue}
-                  </Typography>
-                ))}
-              </Stack>
-            </AccordionDetails>
-          </Accordion>
-        </Alert>
+      {report && (
+        <SourceCoverageNotice
+          key={`coverage-${documentId}`}
+          issues={report.source_coverage_issues ?? []}
+          sourceReviewUrl={`/specifications?${new URLSearchParams({ document: documentId })}`}
+        />
       )}
       <Menu
         anchorEl={toolsAnchor}
@@ -932,13 +898,32 @@ export default function Comparison({ workspace }: PageProps) {
                               {requirement.methods.join(" · ") ||
                                 "Customer procedure"}
                             </Typography>
-                            <Chip
-                              size="small"
-                              sx={statusStyle(requirement.comparison.status)}
-                              label={
-                                resultLabel(requirement.comparison.status).label
-                              }
-                            />
+                            <Stack
+                              direction="row"
+                              gap={0.75}
+                              alignItems="center"
+                              flexWrap="wrap"
+                            >
+                              <Chip
+                                size="small"
+                                sx={statusStyle(requirement.comparison.status)}
+                                label={
+                                  resultLabel(requirement.comparison.status)
+                                    .label
+                                }
+                              />
+                              {report.assessment_reviews?.[
+                                requirement.requirement_id
+                              ]?.review_status === "accepted" && (
+                                <Typography
+                                  variant="caption"
+                                  color="success.main"
+                                  fontWeight={650}
+                                >
+                                  Reviewed
+                                </Typography>
+                              )}
+                            </Stack>
                           </ListItemButton>
                         ))}
                         {!visible.length && (
@@ -981,8 +966,9 @@ export default function Comparison({ workspace }: PageProps) {
                           <>
                             <Box
                               sx={{
-                                px: { xs: 2, md: 2.5 },
+                                px: 2,
                                 py: 1.75,
+                                borderBottom: "1px solid #e3e9ee",
                                 bgcolor: "background.paper",
                               }}
                             >
@@ -1102,7 +1088,7 @@ export default function Comparison({ workspace }: PageProps) {
                                 spacing={1.25}
                                 useFlexGap
                                 flexWrap="wrap"
-                                sx={{ px: 2.5, py: 1.5 }}
+                                sx={{ px: 2, py: 1.5 }}
                               >
                                 {actions.map((action) => (
                                   <Tooltip
@@ -1123,6 +1109,13 @@ export default function Comparison({ workspace }: PageProps) {
                                 ))}
                               </Stack>
                             )}
+                            <ReportAssessmentReview
+                              key={`${report.comparison_id}-${selected.requirement_id}`}
+                              documentId={documentId}
+                              report={report}
+                              requirement={selected}
+                              onSaved={(updated) => data.setData(updated)}
+                            />
                             <ReportScopeControls
                               documentId={documentId}
                               report={report}

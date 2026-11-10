@@ -4,7 +4,6 @@ import {
   AccordionDetails,
   AccordionSummary,
   Box,
-  Button,
   Chip,
   Stack,
   Tab,
@@ -19,7 +18,6 @@ import {
   Typography,
 } from "@mui/material";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import SourcePageReference from "./SourcePageReference";
 import type { AtomicClaim, Requirement, RequirementValue } from "../types";
 import {
@@ -40,7 +38,6 @@ export default function ExtractionReviewTable({
   sourceField,
   sourceClaimId,
   onSource,
-  onEditClaim,
 }: {
   requirement: Requirement;
   claims?: SourceReviewClaim[];
@@ -48,7 +45,6 @@ export default function ExtractionReviewTable({
   sourceField: SourceField | null;
   sourceClaimId?: string | null;
   onSource: (field: SourceField, page: number, claimId?: string) => void;
-  onEditClaim?: (claimId: string) => void;
 }) {
   const atoms = claims ?? requirement.atomic_claims ?? [];
   const conditions = atoms.filter(
@@ -134,7 +130,7 @@ export default function ExtractionReviewTable({
   );
   return (
     <Stack gap={1.5}>
-      <TableContainer sx={{ border: "1px solid #dce4ef", borderRadius: 2 }}>
+      <TableContainer sx={{ borderBottom: "1px solid #dce4ef" }}>
         <Table
           aria-label="Test details"
           size="small"
@@ -154,7 +150,7 @@ export default function ExtractionReviewTable({
               <TableCell
                 component="th"
                 scope="row"
-                sx={{ width: 106, bgcolor: "#f5f8fc", fontWeight: 650 }}
+                sx={{ width: 106, fontWeight: 650, color: "text.secondary" }}
               >
                 Test name
                 {identitySource("name")}
@@ -184,7 +180,7 @@ export default function ExtractionReviewTable({
               <TableCell
                 component="th"
                 scope="row"
-                sx={{ bgcolor: "#f5f8fc", fontWeight: 650 }}
+                sx={{ fontWeight: 650, color: "text.secondary" }}
               >
                 Method
                 {identitySource("method")}
@@ -277,7 +273,6 @@ export default function ExtractionReviewTable({
                   <TableCell sx={{ fontWeight: 650 }}>
                     Customer requirement
                   </TableCell>
-                  <TableCell sx={{ width: 38, px: "2px !important" }} />
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -333,20 +328,6 @@ export default function ExtractionReviewTable({
                             color: "#92590c",
                           }}
                         />
-                      )}
-                    </TableCell>
-                    <TableCell sx={{ px: "2px !important" }}>
-                      {onEditClaim && (
-                        <Tooltip title={`Edit ${claim.label}`}>
-                          <Button
-                            size="small"
-                            aria-label={`Edit parameter ${claim.label}`}
-                            onClick={() => onEditClaim(claim.id)}
-                            sx={{ minWidth: 30, p: 0.5 }}
-                          >
-                            <EditOutlinedIcon sx={{ fontSize: 17 }} />
-                          </Button>
-                        </Tooltip>
                       )}
                     </TableCell>
                   </TableRow>
@@ -440,18 +421,6 @@ export default function ExtractionReviewTable({
                       </Box>
                       <Stack direction="row" alignItems="flex-start" gap={0.25}>
                         {sourceLinks(group, claim)}
-                        {onEditClaim && (
-                          <Tooltip title="Edit note">
-                            <Button
-                              size="small"
-                              aria-label={`Edit source note ${claim.label}`}
-                              onClick={() => onEditClaim(claim.id)}
-                              sx={{ minWidth: 28, p: 0.4 }}
-                            >
-                              <EditOutlinedIcon sx={{ fontSize: 16 }} />
-                            </Button>
-                          </Tooltip>
-                        )}
                       </Stack>
                     </Box>
                   );
@@ -464,8 +433,13 @@ export default function ExtractionReviewTable({
           <Accordion
             disableGutters
             elevation={0}
-            defaultExpanded={!active.length}
-            sx={{ mt: 1, "&:before": { display: "none" } }}
+            defaultExpanded={!concrete.length && !other.length}
+            sx={{
+              mt: 0.5,
+              borderTop: "1px solid #e3e9f1",
+              borderRadius: "0 !important",
+              "&:before": { display: "none" },
+            }}
           >
             <AccordionSummary
               expandIcon={<ExpandMoreRoundedIcon />}

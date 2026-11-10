@@ -17,6 +17,7 @@ import {
   FormControl,
   InputAdornment,
   InputLabel,
+  IconButton,
   List,
   ListItemButton,
   MenuItem,
@@ -45,7 +46,9 @@ import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import DocumentScannerOutlinedIcon from "@mui/icons-material/DocumentScannerOutlined";
-import { request, useResource } from "../api";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
+import { ApiError, request, useResource } from "../api";
 import FactSummary from "../components/FactSummary";
 import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
 import type { PageProps } from "../types";
@@ -152,8 +155,10 @@ export default function SpecificationLibrary({
   const [recordQuery, setRecordQuery] = useState("");
   const [recordPage, setRecordPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [loadingExample, setLoadingExample] = useState(false);
-  const [exampleError, setExampleError] = useState("");
+  const [removing, setRemoving] = useState<LibraryDocument | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeError, setRemoveError] = useState("");
+  const [removeStale, setRemoveStale] = useState(false);
 
   useEffect(() => {
     library.refresh();
@@ -369,27 +374,32 @@ export default function SpecificationLibrary({
     }
   };
 
-  const loadExample = async () => {
-    setLoadingExample(true);
-    setExampleError("");
+  const removeSpecification = async () => {
+    if (!removing || removeBusy) return;
+    setRemoveBusy(true);
+    setRemoveError("");
     try {
-      const result = await request<{ document_id: string }>(
-        "/api/specifications/worked-example",
-        { method: "POST", body: JSON.stringify({}) },
+      await request(
+        `/api/library/${encodeURIComponent(removing.document_id)}`,
+        {
+          method: "DELETE",
+          body: JSON.stringify({ version: removing.version }),
+        },
       );
-      setParams({ document: result.document_id });
-      setCompany("");
-      setQuery("");
+      if (selectedId === removing.document_id) setParams({});
+      setNotice("Specification removed from your library.");
+      setRemoving(null);
       library.refresh();
       onRefresh();
-    } catch (error) {
-      setExampleError(
-        error instanceof Error
-          ? error.message
-          : "The example could not be opened. Please try again.",
+    } catch (reason) {
+      setRemoveStale(reason instanceof ApiError && reason.status === 409);
+      setRemoveError(
+        reason instanceof Error
+          ? reason.message
+          : "Unable to remove this specification.",
       );
     } finally {
-      setLoadingExample(false);
+      setRemoveBusy(false);
     }
   };
 
@@ -418,7 +428,7 @@ export default function SpecificationLibrary({
           <Typography color="text.secondary" sx={{ mt: 0.5 }}>
             {selectedId
               ? "Browse the saved tests and requirements for this specification."
-              : "Find a customer specification, then open its saved tests and requirements."}
+              : "Customer specifications, extracted tests and saved versions."}
           </Typography>
         </Box>
         {!selectedId && (
@@ -427,13 +437,6 @@ export default function SpecificationLibrary({
             spacing={1}
             sx={{ flexShrink: 0, alignSelf: { xs: "flex-start", sm: "auto" } }}
           >
-            <Button
-              variant="outlined"
-              onClick={() => void loadExample()}
-              disabled={loadingExample}
-            >
-              {loadingExample ? "Opening example…" : "Try worked example"}
-            </Button>
             <Button
               variant="contained"
               startIcon={<AddRoundedIcon />}
@@ -448,11 +451,6 @@ export default function SpecificationLibrary({
       {notice && (
         <Alert severity="success" onClose={() => setNotice("")} sx={{ mb: 2 }}>
           {notice}
-        </Alert>
-      )}
-      {exampleError && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {exampleError}
         </Alert>
       )}
       {library.error && (
@@ -552,15 +550,25 @@ export default function SpecificationLibrary({
                 sx={{ mt: 2 }}
                 endIcon={<ArrowForwardRoundedIcon />}
               >
-                Open review workspace or import an example
+                Open PDF review
               </Button>
             </Box>
           ) : (
-            <TableContainer sx={{ maxHeight: 340 }}>
+            <TableContainer
+              sx={{ maxHeight: "calc(100dvh - 280px)", minHeight: 240 }}
+            >
               <Table
                 stickyHeader
                 size="small"
                 aria-label="Saved customer specifications"
+                sx={{
+                  "& th": {
+                    bgcolor: "#f5f7fb",
+                    color: "#53647b",
+                    fontWeight: 650,
+                  },
+                  "& td": { py: 1.75, borderColor: "#e6ebf2" },
+                }}
               >
                 <TableHead>
                   <TableRow>
@@ -570,6 +578,7 @@ export default function SpecificationLibrary({
                     <TableCell align="right">Tests</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell>Updated</TableCell>
+                    <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -642,12 +651,37 @@ export default function SpecificationLibrary({
                       >
                         {dateLabel(document.updated_at)}
                       </TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                        <Tooltip title="Review PDF">
+                          <IconButton
+                            size="small"
+                            component={RouterLink}
+                            to={reviewUrl(document.document_id)}
+                            aria-label={`Review ${documentTitle(document)}`}
+                          >
+                            <DescriptionOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Remove from library">
+                          <IconButton
+                            size="small"
+                            aria-label={`Remove ${documentTitle(document)}`}
+                            onClick={() => {
+                              setRemoving(document);
+                              setRemoveError("");
+                              setRemoveStale(false);
+                            }}
+                          >
+                            <DeleteOutlineRoundedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {filtered.length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={7}
                         sx={{
                           py: 4,
                           textAlign: "center",
@@ -723,6 +757,18 @@ export default function SpecificationLibrary({
                 </Typography>
               </Box>
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Tooltip title="Remove from library">
+                  <IconButton
+                    aria-label="Remove specification"
+                    onClick={() => {
+                      setRemoving(current);
+                      setRemoveError("");
+                      setRemoveStale(false);
+                    }}
+                  >
+                    <DeleteOutlineRoundedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
                 <Button
                   startIcon={<EditOutlinedIcon />}
                   onClick={() => openEdit(current)}
@@ -736,6 +782,13 @@ export default function SpecificationLibrary({
                   endIcon={<ArrowForwardRoundedIcon />}
                 >
                   Read PDF & review
+                </Button>
+                <Button
+                  component={RouterLink}
+                  to={`/reports?document=${encodeURIComponent(current.document_id)}`}
+                  startIcon={<AssessmentOutlinedIcon />}
+                >
+                  Gap report
                 </Button>
               </Stack>
             </Stack>
@@ -826,8 +879,8 @@ export default function SpecificationLibrary({
                     sx={{
                       maxHeight: { xs: 240, md: 560 },
                       overflowY: "auto",
-                      borderRight: { md: "1px solid" },
-                      borderBottom: { xs: "1px solid", md: 0 },
+                      borderRight: { md: "1px solid #e2e8f0" },
+                      borderBottom: { xs: "1px solid #e2e8f0", md: 0 },
                       borderColor: "divider",
                     }}
                   >
@@ -1243,6 +1296,61 @@ export default function SpecificationLibrary({
         </Paper>
       )}
 
+      <Dialog
+        open={Boolean(removing)}
+        onClose={() => {
+          if (!removeBusy) setRemoving(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Remove this specification?</DialogTitle>
+        <DialogContent>
+          <Typography fontWeight={600} sx={{ mb: 1 }}>
+            {removing ? documentTitle(removing) : ""}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            This version will no longer appear in your library or report
+            selection. Other versions remain available. Its original PDF and
+            saved history are retained.
+          </Typography>
+          {removeError && (
+            <Alert
+              severity="error"
+              sx={{ mt: 2 }}
+              action={
+                removeStale ? (
+                  <Button
+                    color="inherit"
+                    onClick={() => {
+                      setRemoving(null);
+                      library.refresh();
+                      onRefresh();
+                    }}
+                  >
+                    Reload library
+                  </Button>
+                ) : undefined
+              }
+            >
+              {removeError}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button disabled={removeBusy} onClick={() => setRemoving(null)}>
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={removeBusy || removeStale}
+            onClick={() => void removeSpecification()}
+          >
+            {removeBusy ? "Removing…" : "Remove from library"}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Dialog
         open={dialogOpen}
         onClose={() => {
