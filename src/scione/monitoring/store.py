@@ -143,3 +143,19 @@ class MonitoringStore:
                     .limit(limit)
                 ).mappings()
             ]
+
+    def latest_document(self, document_id: str) -> dict | None:
+        """Return a bounded, metadata-only status for one owned document."""
+        upgrade_monitoring_schema(self.library)
+        with self.library.engine.connect() as connection:
+            row = connection.execute(
+                select(
+                    operations.c.id, operations.c.kind, operations.c.status,
+                    operations.c.started_at, operations.c.finished_at,
+                    operations.c.run_id, operations.c.duration_ms,
+                )
+                .where(operations.c.document_id == document_id)
+                .order_by(operations.c.started_at.desc(), operations.c.id.desc())
+                .limit(1)
+            ).mappings().first()
+            return dict(row) if row is not None else None

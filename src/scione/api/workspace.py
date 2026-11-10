@@ -25,7 +25,14 @@ from scione.ingestion.source_views import current_document_view
 from scione.library.store import LibraryConflict, digest
 from scione.library.workspace import LibraryWorkspace
 from scione.matching.workspace import MatchingWorkspace
-from scione.reports.matching import build_report, lab_fingerprint, support_basis
+from scione.reports.matching import (
+    build_report,
+    lab_fingerprint,
+    support_basis,
+)
+from scione.reports.matching import (
+    input_fingerprint as report_input_fingerprint,
+)
 from scione.reports.models import (
     GapLine,
     MappingChoice,
@@ -345,7 +352,12 @@ class Workspace:
             raise HTTPException(409, "Extraction changed. Reload before saving your decision.")
         return run
 
-    def draft(self, document_id: str) -> ReportSnapshot:
+    def capture_draft_inputs(self, document_id: str) -> dict:
+        """Read every mutable report input without deriving or matching it.
+
+        Each call reads the current file/SQL revisions. Consumers can reuse a
+        pure derivation only when the complete captured fingerprint agrees.
+        """
         stored = self.current_document(document_id)
         run = self.specs.load_latest_extraction(document_id)
         if run is None:
@@ -376,19 +388,36 @@ class Workspace:
                         )
                     },
                 )
-        report = build_report(
-            stored,
-            run,
-            review,
-            self.labs.load_or_create(),
-            self.catalog,
-            report_workspace,
-            pdf_bytes=self.specs.read_pdf(document_id),
+        return {
+            "stored": stored,
+            "run": run,
+            "review": review,
+            "revision": revision,
+            "lab": self.labs.load_or_create(),
+            "workspace": report_workspace,
+        }
+
+    def captured_draft_fingerprint(self, inputs: dict) -> str:
+        fingerprint = report_input_fingerprint(
+            inputs["stored"], inputs["run"], inputs["review"], inputs["lab"],
+            self.catalog, inputs["workspace"],
         )
+        revision = inputs["revision"]
+        return digest([fingerprint, revision.revision_id]) if revision else fingerprint
+
+    def draft_from_inputs(self, inputs: dict) -> ReportSnapshot:
+        report = build_report(
+            inputs["stored"], inputs["run"], inputs["review"], inputs["lab"],
+            self.catalog, inputs["workspace"],
+            pdf_bytes=self.specs.read_pdf(inputs["stored"].document_id),
+        )
+        revision = inputs["revision"]
         report.source_facts_revision_id = revision.revision_id if revision else None
-        if revision:
-            report.input_fingerprint = digest([report.input_fingerprint, revision.revision_id])
+        report.input_fingerprint = self.captured_draft_fingerprint(inputs)
         return report
+
+    def draft(self, document_id: str) -> ReportSnapshot:
+        return self.draft_from_inputs(self.capture_draft_inputs(document_id))
 
     def report(self, document_id: str) -> dict:
         report = self.draft(document_id)

@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, OrderedDict
+from copy import deepcopy
+from threading import Lock, RLock
 
 from fastapi import HTTPException
 
 from scione.library.assessment_reviews import SQLAssessmentReviews
 from scione.library.candidate_display import candidate_lab_entries
 from scione.library.store import LibraryStore, digest
+from scione.matching.batching import MATCHING_BATCH_POLICY_VERSION
+from scione.matching.models import MATCHING_PROMPT_VERSION, MATCHING_VALIDATION_VERSION
+from scione.matching.projection import MATCHING_PROJECTION_VERSION
+from scione.matching.retrieval import RETRIEVAL_POLICY_VERSION
 from scione.parameters import REGISTRY_VERSION
 from scione.reports.matching import lab_fingerprint
 from scione.specifications.extraction import coverage_issues
@@ -21,6 +27,10 @@ from scione.structured import compare_requirement, normalize_capability
 from scione.structured.models import NORMALIZER_VERSION, AtomicClaim
 
 COMPARISON_POLICY_VERSION = "native_atoms_first_v6"
+EXPORT_PRESENTATION_VERSION = "lab_gap_pdf_v2"
+_READ_CACHE_INITIALIZATION = Lock()
+_READ_CACHE_LIMIT = 32
+_COMPARISON_CACHE_LIMIT = 8
 
 
 class LibraryWorkspace:
@@ -34,13 +44,57 @@ class LibraryWorkspace:
             else None,
         )
 
+    def _read_caches(self):
+        # Tenant library subclasses reuse a provisioned SQL store without
+        # calling this constructor. Initialize per-instance caches lazily;
+        # there is never a process-wide cache of another lab's source data.
+        if not hasattr(self, "_read_cache_lock"):
+            with _READ_CACHE_INITIALIZATION:
+                if not hasattr(self, "_read_cache_lock"):
+                    self._indexed_sources = OrderedDict()
+                    self._source_assessments = OrderedDict()
+                    self._comparison_views = OrderedDict()
+                    self._read_cache_lock = RLock()
+        return self._read_cache_lock, self._indexed_sources, self._source_assessments
+
+    @staticmethod
+    def _remember(cache, key, value, *, limit=_READ_CACHE_LIMIT):
+        cache[key] = value
+        cache.move_to_end(key)
+        while len(cache) > limit:
+            cache.popitem(last=False)
+
+    def _source_signature(self, stored, run, review=None):
+        # Hash the actual, freshly validated source/facts/review contents, not
+        # timestamps. SQL facts revisions and human decisions can change while
+        # the machine run and PDF remain identical.
+        return digest(
+            {
+                "document": stored.document.model_dump(mode="json"),
+                "extraction": run.extraction.model_dump(mode="json") if run else None,
+                "run_id": run.run_id if run else None,
+                "review": review.model_dump(mode="json") if review else None,
+                "normalizer": NORMALIZER_VERSION,
+                "registry": REGISTRY_VERSION,
+                "review_policy": REVIEW_POLICY_VERSION,
+                "catalog": [self.workspace.catalog.id, self.workspace.catalog.version],
+            }
+        )
+
     def index(self, document_id: str):
         stored = self.workspace.current_document(document_id)
         run = self.workspace.specs.load_latest_extraction(document_id)
         self.store.ensure_document(stored, run.extraction.document if run else None)
         if run:
-            _, normalized = self.workspace.comparison_source(document_id, run)
-            self.store.save_requirements(run, normalized)
+            signature = self._source_signature(stored, run)
+            lock, indexed, _assessments = self._read_caches()
+            with lock:
+                if indexed.get(document_id) != signature:
+                    _, normalized = self.workspace.comparison_source(document_id, run)
+                    self.store.save_requirements(run, normalized)
+                    self._remember(indexed, document_id, signature)
+                else:
+                    indexed.move_to_end(document_id)
         return stored, run
 
     def document(self, document_id: str) -> dict:
@@ -53,26 +107,36 @@ class LibraryWorkspace:
     def _document_view(self, stored, run, review) -> dict:
         """Build metadata around one captured source/review, not another latest read."""
         row = self.store.document(stored.document_id)
-        assessments = (
-            assess_requirements(
-                run,
-                stored.document,
-                review,
-                pdf_bytes=self.workspace.specs.read_pdf(stored.document_id),
-            )
-            if run
-            else {}
-        )
+        signature = self._source_signature(stored, run, review)
+        lock, _indexed, cached = self._read_caches()
+        with lock:
+            summary = cached.get(signature)
+            if summary is None:
+                assessments = (
+                    assess_requirements(
+                        run,
+                        stored.document,
+                        review,
+                        pdf_bytes=self.workspace.specs.read_pdf(stored.document_id),
+                    )
+                    if run
+                    else {}
+                )
+                summary = (
+                    sum(item.state == "needs_attention" for item in assessments.values()),
+                    tuple(document_review_issues(run, stored.document)) if run else (),
+                )
+                self._remember(cached, signature, summary)
+            else:
+                cached.move_to_end(signature)
         return {
             **row,
             "page_count": stored.document.page_count,
             "run_id": run.run_id if run else None,
             "provider": run.provider if run else None,
             "requirement_count": len(run.extraction.requirements) if run else 0,
-            "review_count": sum(item.state == "needs_attention" for item in assessments.values()),
-            "document_review_issues": list(document_review_issues(run, stored.document))
-            if run
-            else [],
+            "review_count": summary[0],
+            "document_review_issues": list(summary[1]),
         }
 
     def listing(self) -> dict:
@@ -142,17 +206,44 @@ class LibraryWorkspace:
     def metadata(self, document_id: str, body) -> dict:
         self.index(document_id)
         values = body.model_dump(exclude={"expected_version"})
+        if "specification_date" not in body.model_fields_set:
+            values.pop("specification_date", None)
         self.store.edit_metadata(document_id, values, body.expected_version)
         return self.detail(document_id)
 
     def comparison(self, document_id: str) -> dict:
         # The report captures exactly one immutable extraction plus its review,
         # lab and matching decisions. Derive every exported field from it.
-        report = self.workspace.draft(document_id)
-        run = report.source_run
-        stored = self.workspace.current_document(document_id)
+        inputs = self.workspace.capture_draft_inputs(document_id)
+        stored, run = inputs["stored"], inputs["run"]
         self.store.ensure_document(stored, run.extraction.document)
-        document = self._document_view(stored, run, report.source_review)
+        document = self._document_view(stored, run, inputs["review"])
+        matching_revision = digest(self.workspace.matching.store.listing(document_id))
+        signature = digest({
+            "inputs": self.workspace.captured_draft_fingerprint(inputs),
+            "metadata": document,
+            "matching_revision": matching_revision,
+            # A patched/reloaded implementation cannot reuse an earlier pure
+            # derivation within this process, even before a policy bump.
+            "implementations": [id(coverage_issues), id(type(self.workspace).draft_from_inputs)],
+            "policies": [
+                COMPARISON_POLICY_VERSION, NORMALIZER_VERSION, REGISTRY_VERSION,
+                REVIEW_POLICY_VERSION, MATCHING_PROMPT_VERSION, MATCHING_VALIDATION_VERSION,
+                MATCHING_PROJECTION_VERSION, MATCHING_BATCH_POLICY_VERSION,
+                RETRIEVAL_POLICY_VERSION,
+            ],
+        })
+        lock, _indexed, _assessments = self._read_caches()
+        with lock:
+            cached = self._comparison_views.get(signature)
+            if cached is not None:
+                self._comparison_views.move_to_end(signature)
+                report, saved = deepcopy(cached)
+        if cached is not None:
+            self._assert_comparison_inputs_current(report, document, matching_revision)
+            return self._reviewed_comparison(saved)
+        report = self.workspace.draft_from_inputs(inputs)
+        run = report.source_run
         # Machine extraction rows are immutable. Reviewed facts have their own
         # SQL revision and normalized snapshot, never overwrite this raw index.
         machine = self.workspace.specs.load_extraction(document_id, run.run_id)
@@ -383,18 +474,35 @@ class LibraryWorkspace:
             "report_input_fingerprint": report.input_fingerprint,
             "report_workspace_version": report.workspace.version,
         }
-        self._assert_comparison_inputs_current(report, document)
+        self._assert_comparison_inputs_current(report, document, matching_revision)
         # A policy upgrade can change derived warnings or presentation while
         # source/lab inputs stay identical. Address the complete computed view
         # so it creates a new immutable assessment instead of trying to replace
         # the earlier snapshot with the same input-based identifier.
         identity = digest(payload)
         saved = self.store.save_comparison(identity, payload)
+        with lock:
+            self._remember(
+                self._comparison_views, signature, deepcopy((report, saved)),
+                limit=_COMPARISON_CACHE_LIMIT,
+            )
+        return self._reviewed_comparison(saved)
+
+    def _reviewed_comparison(self, saved: dict) -> dict:
         # Pagination is presentation metadata; the persisted comparison remains immutable.
-        reviews = SQLAssessmentReviews(self.store, self.workspace.labs.workspace_id).latest(
-            saved["comparison_id"]
+        reviews = SQLAssessmentReviews(
+            self.store, self.workspace.labs.workspace_id
+        ).latest_for_assessment(saved)
+        # Human decisions do not alter machine identity or its immutable
+        # checks. Export a separately addressed snapshot so PDF/JSON includes
+        # the exact saved decision versions, while earlier exports stay fixed.
+        export = self.store.save_comparison(
+            digest([EXPORT_PRESENTATION_VERSION, saved["comparison_id"], reviews]),
+            {**saved, "machine_comparison_id": saved["comparison_id"],
+             "assessment_reviews": reviews, "export_format_version": EXPORT_PRESENTATION_VERSION},
         )
-        return {**saved, **({"assessment_reviews": reviews} if reviews else {})}
+        return {**saved, **({"assessment_reviews": reviews} if reviews else {}),
+                "export_snapshot_id": export["comparison_id"]}
 
     def review_assessment(self, document_id: str, body) -> dict:
         current = self.comparison(document_id)
@@ -425,15 +533,17 @@ class LibraryWorkspace:
             )
         return updated
 
-    def _assert_comparison_inputs_current(self, report, document: dict) -> None:
+    def _assert_comparison_inputs_current(
+        self, report, document: dict, matching_revision: str | None = None
+    ) -> None:
         """Reject a stale analysis/review/lab/metadata race before publishing it.
 
         All payload data already comes from the captured report, so even a
         change after this optimistic check cannot mix different source runs.
         """
         self.workspace.latest(report.document_id, report.source_run.run_id)
-        current = self.workspace.draft(report.document_id)
-        if current.input_fingerprint != report.input_fingerprint:
+        current = self.workspace.capture_draft_inputs(report.document_id)
+        if self.workspace.captured_draft_fingerprint(current) != report.input_fingerprint:
             raise HTTPException(
                 409, "Source, review or lab information changed. Recompare the latest saved data."
             )
@@ -442,3 +552,7 @@ class LibraryWorkspace:
             raise HTTPException(
                 409, "Specification details changed. Reload before comparing again."
             )
+        if matching_revision is not None and digest(
+            self.workspace.matching.store.listing(report.document_id)
+        ) != matching_revision:
+            raise HTTPException(409, "The saved analysis changed. Refresh the current report.")

@@ -31,6 +31,10 @@ GLOSS = (
 THICKNESS = "Dry film thickness: ISO 60152:2025. Separate topcoat thickness 42-55 um."
 
 
+def _machine_snapshot(live):
+    return {key: value for key, value in live.items() if key != "export_snapshot_id"}
+
+
 class LocalClient:
     def __init__(self, app):
         self.app = app
@@ -272,7 +276,9 @@ def test_new_coverage_policy_creates_a_new_immutable_snapshot_with_same_inputs(c
     assert before["comparison_id"] != after["comparison_id"]
     assert before["requirements"] == after["requirements"]
     assert http.get(f"/api/comparisons/{source.document_id}").json() == after
-    assert http.get(f"/api/comparison-snapshots/{before['comparison_id']}/json").json() == before
+    assert http.get(f"/api/comparison-snapshots/{before['comparison_id']}/json").json() == (
+        _machine_snapshot(before)
+    )
     assert FileSpecStore(root).load_latest_extraction(source.document_id) == original_run
 
 
@@ -281,10 +287,10 @@ def test_pending_method_identity_does_not_report_lab_values_as_missing(client, m
 
     http, root = client
     source, _ = _seed(root)
-    draft = Workspace.draft
+    draft = Workspace.draft_from_inputs
 
-    def ambiguous_method(workspace, document_id):
-        report = draft(workspace, document_id).model_copy(deep=True)
+    def ambiguous_method(workspace, inputs):
+        report = draft(workspace, inputs).model_copy(deep=True)
         line = report.lines[0]
         # The lab has a gloss declaration, but no declaration can be selected
         # until this test's ambiguous method identity is resolved.
@@ -304,7 +310,7 @@ def test_pending_method_identity_does_not_report_lab_values_as_missing(client, m
         captured.special_instructions.append("Use the buyer's special sample holder.")
         return report
 
-    monkeypatch.setattr(Workspace, "draft", ambiguous_method)
+    monkeypatch.setattr(Workspace, "draft_from_inputs", ambiguous_method)
     response = http.get(f"/api/comparisons/{source.document_id}")
 
     assert response.status_code == 200, response.text
@@ -346,7 +352,7 @@ def test_lab_update_changes_new_comparison_without_reextracting_or_rewriting_his
     assert new["comparison"]["status"] == "fully_matched"
     frozen = http.get(f"/api/comparison-snapshots/{before['comparison_id']}/json")
     assert frozen.status_code == 200
-    assert frozen.json() == before
+    assert frozen.json() == _machine_snapshot(before)
     assert FileSpecStore(root).load_extraction(source.document_id, run.run_id) == run
     assert len(FileSpecStore(root).list_extractions(source.document_id)) == 1
 
@@ -355,7 +361,7 @@ def test_saved_comparison_exports_use_same_frozen_json_and_pdf(client, monkeypat
     http, root = client
     source, _ = _seed(root)
     saved = http.get(f"/api/comparisons/{source.document_id}").json()
-    comparison_id = saved["comparison_id"]
+    comparison_id = saved["export_snapshot_id"]
     endpoint = f"/api/comparison-snapshots/{comparison_id}"
     first = http.get(endpoint + "/pdf?download=true")
     assert first.status_code == 200
@@ -364,7 +370,10 @@ def test_saved_comparison_exports_use_same_frozen_json_and_pdf(client, monkeypat
     assert first.content.startswith(b"%PDF-")
     info = http.get(endpoint)
     assert info.status_code == 200
-    assert info.json()["comparison"] == saved
+    exported = info.json()["comparison"]
+    assert exported["machine_comparison_id"] == saved["comparison_id"]
+    assert exported["requirements"] == saved["requirements"]
+    assert exported["summary"] == saved["summary"]
     assert 1 <= info.json()["page_count"] <= 6
     preview = http.get(endpoint + "/pages/1")
     assert preview.status_code == 200
@@ -372,7 +381,7 @@ def test_saved_comparison_exports_use_same_frozen_json_and_pdf(client, monkeypat
     rendered_page = pymupdf.Pixmap(preview.content)
     assert 1000 <= rendered_page.width <= 2000
     assert 1000 <= rendered_page.height <= 2000
-    assert http.get(endpoint + "/json").json() == saved
+    assert http.get(endpoint + "/json").json() == exported
 
     def reject_rerender(_payload):
         pytest.fail("Downloading a saved PDF must reuse its frozen bytes.")
@@ -559,7 +568,9 @@ def test_comparison_rejects_concurrent_input_changes_without_publishing_mixed_sn
     saved = retried.json()
     expected_run = newer.run_id if changed == "extraction" else initial.run_id
     assert saved["document"]["run_id"] == saved["source_run_id"] == expected_run
-    assert http.get(f"/api/comparison-snapshots/{saved['comparison_id']}/json").json() == saved
+    assert http.get(f"/api/comparison-snapshots/{saved['comparison_id']}/json").json() == (
+        _machine_snapshot(saved)
+    )
 
 
 def test_remove_library_version_hides_selectors_and_preserves_history(client):
@@ -582,7 +593,7 @@ def test_remove_library_version_hides_selectors_and_preserves_history(client):
     assert FileSpecStore(root).load_extraction(source.document_id, run.run_id) == run
     saved = http.get(f"/api/comparison-snapshots/{report['comparison_id']}/json")
     assert saved.status_code == 200
-    assert saved.json() == report
+    assert saved.json() == _machine_snapshot(report)
     stale = http.request(
         "DELETE",
         f"/api/library/{source.document_id}",
@@ -656,7 +667,7 @@ def test_assessment_review_persists_without_overwriting_machine_checks(client):
     assert http.get(f"/api/specifications/{source.document_id}").json()["run"] == before_source
     # Stored machine JSON remains immutable, including after later reviewer decisions.
     frozen = http.get(f"/api/comparison-snapshots/{original['comparison_id']}/json").json()
-    assert frozen == original
+    assert frozen == _machine_snapshot(original)
     followup = http.post(
         path + "/reviews",
         json={

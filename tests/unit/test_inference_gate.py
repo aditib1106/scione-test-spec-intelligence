@@ -1,6 +1,7 @@
 """A paid operation owns a document until success or failure releases it."""
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from threading import Event
 
 import pytest
@@ -63,3 +64,30 @@ def test_simultaneous_request_is_rejected_instead_of_waiting_for_a_new_call():
         finally:
             release.set()
         first.result(timeout=5)
+
+
+def test_active_snapshots_are_tenant_scoped_copies_with_stable_ids(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr("scione.api.inference_gate.monotonic", lambda: now[0])
+    gate = InferenceGate()
+    document = "a" * 16
+    with gate.claim(f"lab_a:{document}", "analysis", workspace_id="lab_a"):
+        with gate.claim(f"lab_b:{document}", "matching", workspace_id="lab_b"):
+            now[0] = 102.5
+            first = gate.snapshot(workspace_id="lab_a")
+            assert len(first) == 1 and first[0]["document_id"] == document
+            assert first[0]["kind"] == "extraction"
+            assert first[0]["elapsed_seconds"] == 2.5
+            assert datetime.fromisoformat(first[0]["started_at"]).utcoffset() is not None
+            assert gate.snapshot() == []  # Legacy does not mean all tenants.
+            assert gate.snapshot(workspace_id="lab_c") == []
+            assert gate.snapshot(workspace_id="lab_a", document_id="b" * 16) == []
+            second = gate.snapshot(workspace_id="lab_b")
+            assert second[0]["kind"] == "matching"
+            assert second[0]["operation_id"] != first[0]["operation_id"]
+            first[0]["kind"] = "mutated by reader"
+            assert gate.snapshot(workspace_id="lab_a")[0]["kind"] == "extraction"
+    assert gate.snapshot(workspace_id="lab_a") == []
+    with gate.claim(f"lab_a:{document}", "matching", workspace_id="lab_a"):
+        third = gate.snapshot(workspace_id="lab_a")[0]
+        assert third["operation_id"] != first[0]["operation_id"]

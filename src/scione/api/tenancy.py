@@ -65,14 +65,16 @@ class _TenantLibraryWorkspace(LibraryWorkspace):
             "original_name": stored.original_name,
         }
 
-    def _assert_comparison_inputs_current(self, report, document: dict) -> None:
+    def _assert_comparison_inputs_current(
+        self, report, document: dict, matching_revision: str | None = None
+    ) -> None:
         # The SQL index deliberately retains the first immutable upload name.
         # Validate every ordinary SQL/source/lab revision through the base guard,
         # then validate the separate live name view as its own input. Otherwise
         # a harmless reupload would make all comparisons fail as stale forever.
         original = self.store.document(report.document_id)["original_name"]
         super()._assert_comparison_inputs_current(
-            report, {**document, "original_name": original}
+            report, {**document, "original_name": original}, matching_revision
         )
         if (
             self.workspace.specs.load_document(report.document_id).original_name
@@ -412,7 +414,7 @@ class TenantWorkspaceMiddleware:
                     and not scope["path"].startswith(("/api/auth/", "/api/admin/"))
                     and not (
                         getattr(principal, "role", None) == "maintainer"
-                        and scope["path"] == "/api/developer/metrics"
+                        and scope["path"] in {"/api/developer/metrics", "/api/operations"}
                     )
                     and scope["path"] != "/api/health"
                 ):

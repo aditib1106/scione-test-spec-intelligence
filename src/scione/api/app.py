@@ -37,6 +37,7 @@ from scione.api.contracts import (
     SourceRequirementAdd,
     SourceReview,
 )
+from scione.api.inference_activity import create_inference_activity_router
 from scione.api.inference_gate import InferenceBusyError, InferenceGate
 from scione.api.method_bank import router as method_bank_router
 from scione.api.monitoring import create_monitoring_router
@@ -150,6 +151,10 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         max_per_workspace=1 if config.scione_auth_enabled else None,
     )
     app.state.inference_gate = inference_gate
+    app.include_router(create_inference_activity_router(
+        inference_gate, tenant_registry,
+        legacy_workspace=workspace if tenant_registry is None else None,
+    ))
 
     @app.middleware("http")
     async def local_requests(request: Request, call_next):

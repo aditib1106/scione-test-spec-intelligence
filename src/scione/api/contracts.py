@@ -1,5 +1,6 @@
 """HTTP write contracts with explicit consent, edit versions and input fingerprints."""
 
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -27,8 +28,16 @@ class LibraryMetadata(WriteModel):
     specification_id: str | None = Field(default=None, max_length=300)
     title: str | None = Field(default=None, max_length=500)
     revision: str | None = Field(default=None, max_length=300)
+    specification_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     family_id: str | None = Field(default=None, max_length=32)
     expected_version: int = Field(default=0, ge=0)
+
+    @field_validator("specification_date")
+    @classmethod
+    def valid_specification_date(cls, value):
+        if value is not None:
+            date.fromisoformat(value)
+        return value
 
 
 class LibraryRemoval(WriteModel):

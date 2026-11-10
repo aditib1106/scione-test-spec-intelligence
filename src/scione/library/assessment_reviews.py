@@ -22,6 +22,8 @@ from scione.library.store import (
     LibraryConflict,
     LibraryStore,
     LibraryStoreError,
+    comparisons,
+    digest,
     now,
     schema_versions,
 )
@@ -102,6 +104,80 @@ class SQLAssessmentReviews:
             if identifier not in current or event["version"] > current[identifier]["version"]:
                 current[identifier] = event
         return current
+
+    def latest_for_assessment(self, assessment: dict) -> dict[str, dict]:
+        """Keep decisions across display-metadata edits, never changed facts.
+
+        The semantic payload and complete input fingerprint must both agree.
+        Copied append-only events retain their provenance and are rebound to
+        the new immutable machine snapshot with ordinary optimistic versions.
+        """
+        current_id = assessment["comparison_id"]
+        current = self.latest(current_id)
+        if current:
+            return current
+
+        def semantic(payload):
+            return digest({key: value for key, value in payload.items()
+                           if key not in {"document", "comparison_id", "created_at"}})
+
+        expected = semantic(assessment)
+        with self.library.engine.connect() as connection:
+            # Sort only small scalar metadata; large artifact JSON must stay
+            # out of MySQL filesort. The bounded candidates share exact inputs.
+            candidates = connection.execute(
+                select(reviews.c.review_id, reviews.c.comparison_id)
+                .where(
+                    reviews.c.workspace_id == self.workspace_id,
+                    reviews.c.comparison_id != current_id,
+                    reviews.c.payload["input_fingerprint"].as_string()
+                    == assessment["report_input_fingerprint"],
+                )
+                .order_by(reviews.c.created_at.desc(), reviews.c.version.desc())
+                .limit(100)
+            ).all()
+            compatible = {}
+            originals = {}
+            for review_id, previous_id in candidates:
+                if previous_id not in compatible:
+                    previous = connection.execute(
+                        select(comparisons.c.payload)
+                        .where(comparisons.c.comparison_id == previous_id)
+                    ).scalar_one_or_none()
+                    compatible[previous_id] = (
+                        previous is not None and semantic(previous) == expected
+                    )
+                if not compatible[previous_id]:
+                    continue
+                event = connection.execute(
+                    select(reviews.c.payload).where(
+                        reviews.c.workspace_id == self.workspace_id,
+                        reviews.c.review_id == review_id,
+                    )
+                ).scalar_one()
+                originals.setdefault(event["requirement_id"], event)
+        if not originals:
+            return {}
+        try:
+            with self.library.engine.begin() as connection:
+                for event in originals.values():
+                    copied = {
+                        **event,
+                        "review_id": str(uuid4()), "comparison_id": current_id,
+                        "version": 1, "created_at": now(),
+                        "carried_from_review_id": event["review_id"],
+                        "carried_from_comparison_id": event["comparison_id"],
+                    }
+                    connection.execute(insert(reviews).values(
+                        workspace_id=self.workspace_id, review_id=copied["review_id"],
+                        comparison_id=current_id, requirement_id=copied["requirement_id"],
+                        version=1, created_at=copied["created_at"], payload=copied,
+                    ))
+        except IntegrityError:
+            # Another reader may have materialized the same carry-forward.
+            # Unique per-item versions prevent overwriting either decision.
+            pass
+        return self.latest(current_id)
 
     def save(self, assessment: dict, requirement: dict, body) -> dict:
         upgrade_assessment_reviews_schema(self.library)
