@@ -55,6 +55,7 @@ export interface ComparisonRequirement {
 }
 
 export interface ComparisonData {
+  export_snapshot_id?: string;
   comparison_id: string;
   matching_run_id?: string | null;
   comparison_engine?: "ai_semantic_matching" | "deterministic_rules";

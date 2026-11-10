@@ -176,14 +176,18 @@ test("source review generates a report once and refresh does not repeat inferenc
     .toBeNull();
   state.release();
   await expect(progress).not.toBeVisible();
-  await expect(page.getByText("Compared", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Check for updates", exact: true }),
+  ).toBeVisible();
   expect(state.posts).toBe(1);
 
   await page.reload();
-  await expect(page.getByText("Compared", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Check for updates", exact: true }),
+  ).toBeVisible();
   expect(state.posts).toBe(1);
   await page
-    .getByRole("button", { name: "Update report", exact: true })
+    .getByRole("button", { name: "Check for updates", exact: true })
     .click();
   await expect(
     page.getByText("Your report is up to date.", { exact: true }),
@@ -213,7 +217,9 @@ test("source review generates a report once and refresh does not repeat inferenc
     { documentId, consumedIntent },
   );
   await page.reload();
-  await expect(page.getByText("Compared", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Check for updates", exact: true }),
+  ).toBeVisible();
   expect(state.posts).toBe(1);
 });
 
@@ -223,10 +229,14 @@ test("ordinary report visits are free of model calls and failed generation needs
 }) => {
   const { documentId, state } = await prepareReport(page, request);
   await page.goto(`/reports?document=${documentId}`);
-  await expect(page.getByText("Preview", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Generate report", exact: true }),
+  ).toBeVisible();
   expect(state.posts).toBe(0);
   await page.reload();
-  await expect(page.getByText("Preview", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Generate report", exact: true }),
+  ).toBeVisible();
   expect(state.posts).toBe(0);
   state.failNext = true;
   await page
@@ -248,11 +258,15 @@ test("ordinary report visits are free of model calls and failed generation needs
     page.getByRole("navigation", { name: "Requested tests" }),
   ).toBeVisible();
   await page.reload();
-  await expect(page.getByText("Preview", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Generate report", exact: true }),
+  ).toBeVisible();
   expect(state.posts).toBe(1);
   await page
     .getByRole("button", { name: "Generate report", exact: true })
     .click();
-  await expect(page.getByText("Compared", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Check for updates", exact: true }),
+  ).toBeVisible();
   expect(state.posts).toBe(2);
 });

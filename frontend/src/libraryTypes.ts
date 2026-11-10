@@ -4,6 +4,7 @@ export interface LibraryDocument {
   specification_id: string | null;
   title: string | null;
   revision: string | null;
+  specification_date?: string | null;
   family_id: string;
   version: number;
   original_name: string;
@@ -49,5 +50,6 @@ export interface LibraryMetadata {
   specification_id: string;
   title: string;
   revision: string;
+  specification_date?: string | null;
   family_id: string | null;
 }

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
-  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -18,6 +17,7 @@ import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import CodeRoundedIcon from "@mui/icons-material/CodeRounded";
 import { ApiError, request } from "../api";
 import { useAuth } from "../auth";
+import { useInferenceActivity } from "./InferenceActivity";
 import type { ProviderOption } from "../types";
 import { claimReportGenerationIntent } from "../reportGeneration";
 import InferenceProgress, {
@@ -74,7 +74,10 @@ export default function ReportGenerationControls({
 }) {
   const { canDevelop } = useAuth();
   const configured = providers.find((provider) => provider.available);
-  const [busy, setBusy] = useState(false);
+  const { active } = useInferenceActivity();
+  const operation = active.find((item) => item.document_id === documentId);
+  const [localBusy, setBusy] = useState(false);
+  const busy = localBusy || operation?.kind === "matching";
   const [phase, setPhase] = useState<"preparing" | "comparing">("preparing");
   const [progressOpen, setProgressOpen] = useState(false);
   const [developerOpen, setDeveloperOpen] = useState(false);
@@ -95,7 +98,7 @@ export default function ReportGenerationControls({
   }, []);
 
   async function generateReport() {
-    if (submitting.current) return;
+    if (submitting.current || operation) return;
     submitting.current = true;
     const submittedDocument = documentId;
     const controller = new AbortController();
@@ -185,23 +188,15 @@ export default function ReportGenerationControls({
       <Tooltip
         title={
           aiApplied
-            ? "This report uses the current specification and lab comparison."
-            : "Generate a report to compare these requirements with your saved lab information using AI."
+            ? "Checks for changed specification or lab information. An unchanged comparison is reused; only changed inputs need AI analysis."
+            : "Compare customer requirements with your lab’s declared capabilities."
         }
       >
-        <Chip
-          label={aiApplied ? "Compared" : "Preview"}
-          size="small"
-          color={aiApplied ? "success" : "default"}
-          variant="outlined"
-          sx={{ height: 25, fontSize: 12 }}
-        />
-      </Tooltip>
-      <Tooltip title="Compare customer requirements with your lab’s declared capabilities.">
         <span>
           <Button
             variant={aiApplied ? "outlined" : "contained"}
             size="small"
+            disabled={operation?.kind === "extraction"}
             onClick={() => {
               if (busy) setProgressOpen(true);
               else void generateReport();
@@ -218,7 +213,7 @@ export default function ReportGenerationControls({
             {busy
               ? "Generating…"
               : aiApplied
-                ? "Update report"
+                ? "Check for updates"
                 : "Generate report"}
           </Button>
         </span>
@@ -229,7 +224,7 @@ export default function ReportGenerationControls({
             <IconButton
               aria-label="Developer report tools"
               size="small"
-              disabled={busy}
+              disabled={busy || operation?.kind === "extraction"}
               onClick={() => setDeveloperOpen(true)}
             >
               <CodeRoundedIcon fontSize="small" />
@@ -250,6 +245,7 @@ export default function ReportGenerationControls({
         <DialogContent>
           {busy ? (
             <InferenceProgress
+              startedAt={operation?.started_at}
               workUnits={requirementCount}
               title={
                 phase === "preparing"

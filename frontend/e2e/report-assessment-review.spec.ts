@@ -25,6 +25,21 @@ test("report assessment acceptance and follow-up persist without approving unkno
   ).json();
   const id = imported.document_id;
   const url = `/api/comparisons/${id}`;
+  let writes = 0;
+  let releaseResponse = () => {};
+  let responseGate = Promise.resolve();
+  const holdResponse = () => {
+    responseGate = new Promise<void>((resolve) => {
+      releaseResponse = resolve;
+    });
+  };
+  await page.route(`**/api/comparisons/${id}/reviews`, async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    writes++;
+    const response = await route.fetch();
+    await responseGate;
+    await route.fulfill({ response });
+  });
   const before = (await (await request.get(url)).json()) as ComparisonData;
   const target = before.requirements.find((row) =>
     row.comparison.checks.some((check) => check.status === "unknown"),
@@ -42,9 +57,12 @@ test("report assessment acceptance and follow-up persist without approving unkno
       .getByRole("button", { name: target.test_name, exact: true })
       .click();
   await select();
+  holdResponse();
   await page
     .getByRole("button", { name: "Accept assessment", exact: true })
-    .click();
+    .dblclick();
+  await expect.poll(() => writes).toBe(1);
+  releaseResponse();
   await expect(
     page.getByText("Assessment reviewed", { exact: true }),
   ).toBeVisible();
@@ -102,9 +120,12 @@ test("report assessment acceptance and follow-up persist without approving unkno
   await dialog
     .getByLabel("Follow-up note", { exact: true })
     .fill("Please confirm the missing reporting stage.");
+  holdResponse();
   await dialog
     .getByRole("button", { name: "Save review", exact: true })
-    .click();
+    .dblclick();
+  await expect.poll(() => writes).toBe(2);
+  releaseResponse();
   await expect(dialog).not.toBeVisible();
   await expect(
     page.getByText("Ask the customer to clarify", { exact: true }),

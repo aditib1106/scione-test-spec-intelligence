@@ -50,6 +50,10 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 import { ApiError, request, useResource } from "../api";
 import { useAuth } from "../auth";
+import {
+  compareSpecificationDates,
+  specificationVersionLabel,
+} from "../specificationDates";
 import FactSummary from "../components/FactSummary";
 import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
 import type { PageProps } from "../types";
@@ -65,6 +69,7 @@ const emptyMetadata = (): LibraryMetadata => ({
   specification_id: "",
   title: "",
   revision: "",
+  specification_date: null,
   family_id: null,
 });
 
@@ -207,7 +212,7 @@ export default function SpecificationLibrary({
     const latest = new Map<string, LibraryDocument>();
     for (const document of documents) {
       const current = latest.get(document.family_id);
-      if (!current || document.created_at > current.created_at)
+      if (!current || compareSpecificationDates(document, current) < 0)
         latest.set(document.family_id, document);
     }
     return [...latest.values()].sort((a, b) =>
@@ -239,6 +244,7 @@ export default function SpecificationLibrary({
           document.title,
           document.original_name,
           document.revision,
+          document.specification_date,
         ]
           .filter(Boolean)
           .join(" ")
@@ -274,6 +280,7 @@ export default function SpecificationLibrary({
       specification_id: document.specification_id ?? "",
       title: document.title ?? "",
       revision: document.revision ?? "",
+      specification_date: document.specification_date ?? null,
       family_id: document.family_id,
     });
     setFile(null);
@@ -351,6 +358,7 @@ export default function SpecificationLibrary({
           revision: editing
             ? metadata.revision
             : metadata.revision || saved.document.revision || "",
+          specification_date: metadata.specification_date || null,
           expected_version: editing?.version ?? saved.document.version,
         }),
       });
@@ -574,7 +582,7 @@ export default function SpecificationLibrary({
                   <TableRow>
                     <TableCell>Customer</TableCell>
                     <TableCell>Specification</TableCell>
-                    <TableCell>Latest saved version</TableCell>
+                    <TableCell>Spec date</TableCell>
                     <TableCell align="right">Tests</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell>Updated</TableCell>
@@ -623,7 +631,7 @@ export default function SpecificationLibrary({
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        {document.revision || "Not specified"}
+                        {specificationVersionLabel(document)}
                       </TableCell>
                       <TableCell align="right">
                         {document.run_id ? document.requirement_count : "—"}
@@ -754,7 +762,7 @@ export default function SpecificationLibrary({
                   {current.specification_id
                     ? ` · ${current.specification_id}`
                     : ""}
-                  {current.revision ? ` · ${current.revision}` : ""}
+                  {` · ${specificationVersionLabel(current)}`}
                 </Typography>
               </Box>
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -802,25 +810,29 @@ export default function SpecificationLibrary({
               {detail.data.versions.length > 1 && (
                 <FormControl size="small" sx={{ minWidth: 240 }}>
                   <InputLabel id="library-version-label">
-                    Saved version
+                    Specification date
                   </InputLabel>
                   <Select
                     labelId="library-version-label"
-                    label="Saved version"
+                    label="Specification date"
                     value={current.document_id}
                     onChange={(event) =>
                       setParams({ document: event.target.value })
                     }
                   >
-                    {detail.data.versions.map((version) => (
-                      <MenuItem
-                        key={version.document_id}
-                        value={version.document_id}
-                      >
-                        {version.revision || "Version not specified"} ·{" "}
-                        {dateLabel(version.created_at)}
-                      </MenuItem>
-                    ))}
+                    {[...detail.data.versions]
+                      .sort(compareSpecificationDates)
+                      .map((version) => (
+                        <MenuItem
+                          key={version.document_id}
+                          value={version.document_id}
+                        >
+                          {specificationVersionLabel(version)}
+                          {!version.specification_date
+                            ? ` · ${version.original_name}`
+                            : ""}
+                        </MenuItem>
+                      ))}
                   </Select>
                 </FormControl>
               )}
@@ -1454,14 +1466,19 @@ export default function SpecificationLibrary({
                 placeholder="e.g. CSP-EN-301"
               />
               <TextField
-                label="Document version"
-                value={metadata.revision}
+                label="Specification date"
+                type="date"
+                value={metadata.specification_date ?? ""}
                 onChange={(event) =>
-                  setMetadata({ ...metadata, revision: event.target.value })
+                  setMetadata({
+                    ...metadata,
+                    specification_date: event.target.value || null,
+                  })
                 }
                 disabled={saving}
                 fullWidth
-                placeholder="e.g. Issue A"
+                slotProps={{ inputLabel: { shrink: true } }}
+                helperText="Use the date printed on the specification. Leave blank if unknown."
               />
             </Stack>
             <TextField
@@ -1473,6 +1490,11 @@ export default function SpecificationLibrary({
               disabled={saving}
               fullWidth
             />
+            {editing?.revision && (
+              <Typography variant="caption" color="text.secondary">
+                Original source revision: {editing.revision}
+              </Typography>
+            )}
             <Typography variant="caption" color="text.secondary">
               {editing
                 ? "These details organize the saved customer specification. Earlier versions remain available."

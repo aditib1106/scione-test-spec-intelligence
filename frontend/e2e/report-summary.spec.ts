@@ -1,3 +1,4 @@
+import { openReportScope, reloadSavedReport } from "./reportScope";
 import { expect, test, type Page } from "@playwright/test";
 import type { ComparisonCheck, ComparisonData } from "../src/comparisonTypes";
 import type { LibraryDocument } from "../src/libraryTypes";
@@ -476,6 +477,7 @@ for (const height of [900, 760]) {
         );
       }),
     ).toBe(true);
+    await openReportScope(page);
     const remove = pane.getByRole("button", {
       name: "Remove from this report",
       exact: true,
@@ -516,9 +518,7 @@ test("result filters preserve the visible selected test when cleared or refreshe
   await selectFilter(page, "All tests");
   await expect(gloss).toHaveAttribute("aria-current", "true");
   await selectFilter(page, "Fully matched");
-  await page
-    .getByRole("button", { name: "Recompare saved information", exact: true })
-    .click();
+  await reloadSavedReport(page);
   await expect(
     page.getByRole("combobox", { name: "Show", exact: true }),
   ).toContainText("Fully matched");
@@ -596,9 +596,7 @@ test("refresh and result filtering preserve the review pane scroll position", as
     viewportTop: element.getBoundingClientRect().top,
     pageY: window.scrollY,
   }));
-  await page
-    .getByRole("button", { name: "Recompare saved information", exact: true })
-    .click();
+  await reloadSavedReport(page);
   await expect(conditions).toHaveAttribute("aria-expanded", "true");
   await expect
     .poll(() => pane.evaluate((element) => element.scrollTop))
@@ -616,3 +614,101 @@ test("refresh and result filtering preserve the review pane scroll position", as
     2,
   );
 });
+
+for (const viewport of [
+  { width: 1440, height: 1000 },
+  { width: 1280, height: 800 },
+  { width: 390, height: 844 },
+]) {
+  test(`report action hierarchy stays clear at ${viewport.width}x${viewport.height}`, async ({
+    page,
+  }, info) => {
+    test.skip(
+      viewport.width < 600 !== (info.project.name === "narrow"),
+      "Use the relevant viewport project.",
+    );
+    await page.setViewportSize(viewport);
+    await mockReport(page);
+    await page.goto(`${base}/reports?document=summary-source`);
+    const list = page.getByRole("navigation", {
+      name: "Requested tests",
+      exact: true,
+    });
+    const pane = page.getByTestId("report-detail-pane");
+    const tools = pane.getByRole("region", {
+      name: "Source and lab details",
+      exact: true,
+    });
+    const review = pane.getByRole("region", {
+      name: "Your assessment review",
+      exact: true,
+    });
+    await expect(
+      tools.getByRole("link", { name: "Review source PDF", exact: true }),
+    ).toHaveAttribute("href", /requirement=req_water/);
+    await expect(
+      tools.getByRole("link", { name: "Update lab information", exact: true }),
+    ).toHaveAttribute("href", "/my-lab?capability=cap_water");
+    await expect(
+      review.getByRole("button", { name: "Accept assessment", exact: true }),
+    ).toHaveClass(/MuiButton-contained/);
+    await expect(
+      review.getByRole("button", { name: "Edit decision", exact: true }),
+    ).toHaveClass(/MuiButton-outlined/);
+    const scope = pane.getByRole("button", {
+      name: "Report scope",
+      exact: true,
+    });
+    await expect(scope).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      pane.getByRole("button", {
+        name: "Remove from this report",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    if (viewport.width >= 1200) {
+      const rail = await list.boundingBox();
+      const detail = await pane.boundingBox();
+      expect(rail!.width).toBeGreaterThanOrEqual(300);
+      expect(rail!.width).toBeLessThanOrEqual(360);
+      expect(detail!.width).toBeGreaterThan(rail!.width * 1.8);
+      expect((await tools.boundingBox())!.y).toBeLessThan(
+        (await review.boundingBox())!.y,
+      );
+    }
+    await page.screenshot({
+      path: info.outputPath(`report-actions-${viewport.width}.png`),
+      fullPage: true,
+      animations: "disabled",
+    });
+    const conditions = pane.getByRole("button", {
+      name: "Conditions",
+      exact: true,
+    });
+    const criteria = pane.getByRole("button", {
+      name: "Acceptance criteria / reporting",
+      exact: true,
+    });
+    await conditions.click();
+    await criteria.click();
+    await openReportScope(page);
+    await expect(conditions).toHaveAttribute("aria-expanded", "true");
+    await expect(criteria).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      pane.getByRole("button", {
+        name: "Remove from this report",
+        exact: true,
+      }),
+    ).toHaveClass(/MuiButton-textError/);
+    await expect(
+      list.getByRole("button", { name: "Water jet adhesion", exact: true }),
+    ).toHaveAttribute("aria-current", "true");
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth + 1,
+      ),
+    ).toBeTruthy();
+  });
+}

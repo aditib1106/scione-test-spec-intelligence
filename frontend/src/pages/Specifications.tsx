@@ -38,7 +38,8 @@ import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
 import SourcePageReference from "../components/SourcePageReference";
-import { ApiError, apiFetch, request } from "../api";
+import { ApiError, apiFetch, request, useResource } from "../api";
+import { useInferenceActivity } from "../components/InferenceActivity";
 import { useAuth } from "../auth";
 import PdfPageViewer from "../components/PdfPageViewer";
 import SourceFactsEditor from "../components/SourceFactsEditor";
@@ -117,6 +118,10 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const docs = workspace.documents;
   const requestedId = params.get("document");
   const documentId = requestedId || docs[0]?.document_id || "";
+  const { active: activeOperations } = useInferenceActivity();
+  const operationStatus = useResource<{ state: string; notice: string | null }>(
+    documentId ? `/api/specifications/${documentId}/operations` : null,
+  );
   const activeDocumentRef = useRef(documentId);
   activeDocumentRef.current = documentId;
   const [data, setData] = useState<SpecificationData | null>(null);
@@ -149,7 +154,13 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
-  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisInFlight, setAnalyzing] = useState(false);
+  const [analysisDocumentId, setAnalysisDocumentId] = useState("");
+  const analyzing =
+    (analysisInFlight && analysisDocumentId === documentId) ||
+    activeOperations.some(
+      (item) => item.document_id === documentId && item.kind === "extraction",
+    );
   const [analysisDocumentName, setAnalysisDocumentName] = useState("");
   const analysisSubmitting = useRef(false);
   const analysisMounted = useRef(true);
@@ -265,6 +276,42 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     return () => controller.abort();
     // Fetch by document; requirement-query changes update selection below.
   }, [documentId, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const completed = (event: Event) => {
+      if (
+        (event as CustomEvent<{ documentId: string }>).detail?.documentId !==
+        documentId
+      )
+        return;
+      void request<SpecificationData>(`/api/specifications/${documentId}`, {
+        signal: controller.signal,
+      })
+        .then((updated) => {
+          if (
+            controller.signal.aborted ||
+            activeDocumentRef.current !== documentId
+          )
+            return;
+          setData(updated);
+          setSelectedId((current) =>
+            updated.run?.extraction.requirements.some(
+              (item) => item.id === current,
+            )
+              ? current
+              : (updated.run?.extraction.requirements[0]?.id ?? ""),
+          );
+        })
+        .catch(() => {
+          /* The ordinary page reload action remains available. */
+        });
+    };
+    window.addEventListener("scione:inference-completed", completed);
+    return () => {
+      controller.abort();
+      window.removeEventListener("scione:inference-completed", completed);
+    };
+  }, [documentId]);
   useEffect(() => {
     const current = new URLSearchParams(params);
     if (documentId && current.get("document") !== documentId)
@@ -612,6 +659,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const analyze = async () => {
     if (
       analysisSubmitting.current ||
+      analyzing ||
       (canDevelop && !permission) ||
       (canDevelop && requiresUsageAcknowledgment && !freeTierConfirmed) ||
       !model.trim() ||
@@ -625,6 +673,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     const analysisPages = data.document.page_count;
     const controller = new AbortController();
     analysisController.current = controller;
+    setAnalysisDocumentId(documentAtSubmit);
     setAnalyzing(true);
     setAnalysisDocumentName(data.original_name);
     setAnalysisError("");
@@ -1592,9 +1641,9 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                       sx={{ gridColumn: "1/-1" }}
                     >
                       Analysis starts only when you press the button. Failed
-                      requests are not retried automatically. Leaving this page
-                      stops waiting, but a request already accepted by the model
-                      provider may finish and use credits.
+                      requests are not retried automatically. You can browse
+                      other pages while analysis continues. Closing the browser
+                      does not cancel work already accepted by the server.
                     </Typography>
                     {strategy === "focused_passes" && (
                       <Typography
@@ -1731,10 +1780,22 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               </Paper>
             )}
 
+            {operationStatus.data?.state === "completion_unknown" && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                {operationStatus.data.notice}
+              </Alert>
+            )}
             {analyzing && (
               <InferenceProgress
+                startedAt={
+                  activeOperations.find(
+                    (item) =>
+                      item.document_id === documentId &&
+                      item.kind === "extraction",
+                  )?.started_at
+                }
                 title="Document analysis in progress"
-                detail={`${analysisDocumentName} · Reading test requirements and validating the extracted details.`}
+                detail={`${data?.original_name || analysisDocumentName} · Reading test requirements and validating the extracted details.`}
                 estimateKey="analysis"
                 workUnits={data.document.page_count}
               />

@@ -113,24 +113,29 @@ export default function ReportAssessmentReview({
   return (
     <>
       <Box
+        component="section"
+        aria-label="Your assessment review"
         sx={{
-          px: 2,
-          py: 1.5,
+          px: { xs: 2, sm: 2.5 },
+          py: 2,
           borderTop: "1px solid #e0e7f0",
-          bgcolor: "#f8faff",
+          bgcolor: "#f5f8fe",
         }}
       >
+        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.25 }}>
+          Your review
+        </Typography>
         <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
           {accepted ? (
             <Chip
               icon={<CheckRoundedIcon />}
-              size="small"
+              size="medium"
               color="success"
               label="Assessment reviewed"
             />
           ) : (
             <Button
-              size="small"
+              size="medium"
               variant="contained"
               startIcon={<CheckRoundedIcon />}
               disabled={busy}
@@ -140,7 +145,7 @@ export default function ReportAssessmentReview({
             </Button>
           )}
           <Button
-            size="small"
+            size="medium"
             variant="outlined"
             startIcon={<EditOutlinedIcon />}
             disabled={busy}
@@ -166,7 +171,8 @@ export default function ReportAssessmentReview({
           display="block"
           sx={{ mt: 0.75 }}
         >
-          Accept records your review. Gaps and missing information stay visible.
+          Review acknowledges these findings; gaps and missing information stay
+          visible.
         </Typography>
         {current?.note && (
           <Typography

@@ -63,12 +63,14 @@ export default function InferenceProgress({
   estimateKey = "matching",
   workUnits = 1,
   previousDurationSeconds,
+  startedAt,
 }: {
   title: string;
   detail: string;
   estimateKey?: EstimateKey;
   workUnits?: number;
   previousDurationSeconds?: number;
+  startedAt?: string;
 }) {
   const [elapsed, setElapsed] = useState(0);
   const estimate = useMemo(() => {
@@ -98,13 +100,15 @@ export default function InferenceProgress({
     return { low, high, count: values.length };
   }, [estimateKey, workUnits, previousDurationSeconds]);
   useEffect(() => {
-    const started = Date.now();
+    const parsed = startedAt ? Date.parse(startedAt) : NaN;
+    const started = Number.isFinite(parsed) ? parsed : Date.now();
+    setElapsed(Math.max(0, Math.floor((Date.now() - started) / 1000)));
     const timer = window.setInterval(
-      () => setElapsed(Math.floor((Date.now() - started) / 1000)),
+      () => setElapsed(Math.max(0, Math.floor((Date.now() - started) / 1000))),
       1000,
     );
     return () => window.clearInterval(timer);
-  }, []);
+  }, [startedAt]);
   return (
     <Box
       role="status"

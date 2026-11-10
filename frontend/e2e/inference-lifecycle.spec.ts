@@ -71,7 +71,9 @@ test("failed analysis is not retried and requires fresh consent before another c
 
   await page.goto(`/specifications?document=${documentId}`);
   await page.getByRole("button", { name: /^Analysis settings/ }).click();
-  await expect(page.getByText(/Leaving this page stops waiting/)).toBeVisible();
+  await expect(
+    page.getByText(/browse other pages while analysis continues/),
+  ).toBeVisible();
   const sendConsent = page.getByRole("checkbox", {
     name: /I have permission to send this document/,
   });

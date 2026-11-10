@@ -555,9 +555,9 @@ export default function MatchingControls({
               <Stack spacing={2}>
                 <Typography variant="caption" color="text.secondary">
                   Complex specifications use up to eight planned model requests,
-                  with no automatic retries. Leaving this page stops waiting; a
-                  started operation may finish its planned requests and use
-                  credits.
+                  with no automatic retries. You can browse other pages while
+                  comparison continues. Closing the browser does not cancel work
+                  already accepted by the server.
                 </Typography>
                 <TextField
                   label="Matching model"

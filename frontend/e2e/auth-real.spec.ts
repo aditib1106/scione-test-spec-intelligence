@@ -1,3 +1,4 @@
+import { openReportScope } from "./reportScope";
 import { expect, test, type Page } from "@playwright/test";
 
 const password = "Synthetic-fixture-password-2026";
@@ -212,6 +213,7 @@ test("a lab can review the report, export PDF, and exclude then restore a test",
   expect(pdf.ok()).toBeTruthy();
   expect((await pdf.body()).subarray(0, 4).toString()).toBe("%PDF");
   await page.getByRole("tab", { name: "Comparison", exact: true }).click();
+  await openReportScope(page);
   await page
     .getByRole("button", { name: "Remove from this report", exact: true })
     .click();

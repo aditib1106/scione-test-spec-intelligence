@@ -28,14 +28,18 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
 } from "@mui/material";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
-import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import CompareArrowsOutlinedIcon from "@mui/icons-material/CompareArrowsOutlined";
+import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
 import { apiFetch, useResource } from "../api";
 import { useAuth } from "../auth";
@@ -48,6 +52,7 @@ import ReportScopeControls from "../components/ReportScopeControls";
 import ReportAssessmentReview from "../components/ReportAssessmentReview";
 import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
 import SourceCoverageNotice from "../components/SourceCoverageNotice";
+import { specificationVersionLabel } from "../specificationDates";
 import type { PageProps } from "../types";
 import type { LibraryDocument } from "../libraryTypes";
 import type {
@@ -232,6 +237,7 @@ function nextActions(documentId: string, requirement: ComparisonRequirement) {
 
 export default function Comparison({ workspace }: PageProps) {
   const { canDevelop } = useAuth();
+  const desktopPreview = useMediaQuery("(min-width:900px)");
   const [params, setParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -362,9 +368,9 @@ export default function Comparison({ workspace }: PageProps) {
   }, [documentId]);
   useEffect(() => {
     setPage(1);
-  }, [report?.comparison_id]);
+  }, [report?.comparison_id, report?.export_snapshot_id]);
   const reportBase = report
-    ? `/api/comparison-snapshots/${encodeURIComponent(report.comparison_id)}`
+    ? `/api/comparison-snapshots/${encodeURIComponent(report.export_snapshot_id ?? report.comparison_id)}`
     : "";
   const snapshot = useResource<{ page_count: number }>(
     tab === "report" && reportBase ? reportBase : null,
@@ -404,6 +410,22 @@ export default function Comparison({ workspace }: PageProps) {
     };
   }, [tab, reportBase, page]);
   const actions = selected ? nextActions(documentId, selected) : [];
+  const sourceAction = actions.find((action) =>
+    action.to.startsWith("/specifications?"),
+  );
+  const detailActions = selected
+    ? [
+        sourceAction ?? {
+          label: "Review source PDF",
+          to: sourceUrl(documentId, selected.requirement_id),
+          description:
+            "View this test in the specification and correct extracted information if needed.",
+        },
+        ...actions.filter(
+          (action) => !action.to.startsWith("/specifications?"),
+        ),
+      ]
+    : [];
   const counts = Object.fromEntries(
     filters.map(({ value }) => [
       value,
@@ -418,7 +440,7 @@ export default function Comparison({ workspace }: PageProps) {
       ? [
           document.company_name,
           document.specification_id || document.title || fallback,
-          document.revision,
+          specificationVersionLabel(document),
         ]
           .filter(Boolean)
           .join(" · ")
@@ -536,23 +558,7 @@ export default function Comparison({ workspace }: PageProps) {
             />
           )}
           <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0 }}>
-            <Tooltip title="Recompare saved information">
-              <span>
-                <IconButton
-                  aria-label="Recompare saved information"
-                  disabled={data.loading || !documentId}
-                  onClick={data.refresh}
-                  size="small"
-                >
-                  {data.loading ? (
-                    <CircularProgress size={18} />
-                  ) : (
-                    <RefreshRoundedIcon fontSize="small" />
-                  )}
-                </IconButton>
-              </span>
-            </Tooltip>
-            {documentId && canDevelop && (
+            {documentId && (
               <IconButton
                 aria-label="Report options"
                 onClick={(event) => setToolsAnchor(event.currentTarget)}
@@ -583,12 +589,22 @@ export default function Comparison({ workspace }: PageProps) {
           sourceReviewUrl={`/specifications?${new URLSearchParams({ document: documentId })}`}
         />
       )}
-      {canDevelop && (
-        <Menu
-          anchorEl={toolsAnchor}
-          open={Boolean(toolsAnchor)}
-          onClose={() => setToolsAnchor(null)}
+      <Menu
+        anchorEl={toolsAnchor}
+        open={Boolean(toolsAnchor)}
+        onClose={() => setToolsAnchor(null)}
+      >
+        <MenuItem
+          onClick={() => {
+            setToolsAnchor(null);
+            data.refresh();
+          }}
+          disabled={data.loading}
         >
+          <RefreshRoundedIcon fontSize="small" sx={{ mr: 1 }} />
+          Reload saved report
+        </MenuItem>
+        {canDevelop && (
           <MenuItem
             component={RouterLink}
             to={`/reports/advanced?${new URLSearchParams({ document: documentId })}`}
@@ -596,8 +612,8 @@ export default function Comparison({ workspace }: PageProps) {
           >
             Review test matching
           </MenuItem>
-        </Menu>
-      )}
+        )}
+      </Menu>
       {!documentId ? (
         <Paper variant="outlined" sx={{ p: 5, textAlign: "center" }}>
           <Typography variant="h6">
@@ -649,17 +665,38 @@ export default function Comparison({ workspace }: PageProps) {
                   onChange={(_, value: string) => setTab(value)}
                   aria-label="Gap report views"
                   sx={{
-                    minHeight: 34,
+                    minHeight: 40,
+                    p: 0.5,
+                    bgcolor: "#eaf0fa",
+                    border: "1px solid #dce5f1",
+                    borderRadius: 1.5,
+                    "& .MuiTabs-indicator": { display: "none" },
                     "& .MuiTab-root": {
                       minHeight: 34,
                       px: 1.25,
                       py: 0.5,
                       fontSize: 14,
+                      borderRadius: 1,
+                      "&.Mui-selected": {
+                        bgcolor: "#fff",
+                        color: "primary.main",
+                        boxShadow: "0 1px 3px #173b6520",
+                      },
                     },
                   }}
                 >
-                  <Tab label="Comparison" value="comparison" />
-                  <Tab label="PDF & download" value="report" />
+                  <Tab
+                    label="Comparison"
+                    value="comparison"
+                    icon={<CompareArrowsOutlinedIcon sx={{ fontSize: 18 }} />}
+                    iconPosition="start"
+                  />
+                  <Tab
+                    label="PDF & download"
+                    value="report"
+                    icon={<PictureAsPdfOutlinedIcon sx={{ fontSize: 18 }} />}
+                    iconPosition="start"
+                  />
                 </Tabs>
                 <Stack
                   direction="row"
@@ -712,9 +749,11 @@ export default function Comparison({ workspace }: PageProps) {
                       display: "grid",
                       gridTemplateColumns: {
                         xs: "minmax(0,1fr)",
-                        md: "220px minmax(0,1fr)",
+                        md: "clamp(260px, 29%, 300px) minmax(0,1fr)",
+                        lg: "clamp(300px, 28%, 340px) minmax(0,1fr)",
+                        xl: "clamp(320px, 26%, 360px) minmax(0,1fr)",
                       },
-                      gap: { xs: 1.5, md: 1.5 },
+                      gap: { xs: 1.5, md: 2 },
                       flex: 1,
                       minHeight: 0,
                     }}
@@ -728,7 +767,7 @@ export default function Comparison({ workspace }: PageProps) {
                         display: "flex",
                         flexDirection: "column",
                         minHeight: 0,
-                        maxHeight: { xs: 350, md: "none" },
+                        maxHeight: { xs: 320, sm: 300, md: "none" },
                       }}
                     >
                       <Box
@@ -800,7 +839,7 @@ export default function Comparison({ workspace }: PageProps) {
                           </FormControl>
                           <FormControl
                             size="small"
-                            sx={{ width: 86, flexShrink: 0 }}
+                            sx={{ width: 108, flexShrink: 0 }}
                           >
                             <InputLabel id="comparison-order-label">
                               Order
@@ -1002,23 +1041,6 @@ export default function Comparison({ workspace }: PageProps) {
                                       .label
                                   }
                                 />
-                                <Tooltip title="Check source PDF">
-                                  <IconButton
-                                    component={RouterLink}
-                                    to={sourceUrl(
-                                      documentId,
-                                      selected.requirement_id,
-                                    )}
-                                    aria-label="Check source PDF"
-                                    size="small"
-                                    sx={{
-                                      flexShrink: 0,
-                                      color: "primary.main",
-                                    }}
-                                  >
-                                    <OpenInNewRoundedIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
                               </Stack>
                               {selected.comparison.status !== "excluded" &&
                                 selected.comparison.checks.length > 0 && (
@@ -1062,6 +1084,61 @@ export default function Comparison({ workspace }: PageProps) {
                                 </Alert>
                               )}
                             </Box>
+                            <Box
+                              component="section"
+                              aria-label="Source and lab details"
+                              sx={{
+                                px: { xs: 2, sm: 2.5 },
+                                py: 1,
+                                borderBottom: "1px solid #e3e9ee",
+                                bgcolor: "#fbfcfe",
+                              }}
+                            >
+                              <Stack
+                                direction="row"
+                                gap={1.25}
+                                alignItems="center"
+                                useFlexGap
+                                flexWrap="wrap"
+                              >
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  fontWeight={650}
+                                >
+                                  Source and lab details
+                                </Typography>
+                                {detailActions.map((action) => (
+                                  <Tooltip
+                                    key={action.label}
+                                    title={action.description}
+                                    describeChild
+                                  >
+                                    <Button
+                                      component={RouterLink}
+                                      to={action.to}
+                                      size="small"
+                                      startIcon={
+                                        action.to.startsWith(
+                                          "/specifications?",
+                                        ) ? (
+                                          <DescriptionOutlinedIcon fontSize="small" />
+                                        ) : (
+                                          <ScienceOutlinedIcon fontSize="small" />
+                                        )
+                                      }
+                                      sx={{
+                                        px: 0.5,
+                                        fontSize: 12,
+                                        minHeight: 30,
+                                      }}
+                                    >
+                                      {action.label}
+                                    </Button>
+                                  </Tooltip>
+                                ))}
+                              </Stack>
+                            </Box>
                             {selected.comparison.status !== "excluded" ? (
                               <ReportDimensions
                                 requirement={selected}
@@ -1085,33 +1162,6 @@ export default function Comparison({ workspace }: PageProps) {
                                 This test is outside the report's active scope.
                                 Its source requirements remain saved.
                               </Typography>
-                            )}
-                            {actions.length > 0 && (
-                              <Stack
-                                direction="row"
-                                spacing={1.25}
-                                useFlexGap
-                                flexWrap="wrap"
-                                sx={{ px: 2, py: 1.5 }}
-                              >
-                                {actions.map((action) => (
-                                  <Tooltip
-                                    key={action.label}
-                                    title={action.description}
-                                    describeChild
-                                  >
-                                    <Button
-                                      component={RouterLink}
-                                      to={action.to}
-                                      size="small"
-                                      endIcon={<ArrowForwardRoundedIcon />}
-                                      sx={{ fontSize: 13, px: 0 }}
-                                    >
-                                      {action.label}
-                                    </Button>
-                                  </Tooltip>
-                                ))}
-                              </Stack>
                             )}
                             <ReportAssessmentReview
                               key={`${report.comparison_id}-${selected.requirement_id}`}
@@ -1167,21 +1217,37 @@ export default function Comparison({ workspace }: PageProps) {
                 </>
               )}
               {tab === "report" && (
-                <Box sx={{ overflowY: "auto", minHeight: 0, flex: 1 }}>
-                  {" "}
-                  <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }}>
+                <Box
+                  sx={{
+                    minHeight: 0,
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: { md: "hidden" },
+                  }}
+                >
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: { xs: 1.5, md: 2 },
+                      minHeight: 0,
+                      flex: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
                     <Stack
                       direction={{ xs: "column", sm: "row" }}
                       justifyContent="space-between"
                       alignItems={{ sm: "center" }}
                       spacing={2}
-                      sx={{ mb: 2 }}
+                      sx={{ mb: 2, flexShrink: 0 }}
                     >
                       <Box>
                         <Typography variant="h6">Draft gap report</Typography>
                         <Typography variant="body2" color="text.secondary">
-                          Saved comparison from{" "}
-                          {new Date(report.created_at).toLocaleString()}.
+                          Current comparison and saved review decisions. Draft
+                          for lab review.
                         </Typography>
                       </Box>
                       <Stack direction="row" spacing={1}>
@@ -1222,7 +1288,9 @@ export default function Comparison({ workspace }: PageProps) {
                       loading={pageLoading}
                       error={pageError}
                       documentUrl={`${reportBase}/pdf`}
-                      height="75vh"
+                      documentLabel="Open report PDF"
+                      height={desktopPreview ? "100%" : "70dvh"}
+                      initialFit="page"
                       navigation={
                         <Stack direction="row" alignItems="center" spacing={1}>
                           <Button

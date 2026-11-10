@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
   Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   CircularProgress,
@@ -15,6 +18,7 @@ import {
 } from "@mui/material";
 import RemoveCircleOutlineRoundedIcon from "@mui/icons-material/RemoveCircleOutlineRounded";
 import UndoRoundedIcon from "@mui/icons-material/UndoRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import { request } from "../api";
 import type { ComparisonData, ComparisonRequirement } from "../comparisonTypes";
 
@@ -33,6 +37,10 @@ export default function ReportScopeControls({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState(
+    Boolean(requirement.report_scope_exclusion) ||
+      requirement.source_review_state === "excluded",
+  );
   const trigger = useRef<HTMLButtonElement>(null);
   const submitting = useRef(false);
   const mounted = useRef(true);
@@ -46,6 +54,10 @@ export default function ReportScopeControls({
     setOpen(false);
     setNote("");
     setError("");
+    setExpanded(
+      Boolean(requirement.report_scope_exclusion) ||
+        requirement.source_review_state === "excluded",
+    );
   }, [requirement.requirement_id]);
 
   const restoreFocus = () =>
@@ -110,71 +122,107 @@ export default function ReportScopeControls({
   return (
     <Box
       sx={{
-        p: { xs: 2, md: 2.5 },
         borderTop: "1px solid",
         borderColor: "divider",
       }}
     >
-      {requirement.source_review_state === "excluded" ? (
-        <Alert
-          severity="info"
-          action={
-            <Button
-              component={RouterLink}
-              to={`/specifications?${new URLSearchParams({ document: documentId, requirement: requirement.requirement_id })}`}
-            >
-              Review source exclusion
-            </Button>
-          }
+      <Accordion
+        disableGutters
+        elevation={0}
+        expanded={expanded}
+        onChange={(_, value) => setExpanded(value)}
+        sx={{ "&:before": { display: "none" }, borderRadius: "0 !important" }}
+      >
+        <AccordionSummary
+          aria-label="Report scope"
+          expandIcon={<ExpandMoreRoundedIcon fontSize="small" />}
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            minHeight: 46,
+            "& .MuiAccordionSummary-content": { my: 1 },
+          }}
         >
-          This test was excluded during specification review. Restore it there
-          to include it in a report.
-        </Alert>
-      ) : (
-        <>
-          {excluded && (
-            <Alert severity="info" sx={{ mb: 1.5 }}>
-              Removed from this report's scope. The extracted requirement and
-              matching results are preserved.
-              {requirement.report_scope_exclusion?.note && (
-                <Typography variant="caption" component="p" sx={{ mt: 0.5 }}>
-                  Note: {requirement.report_scope_exclusion.note}
-                </Typography>
-              )}
-            </Alert>
-          )}
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            alignItems={{ sm: "center" }}
-            spacing={1.5}
-          >
-            <Button
-              ref={trigger}
-              variant="outlined"
-              size="small"
-              color={excluded ? "primary" : "inherit"}
-              startIcon={
-                excluded ? (
-                  <UndoRoundedIcon />
-                ) : (
-                  <RemoveCircleOutlineRoundedIcon />
-                )
-              }
-              onClick={() => {
-                setNote("");
-                setError("");
-                setOpen(true);
-              }}
-              sx={{ alignSelf: "flex-start" }}
-            >
-              {excluded ? "Restore to this report" : "Remove from this report"}
-            </Button>
+          <Stack direction="row" gap={1.25} alignItems="baseline">
+            <Typography variant="body2" fontWeight={650}>
+              Report scope
+            </Typography>
             <Typography variant="caption" color="text.secondary">
-              Changes this report's scope only.
+              {excluded || requirement.source_review_state === "excluded"
+                ? "Excluded"
+                : "Included"}
             </Typography>
           </Stack>
-        </>
-      )}
+        </AccordionSummary>
+        <AccordionDetails sx={{ px: { xs: 2, sm: 2.5 }, pt: 0, pb: 2 }}>
+          {requirement.source_review_state === "excluded" ? (
+            <Alert
+              severity="info"
+              action={
+                <Button
+                  component={RouterLink}
+                  to={`/specifications?${new URLSearchParams({ document: documentId, requirement: requirement.requirement_id })}`}
+                >
+                  Review source exclusion
+                </Button>
+              }
+            >
+              This test was excluded during specification review. Restore it
+              there to include it in a report.
+            </Alert>
+          ) : (
+            <>
+              {excluded && (
+                <Alert severity="info" sx={{ mb: 1.5 }}>
+                  Removed from this report's scope. The extracted requirement
+                  and matching results are preserved.
+                  {requirement.report_scope_exclusion?.note && (
+                    <Typography
+                      variant="caption"
+                      component="p"
+                      sx={{ mt: 0.5 }}
+                    >
+                      Note: {requirement.report_scope_exclusion.note}
+                    </Typography>
+                  )}
+                </Alert>
+              )}
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                alignItems={{ sm: "center" }}
+                spacing={1.5}
+              >
+                <Button
+                  ref={trigger}
+                  disabled={busy}
+                  variant={excluded ? "outlined" : "text"}
+                  size="small"
+                  color={excluded ? "primary" : "error"}
+                  startIcon={
+                    excluded ? (
+                      <UndoRoundedIcon />
+                    ) : (
+                      <RemoveCircleOutlineRoundedIcon />
+                    )
+                  }
+                  onClick={() => {
+                    setNote("");
+                    setError("");
+                    setOpen(true);
+                  }}
+                  sx={{ alignSelf: "flex-start" }}
+                >
+                  {excluded
+                    ? "Restore to this report"
+                    : "Remove from this report"}
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  Changes this report's scope only.
+                </Typography>
+              </Stack>
+            </>
+          )}
+        </AccordionDetails>
+      </Accordion>
       <Dialog
         open={open}
         disableRestoreFocus

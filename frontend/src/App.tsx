@@ -36,6 +36,7 @@ import {
 import ScienceOutlined from "@mui/icons-material/ScienceOutlined";
 import GridViewOutlined from "@mui/icons-material/GridViewOutlined";
 import DescriptionOutlined from "@mui/icons-material/DescriptionOutlined";
+import FolderCopyOutlined from "@mui/icons-material/FolderCopyOutlined";
 import AssessmentOutlined from "@mui/icons-material/AssessmentOutlined";
 import CodeRounded from "@mui/icons-material/CodeRounded";
 import MonitorHeartOutlined from "@mui/icons-material/MonitorHeartOutlined";
@@ -47,6 +48,10 @@ import { useResource } from "./api";
 import { useAuth } from "./auth";
 import Login from "./pages/Login";
 import SessionControls from "./components/SessionControls";
+import {
+  InferenceActivityBanner,
+  InferenceActivityProvider,
+} from "./components/InferenceActivity";
 import type { Workspace } from "./types";
 const MyLab = lazy(() => import("./pages/MyLab"));
 const TestCatalog = lazy(() => import("./pages/TestCatalog"));
@@ -124,9 +129,11 @@ export default function App() {
     );
   if (!auth.session?.authenticated || !auth.session.user) return <Login />;
   return (
-    <WorkspaceApp
+    <InferenceActivityProvider
       key={`${auth.session.user.id}:${auth.session.user.lab_id ?? "local"}`}
-    />
+    >
+      <WorkspaceApp />
+    </InferenceActivityProvider>
   );
 }
 
@@ -535,6 +542,7 @@ function WorkspaceApp() {
           <SessionControls />
         </Stack>
         <Box component="main" id="main" tabIndex={-1} sx={{ outline: "none" }}>
+          <InferenceActivityBanner />
           {location.pathname.startsWith("/specifications") && (
             <Box
               sx={{
@@ -542,6 +550,7 @@ function WorkspaceApp() {
                 borderColor: "divider",
                 bgcolor: "background.paper",
                 px: { xs: 2, md: 4 },
+                py: 1,
               }}
             >
               <Tabs
@@ -551,15 +560,40 @@ function WorkspaceApp() {
                     : "review"
                 }
                 aria-label="Specification workspace"
+                sx={{
+                  display: "inline-flex",
+                  minHeight: 40,
+                  p: 0.5,
+                  bgcolor: "#eaf0fa",
+                  border: "1px solid #dce5f1",
+                  borderRadius: 1.5,
+                  "& .MuiTabs-indicator": { display: "none" },
+                  "& .MuiTab-root": {
+                    minHeight: 34,
+                    px: 1.5,
+                    py: 0.5,
+                    fontSize: 14,
+                    borderRadius: 1,
+                  },
+                  "& .Mui-selected": {
+                    bgcolor: "#fff",
+                    color: "primary.main",
+                    boxShadow: "0 1px 3px #173b6520",
+                  },
+                }}
               >
                 <Tab
                   label="Library"
+                  icon={<FolderCopyOutlined sx={{ fontSize: 18 }} />}
+                  iconPosition="start"
                   value="library"
                   component={Link}
                   to={`/specifications/library${location.search}`}
                 />
                 <Tab
                   label="PDF & review"
+                  icon={<DescriptionOutlined sx={{ fontSize: 18 }} />}
+                  iconPosition="start"
                   value="review"
                   component={Link}
                   to={`/specifications${location.search}`}

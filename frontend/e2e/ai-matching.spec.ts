@@ -157,7 +157,9 @@ test("AI matching requires consent, reuses results and keeps the last success af
     },
   );
   await page.goto(`${base}/reports?document=matching-source`);
-  await expect(page.getByText("Preview", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Generate report", exact: true }),
+  ).toBeVisible();
   expect(submissions).toBe(0);
   await page
     .getByRole("button", { name: "Developer report tools", exact: true })
@@ -202,7 +204,9 @@ test("AI matching requires consent, reuses results and keeps the last success af
     page.getByText("AI-assisted comparison", { exact: true }),
   ).toBeVisible();
   await page.reload();
-  await expect(page.getByText("Compared", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Check for updates", exact: true }),
+  ).toBeVisible();
   await page
     .getByRole("button", { name: "Developer report tools", exact: true })
     .click();

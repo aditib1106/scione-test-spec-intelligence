@@ -1,3 +1,4 @@
+import { openReportScope, reloadSavedReport } from "./reportScope";
 import { expect, test } from "@playwright/test";
 import type { ComparisonData } from "../src/comparisonTypes";
 import type { LabProfile, SpecificationData } from "../src/types";
@@ -26,6 +27,18 @@ test("removing and restoring report scope persists without changing source extra
   const { document_id: id } = (await imported.json()) as {
     document_id: string;
   };
+  let writes = 0;
+  let releaseResponse = () => {};
+  const responseGate = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+  await page.route(`**/api/reports/${id}/exclusions`, async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    writes++;
+    const response = await route.fetch();
+    await responseGate;
+    await route.fulfill({ response });
+  });
   const before = (await (
     await request.get(`/api/specifications/${id}`)
   ).json()) as SpecificationData;
@@ -35,6 +48,7 @@ test("removing and restoring report scope persists without changing source extra
     .getByRole("button", { name: "Specular gloss", exact: true });
   await expect(selected).toBeVisible();
   await selected.click();
+  await openReportScope(page);
   await page
     .getByRole("button", { name: "Remove from this report", exact: true })
     .click();
@@ -44,7 +58,9 @@ test("removing and restoring report scope persists without changing source extra
     .fill("Customer removed this test from the requested quote.");
   await dialog
     .getByRole("button", { name: "Remove test", exact: true })
-    .click();
+    .dblclick();
+  await expect.poll(() => writes).toBe(1);
+  releaseResponse();
   await expect(dialog).not.toBeVisible();
   await expect(selected).toHaveAttribute("aria-current", "true");
   await expect(
@@ -87,6 +103,7 @@ test("removing and restoring report scope persists without changing source extra
   await expect(
     page.getByRole("button", { name: "Remove from this report", exact: true }),
   ).toBeVisible();
+  expect(writes).toBe(2);
   const restored = (await (
     await request.get(`/api/comparisons/${id}`)
   ).json()) as ComparisonData;
@@ -139,6 +156,7 @@ test("removing and restoring a filtered test never silently resets the result fi
   await expect(
     list.getByRole("button", { name: "Specular gloss", exact: true }),
   ).toBeVisible();
+  await openReportScope(page);
   await page
     .getByRole("button", { name: "Remove from this report", exact: true })
     .click();
@@ -150,9 +168,7 @@ test("removing and restoring a filtered test never silently resets the result fi
   await expect(filter).toContainText("Partially matched");
   await expect(search).toHaveValue("gloss");
   await expect(list.getByRole("button")).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Recompare saved information", exact: true })
-    .click();
+  await reloadSavedReport(page);
   await expect(filter).toContainText("Partially matched");
   await expect(search).toHaveValue("gloss");
   await filter.click();
