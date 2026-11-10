@@ -257,7 +257,7 @@ def test_specific_grounded_step_atoms_replace_generic_numeric_fallback_copies_on
     assert source.atomic_claims[0].id == "temperature"
 
 
-@pytest.mark.parametrize("context, numeric_count", [("Water", 1), ("Nitrogen", 2)])
+@pytest.mark.parametrize("context, numeric_count", [("Water", 1), ("Nitrogen", 1)])
 def test_more_specific_model_context_needs_literal_local_source_support(context, numeric_count):
     raw = "Water at 23 °C"
     normalized = normalize_requirement(
@@ -266,10 +266,17 @@ def test_more_specific_model_context_needs_literal_local_source_support(context,
     assert len([claim for claim in normalized.claims if claim.parameter_id == "temperature"]) == (
         numeric_count
     )
-    assert any(
+    unresolved = any(
         claim.normalization_state == "unresolved" and claim.raw_text == raw
         for claim in normalized.claims
     )
+    # A literally preserved medium is already represented on the primary atom;
+    # an invented medium cannot consume the source's actual water restriction.
+    assert unresolved is (context == "Nitrogen")
+    assert normalized.claims[0].source_context == context
+    if context == "Nitrogen":
+        assert normalized.review_issues
+        assert compare_requirement(normalized, [normalized.claims[0]]).status == "needs_information"
 
 
 def test_model_step_contradicting_its_quotation_cannot_suppress_numeric_fallback():
@@ -278,11 +285,12 @@ def test_model_step_contradicting_its_quotation_cannot_suppress_numeric_fallback
         raw, atoms=[temperature(raw_text=raw, stage="thermal_cycle", sequence=2)]
     )
     source.evidence[0].quote = "Execute thermal-cycle stages: " + raw
-    claims = normalize_requirement(source).claims
-    assert any(
-        claim.parameter_id == "temperature" and claim.stage == "general" and claim.sequence is None
-        for claim in claims
-    )
+    normalized = normalize_requirement(source)
+    numeric = [claim for claim in normalized.claims if claim.parameter_id == "temperature"]
+    assert len(numeric) == 1 and numeric[0].sequence == 2
+    assert normalized.review_issues
+    assert compare_requirement(normalized, numeric).status == "needs_information"
+    assert source.atomic_claims[0].sequence == 2  # Immutable original proposal.
 
 
 def test_specific_model_step_cannot_erase_a_contradictory_named_source_stage():
@@ -290,9 +298,10 @@ def test_specific_model_step_cannot_erase_a_contradictory_named_source_stage():
     normalized = normalize_requirement(
         source_requirement(raw, atoms=[temperature(raw_text=raw, stage="curing", sequence=1)])
     )
-    assert {claim.stage for claim in normalized.claims if claim.parameter_id == "temperature"} == {
-        "curing", "conditioning",
-    }
+    numeric = [claim for claim in normalized.claims if claim.parameter_id == "temperature"]
+    assert len(numeric) == 1 and numeric[0].stage == "curing"
+    assert normalized.review_issues
+    assert compare_requirement(normalized, numeric).status == "needs_information"
 
 
 @pytest.mark.parametrize(

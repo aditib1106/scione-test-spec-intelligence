@@ -254,3 +254,138 @@ Running the script without those inputs only prepares the oracle code baseline.
 Generated results include the frozen fixture hash and evaluator source hash and
 stay under ignored `local_data/experiments/`. Never present these four cases as a
 production reliability percentage.
+
+## Frozen semantic-matching challenge v2
+
+`semantic_capability_challenge_v2.json` contains 24 author-designed scenarios and
+28 parameter decisions, split into two batches of 12. Its frozen SHA256 is
+`54a4e286922e27b13a99e37d1583e0ecc41d53c73395a96f9e5a992794b7bf19`.
+It supplies typed source facts to isolate semantic matching and deterministic
+comparison from extraction, PDF parsing and OCR. These are development labels,
+not independently reviewed production ground truth. Do not revise the labels
+after looking at model responses.
+
+The scenarios include bilingual names, unfamiliar parameters, equivalent free
+context and material wording, missing facts, unknown tests, method editions,
+ordered steps, different media and roles, numeric limits, resolution, nominal
+tolerances, distinct configurations and the scope of negative declarations.
+Proprietary identifiers retain meaningful case and punctuation. One case
+intentionally supplies an incomplete extracted category to test safe handling.
+
+The pure helper in `scione.evaluation.semantic_challenge` builds the candidate
+snapshot. Each requirement can select only the capability IDs belonging to its
+own scenario, even when another case in the same batch has a similarly named
+capability. Otherwise a missing-information case could borrow evidence from a
+neighboring test case. No settings, model clients or database are used by this
+helper.
+
+Replay one or more saved **SemanticMatchingRun** JSON files without API calls:
+
+```sh
+python scripts/evaluate_semantic_matching.py \
+  --run saved_batch_a.run.json saved_batch_b.run.json \
+  --output local_data/experiments/semantic-replay
+```
+
+`--run` may also be repeated. The input is the saved run itself, not a provider's
+raw completion or a full application export wrapper; `matching_machine` from an
+application artifact export is the corresponding run object. Input files remain
+unchanged. The command writes full per-run scores and `summary.json` to the
+chosen directory. This is explicitly labelled `CURRENT_POLICY_RECOMPILE`: it
+recompiles the saved accepted links using the currently
+imported production guards and comparator, recording their source hashes. It does
+not reconstruct a historical policy from the saved model's version string.
+Historical and current scores are not comparable without identifying the policy
+used for each; original historical score/run files must remain unchanged. To
+score previously frozen application verdicts without recompilation, use the
+`evaluate_capability.py --artifacts` protocol above with independently aligned
+labels and the exported `comparison_validated` data.
+
+Invalid artifacts are recorded separately and return a nonzero
+exit code; they are not converted into correct unknown capability decisions.
+
+Without `--run`, the command compiles the frozen first reference outcome for each
+case and exercises the comparison policy offline:
+
+```sh
+python scripts/evaluate_semantic_matching.py
+```
+
+This mode is explicitly labelled `manual_reference_policy_probe`. It measures
+policy given author-typed facts and correspondences, not model performance.
+No mode of this CLI loads credentials, retries inference or runs a provider.
+
+Scores separate test/capability identity, exact claim links, parameter decisions,
+whole-test status, false support, false gaps, false rejection of known positives,
+unknown decisions and contract errors. Wrong identity cannot receive credit for
+an accidentally correct unknown status. Missing or failed output stays in the
+error denominator. Where more than one conservative outcome is valid, allowed
+outcomes are frozen in advance; all metrics for a case use one complete chosen
+outcome rather than favorable fields from several alternatives. Replayed trials
+with overlapping cases are explicitly flagged and are not independent samples.
+
+Exact link agreement scores IDs and relation labels. It does not independently
+certify a model's proposed context/category wording equivalence. Those proposals
+retain both quoted inputs and reasons, and require separate semantic annotation
+for broader evaluation; structural acceptance alone is not proof of meaning.
+
+`e2e_source_plan()` derives a separate six-page text probe from six frozen cases.
+It uses neutral R01-R06 independent-request boundaries, one request per physical
+page and explicit source stage headers, with seven expected source facts. Two
+requests deliberately share a method, so method text alone cannot align their
+output rows. The plan retains source/page hashes, typed expectations and a strict
+scoring protocol. It does not change the 24-case fixture or create a PDF/OCR
+benchmark. A real extraction-and-matching test must use actual extracted facts,
+retain missing/incorrect facts as end-to-end errors, and report independently
+reviewed representation differences separately from strict field agreement.
+
+## Generated customer corpus and matching probes
+
+`generated_matching_reference_v1.json` contains 28 frozen, controlled matching-only
+scenarios (29 parameter decisions), using manually typed source facts and independent
+synthetic lab declarations. It is an internal development reference, not domain-expert
+validated gold. Source and scoring hashes prevent changing labels to match predictions.
+
+```sh
+python scripts/evaluate_generated_matching.py --output local_data/experiments/generated-policy.json
+python scripts/evaluate_generated_matching.py \
+  --run saved_batch_01/matching_run.json \
+  --run saved_batch_02/matching_run.json \
+  --output local_data/experiments/generated-live-replay.json
+```
+
+The first command makes zero model calls and probes software policy. The second
+scores saved actual matching runs; repeat once per frozen batch (five batches total).
+It reports missing batches, identity/link/parameter/method/overall results and false
+support separately. A correct policy probe does not establish model performance.
+
+The generated-PDF scorer requires explicitly supplied source-only partial annotations:
+
+```sh
+python scripts/evaluate_generated_corpus.py \
+  --reference private_source_reference.json --reference-sha256 REFERENCE_SHA256 \
+  --runs local_data/experiments/saved-extractions \
+  --output local_data/experiments/extraction-score.json
+```
+
+Original PDFs, raw responses, private annotation working files and paid experiment
+outputs remain outside tracked fixtures. Scans/handwriting are excluded from the
+text-only corpus. Do not combine selected successful attempts into an apparent
+single-configuration score or label iteratively inspected data an independent holdout.
+
+`generated_matching_workflow_v2.json` is a separate four-test workflow probe with
+35 manually selected, source-quoted CSP-EN-301 facts and an explicitly synthetic
+lab profile. Its operating ranges and reporting declarations were authored before
+matching inference, independently of extraction model outputs. Frozen outcomes
+include full coverage, an explicitly unavailable post-cycle gloss output, and a
+missing separate-topcoat declaration. It is deliberately a selected-fact matching
+probe, not exhaustive extraction accuracy or a claim about any real lab.
+`test_matching_workflow_automation.py` checks the policy, literal source quotes,
+and counterfactuals where a field is removed or a lab range becomes insufficient.
+
+The same optional lab input is packaged as
+`scione.catalogs/data/csp301_typed_lab_example.json`, with provenance and limitations.
+Loading an example must be an explicit user action; it never fills an existing
+lab profile automatically or derives capability from catalog metadata. Actual
+end-to-end extraction can still require review for additional source obligations
+not included among these selected reference facts.

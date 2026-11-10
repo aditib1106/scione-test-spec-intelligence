@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from scione.providers import TokenUsage
-from scione.schemas import TextExtractionStatus
+from scione.schemas import TextExtractionStatus, TextReadingOrder
 from scione.specifications.models import CustomerExtraction, CustomerExtractionRun
 from scione.specifications.store import (
     MAX_PDF_BYTES,
@@ -68,6 +68,25 @@ def make_run(document_id: str, run_id: str = "run_one") -> CustomerExtractionRun
             }
         ),
     )
+
+
+def test_new_import_keeps_visual_paragraph_order_without_rewriting_existing_document(tmp_path):
+    with pymupdf.open() as pdf:
+        page = pdf.new_page()
+        # A writer can append the second paragraph's content stream after
+        # drawing a footer. Coordinates, rather than insertion order, recover it.
+        page.insert_text((40, 60), "Fictional adhesion test ISO 60038:2021.")
+        page.insert_text((40, 720), "Footer: synthetic customer specification.")
+        page.insert_text((40, 85), "Conditioning is required at 23 degrees C for 48 hours.")
+        content = pdf.tobytes()
+    store = FileSpecStore(tmp_path)
+    first = store.import_pdf("paragraph.pdf", content)
+    assert first.document.text_reading_order == TextReadingOrder.GEOMETRIC
+    text = first.document.pages[0].text
+    assert text.index("Conditioning") < text.index("Footer")
+    before = (store.root / first.document_id / "document.json").read_bytes()
+    assert store.import_pdf("renamed.pdf", content).document == first.document
+    assert (store.root / first.document_id / "document.json").read_bytes() == before
 
 
 def make_failure(

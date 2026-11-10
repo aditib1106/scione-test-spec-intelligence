@@ -146,12 +146,26 @@ class SQLMatchingStore:
         if model is not None:
             conditions.append(matching_runs.c.model == model)
         with self._engine().connect() as connection:
-            candidates = connection.execute(
-                select(matching_runs.c.payload)
-                .where(*conditions)
-                .order_by(matching_runs.c.created_at.desc(), matching_runs.c.run_id.desc())
-            ).scalars()
-            for payload in candidates:
+            # Sorting JSON artifacts can exceed MySQL's sort-buffer limit
+            # even for a few runs. Sort the small identifiers first, then
+            # fetch an artifact by its primary key only when it is needed.
+            candidates = (
+                connection.execute(
+                    select(matching_runs.c.run_id)
+                    .where(*conditions)
+                    .order_by(matching_runs.c.created_at.desc(), matching_runs.c.run_id.desc())
+                )
+                .scalars()
+                .all()
+            )
+            for run_id in candidates:
+                payload = connection.execute(
+                    select(matching_runs.c.payload).where(
+                        matching_runs.c.workspace_id == self.workspace_id,
+                        matching_runs.c.document_id == document_id,
+                        matching_runs.c.run_id == run_id,
+                    )
+                ).scalar_one()
                 if (
                     generation_settings is not None
                     and payload.get("generation_settings", {}) != generation_settings
@@ -162,15 +176,19 @@ class SQLMatchingStore:
 
     def listing(self, document_id: str) -> list[dict]:
         with self._engine().connect() as connection:
+            # History needs summary fields, not full requests/responses. Keep
+            # large JSON out of both MySQL's filesort and the HTTP read path.
+            summary_columns = [
+                column
+                for column in matching_runs.c
+                if column.name not in {"payload", "workspace_id"}
+            ]
             rows = connection.execute(
-                select(matching_runs)
+                select(*summary_columns)
                 .where(
                     matching_runs.c.workspace_id == self.workspace_id,
                     matching_runs.c.document_id == document_id,
                 )
                 .order_by(matching_runs.c.created_at.desc(), matching_runs.c.run_id.desc())
             ).mappings()
-            return [
-                {key: value for key, value in row.items() if key not in {"payload", "workspace_id"}}
-                for row in rows
-            ]
+            return [dict(row) for row in rows]

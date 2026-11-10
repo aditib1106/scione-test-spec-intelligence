@@ -19,6 +19,14 @@ from uuid import uuid4
 from pydantic import ValidationError
 
 from scione.catalogs.models import LabProfile, ReferenceCatalog, validate_lab_references
+from scione.matching.keyed_wire import (
+    KEYED_WIRE_VERSION,
+    KeyedWireError,
+    decode_keyed_output,
+    keyed_output_schema,
+)
+from scione.matching.literal_text import literal_comparison_claim
+from scione.matching.metadata import canonical_alignment_pair
 from scione.matching.models import (
     MATCHING_PROMPT_VERSION,
     AlignmentValidationIssue,
@@ -28,11 +36,13 @@ from scione.matching.models import (
     SemanticMatchingOutput,
     SemanticMatchingRun,
 )
+from scione.matching.parameter_policy import ParameterPolicyConflict, comparison_pair
 from scione.matching.projection import (
     MATCHING_PROJECTION_VERSION,
     MatchingProjectionError,
     project_matching_input,
 )
+from scione.matching.semantics import SemanticEquivalenceError, semantic_pair
 from scione.providers.base import (
     ModelProvider,
     ProviderError,
@@ -74,14 +84,18 @@ def build_matching_input(
     catalog_revision: str | None = None,
     normalized_requirements: list[NormalizedRequirement] | None = None,
     candidate_test_ids: dict[str, list[str]] | None = None,
+    candidate_method_ids: list[str] | tuple[str, ...] | None = None,
 ) -> MatchingInput:
     """Build a snapshot without inference or silent candidate truncation.
 
     An upstream retriever can supply per-requirement candidate IDs. Otherwise
     the current small catalog is included explicitly. A size guard in the runner
     rejects oversized requests before calling a provider; it never discards data.
-    This helper does not apply human corrections: the caller supplies the chosen
-    extraction/review revision and any corresponding normalized requirements.
+    An explicit method allowlist projects unrelated catalog metadata out while
+    retaining every referenced lab method. Source method strings remain in each
+    requirement, including unresolved references. This helper does not apply human
+    corrections: the caller supplies the chosen extraction/review revision and any
+    corresponding normalized requirements.
     """
 
     validate_lab_references(lab, catalog)
@@ -113,7 +127,20 @@ def build_matching_input(
         )
     # Keep only requested candidate tests/methods, preserving source IDs and text.
     tests = [row for row in catalog.tests if row.id in selected_test_ids]
-    method_ids = {identifier for row in tests for identifier in row.method_ids}
+    capabilities = [row for row in lab.capabilities if row.canonical_test_id in selected_test_ids]
+    if candidate_method_ids is None:
+        method_ids = {identifier for row in tests for identifier in row.method_ids}
+    else:
+        method_ids = set(candidate_method_ids)
+        if method_ids - {row.id for row in catalog.methods}:
+            raise ValueError("Method candidates must be existing catalog identities.")
+        method_ids.update(identifier for row in capabilities for identifier in row.method_ids)
+        # Source references may belong to a different family from a human pin.
+        # Keep their metadata without associating them with the pinned test.
+        tests = [
+            row.model_copy(update={"method_ids": [i for i in row.method_ids if i in method_ids]})
+            for row in tests
+        ]
     filtered_catalog = catalog.model_copy(
         update={"tests": tests, "methods": [row for row in catalog.methods if row.id in method_ids]}
     )
@@ -126,8 +153,7 @@ def build_matching_input(
         catalog=filtered_catalog,
         capabilities=[
             CapabilityCandidate(capability=row, claims=normalize_capability(row))
-            for row in lab.capabilities
-            if row.canonical_test_id in selected_test_ids
+            for row in capabilities
         ],
         requirements=requirements,
     )
@@ -243,7 +269,31 @@ def validate_matching_output(
                     used_configurations.add(configuration)
         for alignment in row.claim_alignments:
             reason = None
+            metadata_actions = []
             if alignment.relation == "same_parameter":
+                # Equal recorded values need no semantic value bridge. Ignore
+                # a redundant proposal on this accepted copy only: the raw
+                # response and original proposal remain unchanged for audit.
+                # All parameter/context/configuration checks still run below.
+                if alignment.value_equivalence and len(alignment.capability_claim_ids) == 1:
+                    request = requested[alignment.requirement_claim_id]
+                    declaration = declared[alignment.capability_claim_ids[0]]
+                    if (
+                        request.text_value
+                        and request.text_value.strip()
+                        and request.text_value == declaration.text_value
+                    ):
+                        alignment.value_equivalence = None
+                        issues.append(
+                            AlignmentValidationIssue(
+                                requirement_id=row.requirement_id,
+                                requirement_claim_id=alignment.requirement_claim_id,
+                                code="unneeded_value_proposal_ignored",
+                                reason="The recorded source and lab text values are already "
+                                "exactly equal. An unnecessary value-wording proposal was "
+                                "ignored; the original proposal remains in the artifact.",
+                            )
+                        )
                 if len(used_configurations) > 1:
                     reason = "The proposal combines declarations from different configurations."
                 else:
@@ -252,13 +302,27 @@ def validate_matching_output(
                             problem
                             for identifier in alignment.capability_claim_ids
                             if (
-                                problem := _compatible_context(
-                                    requested[alignment.requirement_claim_id], declared[identifier]
+                                problem := _alignment_problem(
+                                    requested[alignment.requirement_claim_id],
+                                    declared[identifier],
+                                    alignment,
+                                    source.requirement,
+                                    list(declared.values()),
+                                    metadata_actions,
                                 )
                             )
                         ),
                         None,
                     )
+            for action in metadata_actions:
+                issues.append(
+                    AlignmentValidationIssue(
+                        requirement_id=row.requirement_id,
+                        requirement_claim_id=alignment.requirement_claim_id,
+                        code="source_proved_metadata_canonicalization",
+                        reason=json.dumps(action, ensure_ascii=False, sort_keys=True),
+                    )
+                )
             if reason:
                 issues.append(
                     AlignmentValidationIssue(
@@ -270,8 +334,56 @@ def validate_matching_output(
                 )
                 alignment.relation = "unknown"
                 alignment.capability_claim_ids = []
+                alignment.context_equivalence = None
+                alignment.value_equivalence = None
+                alignment.joint_scope_equivalence = None
                 alignment.reason = reason
     return output, issues
+
+
+def _alignment_problem(
+    request, declaration, alignment, source, declarations, actions
+) -> str | None:
+    try:
+        literal = literal_comparison_claim(request, source)
+        if literal is not None:
+            request = literal
+            actions.append(
+                {
+                    "field": "comparison_type",
+                    "canonical": "verbatim_source_clause",
+                    "rule": "complete_located_nonnumeric_source_text",
+                }
+            )
+        request, declaration = comparison_pair(request, declaration)
+        request, declaration, proved = canonical_alignment_pair(
+            request,
+            declaration,
+            source,
+            declarations,
+            wording_bridge=bool(alignment.context_equivalence or alignment.joint_scope_equivalence),
+        )
+        actions.extend(proved)
+        if (
+            alignment.value_equivalence
+            and request.text_value == declaration.text_value
+            and any(action.get("rule") == "literal_reporting_body_and_purpose" for action in proved)
+        ):
+            # The literal whole output body, not an AI paraphrase, already
+            # proves this harmless imperative/purpose placement difference.
+            actions.append(
+                {
+                    "field": "value_equivalence",
+                    "source": alignment.value_equivalence.model_dump(),
+                    "canonical": None,
+                    "rule": "unneeded_proposal_after_literal_body_proof",
+                }
+            )
+            alignment.value_equivalence = None
+        pair = semantic_pair(request, declaration, alignment, source=source)
+    except (ParameterPolicyConflict, SemanticEquivalenceError) as exc:
+        return str(exc)
+    return _compatible_context(request, pair.declaration)
 
 
 def _strict_schema(value: Any) -> Any:
@@ -319,8 +431,43 @@ def matching_output_schema() -> dict[str, Any]:
             **claim["properties"]["capability_claim_ids"],
             "maxItems": 0,
         },
+        context_equivalence={"type": "null"},
+        value_equivalence={"type": "null"},
+        joint_scope_equivalence={"type": "null"},
     )
-    definitions["ClaimAlignment"] = {"anyOf": [aligned_claim, unresolved_claim]}
+    no_wording = branch(
+        aligned_claim,
+        context_equivalence={"type": "null"},
+        value_equivalence={"type": "null"},
+        joint_scope_equivalence={"type": "null"},
+    )
+    one_id = {**claim["properties"]["capability_claim_ids"], "minItems": 1, "maxItems": 1}
+    equivalence = {"$ref": "#/$defs/ProposedEquivalence"}
+    definitions["ClaimAlignment"] = {
+        "anyOf": [
+            no_wording,
+            branch(
+                aligned_claim,
+                capability_claim_ids=one_id,
+                context_equivalence=equivalence,
+                joint_scope_equivalence={"type": "null"},
+            ),
+            branch(
+                aligned_claim,
+                capability_claim_ids=one_id,
+                value_equivalence=equivalence,
+                joint_scope_equivalence={"type": "null"},
+            ),
+            branch(
+                aligned_claim,
+                capability_claim_ids=one_id,
+                context_equivalence={"type": "null"},
+                value_equivalence={"type": "null"},
+                joint_scope_equivalence=equivalence,
+            ),
+            unresolved_claim,
+        ]
+    }
     definitions["UnresolvedClaimAlignment"] = unresolved_claim
 
     item = deepcopy(definitions["ItemAlignment"])
@@ -365,6 +512,54 @@ def matching_output_schema() -> dict[str, Any]:
     return schema
 
 
+def prepare_matching_request(
+    snapshot: MatchingInput, *, keyed: bool = False
+) -> StructuredGenerationRequest:
+    """Pure preflight using the same wire contract as an individual runner.
+
+    This creates no provider, sends no request, and never changes the immutable
+    source snapshot. Individual ``run`` failure artifacts remain unchanged.
+    """
+    snapshot = MatchingInput.model_validate(snapshot.model_dump(mode="json"))
+    prompt = files("scione.prompts")
+    prompt = prompt.joinpath(f"{MATCHING_PROMPT_VERSION}.txt").read_text(encoding="utf-8")
+    if keyed:
+        prompt += (
+            "\nWIRE FORMAT: items is an object keyed by every requirement ID. "
+            "claim_alignments is an object keyed by every claim ID. "
+            "Return every required key exactly once. Do not repeat IDs inside values."
+        )
+    schema = matching_output_schema()
+    payload = project_matching_input(snapshot).model_dump(mode="json")
+    if keyed:
+        from scione.matching.semantics import joint_scope_text
+
+        payload["joint_scope_texts"] = {
+            "requirements": {
+                row.requirement.id: {
+                    claim.id: text
+                    for claim in row.normalized.claims
+                    if (text := joint_scope_text(claim)) is not None
+                }
+                for row in snapshot.requirements
+            },
+            "capabilities": {
+                row.capability.id: {
+                    claim.id: text
+                    for claim in row.claims
+                    if (text := joint_scope_text(claim)) is not None
+                }
+                for row in snapshot.capabilities
+            },
+        }
+    return StructuredGenerationRequest(
+        system_prompt=prompt,
+        user_prompt=json.dumps(payload, ensure_ascii=False),
+        schema_name="semantic_matching_keyed_v0_1" if keyed else "semantic_matching_v0_1",
+        json_schema=keyed_output_schema(snapshot, schema) if keyed else schema,
+    )
+
+
 class SemanticMatchingRunner:
     """Run exactly one explicitly requested, bounded matching attempt."""
 
@@ -387,6 +582,7 @@ class SemanticMatchingRunner:
         # Revalidate nested instances and detach all mutable caller data.
         snapshot = MatchingInput.model_validate(snapshot.model_dump(mode="json"))
         started = datetime.now(UTC)
+        keyed = self.provider.provider_name in {"sail", "fireworks"}
         request = StructuredGenerationRequest(
             system_prompt=files("scione.prompts")
             .joinpath(f"{MATCHING_PROMPT_VERSION}.txt")
@@ -407,6 +603,7 @@ class SemanticMatchingRunner:
             "request": request,
             "projection_version": MATCHING_PROJECTION_VERSION,
             "generation_settings": self.provider.generation_settings,
+            "wire_format": KEYED_WIRE_VERSION if keyed else "matching_array_v1",
         }
 
         def fail(code: str, message: str) -> SemanticMatchingError:
@@ -422,9 +619,8 @@ class SemanticMatchingRunner:
             )
 
         try:
-            request.user_prompt = json.dumps(
-                project_matching_input(snapshot).model_dump(mode="json"), ensure_ascii=False
-            )
+            request = prepare_matching_request(snapshot, keyed=keyed)
+            fields["request"] = request
         except MatchingProjectionError as exc:
             raise fail(
                 "input_projection_error",
@@ -477,7 +673,14 @@ class SemanticMatchingRunner:
             generation_settings=response.generation_settings or self.provider.generation_settings,
         )
         try:
-            proposal = SemanticMatchingOutput.model_validate(response.parsed)
+            parsed = decode_keyed_output(response.parsed, snapshot) if keyed else response.parsed
+            proposal = SemanticMatchingOutput.model_validate(parsed)
+        except KeyedWireError as exc:
+            raise fail(
+                "invalid_output_references",
+                "The matching response did not contain every required keyed input. "
+                "No partial result was accepted; the raw response is retained.",
+            ) from exc
         except ValidationError as exc:
             raise fail(
                 "invalid_output_schema",

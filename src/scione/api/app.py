@@ -1,5 +1,6 @@
 """Local HTTP and static frontend entry point for the MUI lab workspace."""
 
+import logging
 from dataclasses import asdict
 from decimal import InvalidOperation
 from pathlib import Path
@@ -28,11 +29,18 @@ from scione.api.contracts import (
     ResetRequest,
     ScopeReview,
     SourceFactsEdit,
+    SourceRequirementAdd,
     SourceReview,
 )
 from scione.api.inference_gate import InferenceBusyError, InferenceGate
+from scione.api.method_bank import router as method_bank_router
 from scione.api.workspace import Workspace, utc_now
 from scione.catalogs import CatalogError, LabProfile, LabStoreError, default_demo_lab
+from scione.catalogs.examples import (
+    demonstration_csp301_lab,
+    detailed_csp301_lab,
+    typed_csp301_lab,
+)
 from scione.catalogs.lab_store import LabVersionConflict
 from scione.catalogs.seed import default_csp301_lab
 from scione.config import ConfigurationError, Settings
@@ -46,14 +54,26 @@ from scione.specifications.extraction import (
     CustomerRequirementRunner,
     build_plan,
 )
-from scione.specifications.pdf_preview import PDFPreviewError, render_pdf_page
+from scione.specifications.parameter_views import physical_parameter_views
+from scione.specifications.pdf_preview import (
+    PDFPreviewError,
+    inspect_pdf_highlights,
+    render_pdf_page,
+)
+from scione.specifications.preview_quotes import (
+    PreviewField,
+    field_preview_quotes,
+    parameter_preview_quotes,
+)
+from scione.specifications.public_errors import public_analysis_error
 from scione.specifications.store import (
     MAX_PDF_BYTES,
     ExtractionFailure,
     SpecStoreError,
     SpecVersionConflict,
 )
-from scione.structured.pdf import render_comparison_pdf
+from scione.structured import normalize_requirement
+from scione.structured.pdf import ComparisonPDFError, render_comparison_pdf
 from scione.web.diagnostics_data import (
     comparison_rows,
     evidence_rows,
@@ -71,6 +91,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
     config = settings if settings is not None else Settings()
     workspace = Workspace(config)
     app = FastAPI(title="SciOne local workspace", version="0.1.0")
+    app.include_router(method_bank_router)
     inference_gate = InferenceGate()
     app.state.inference_gate = inference_gate
     app.add_middleware(
@@ -111,6 +132,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         CatalogError,
         PDFPreviewError,
         ReportPDFError,
+        ComparisonPDFError,
         DemoResetError,
         LibraryStoreError,
     ):
@@ -121,11 +143,30 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         return JSONResponse({"detail": str(exc)}, 409)
 
     @app.exception_handler(SQLAlchemyError)
-    async def database_error(_request: Request, _exc: SQLAlchemyError):
+    async def database_error(request: Request, exc: SQLAlchemyError):
+        # Log a useful correlation/code without SQL, bound customer data or
+        # connection credentials. A query resource limit is not a DB outage.
+        reference = uuid4().hex[:12]
+        args = getattr(getattr(exc, "orig", None), "args", ())
+        code = args[0] if args and isinstance(args[0], int) else None
+        logging.getLogger(__name__).error(
+            "Workspace database error ref=%s path=%s type=%s driver_code=%s",
+            reference,
+            request.url.path,
+            type(exc).__name__,
+            code,
+        )
+        message = (
+            "Saved comparison history could not be loaded. Your source files and "
+            "earlier reports are preserved. Try again or contact the workspace administrator."
+            if code == 1038
+            else "The specification database could not complete this action. "
+            "Check the database service and retry. Existing source files have been preserved."
+        )
         return JSONResponse(
             {
-                "detail": "The specification database could not complete this action. "
-                "Check the database service and retry. Existing source files have been preserved."
+                "detail": message,
+                "error_reference": reference,
             },
             503,
         )
@@ -175,18 +216,21 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         lab = workspace.labs.load_or_create()
         if lab.version != body.version:
             raise HTTPException(409, "Lab changed. Reload before loading the example.")
-        if lab.capabilities:
-            raise HTTPException(409, "Examples can only be loaded into an empty lab.")
-        workspace.labs.save(
-            lab.model_copy(
-                update={
-                    "capabilities": (
-                        default_csp301_lab().capabilities
-                        if body.example == "csp301"
-                        else default_demo_lab().capabilities
-                    )
-                }
+        if body.replace_existing and not body.acknowledged:
+            raise HTTPException(
+                400, "Confirm replacing lab capabilities with synthetic example data."
             )
+        if lab.capabilities and not (body.replace_existing and body.acknowledged):
+            raise HTTPException(409, "Examples can only be loaded into an empty lab.")
+        examples = {
+            "csp301": default_csp301_lab,
+            "csp301_typed": typed_csp301_lab,
+            "csp301_detailed": detailed_csp301_lab,
+            "csp301_demo": demonstration_csp301_lab,
+            "legacy": default_demo_lab,
+        }
+        workspace.labs.save(
+            lab.model_copy(update={"capabilities": examples[body.example]().capabilities})
         )
         return workspace.labs.load_or_create()
 
@@ -359,8 +403,13 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         page: int,
         requirement_id: str | None = None,
         run_id: str | None = None,
+        field: PreviewField | None = None,
+        claim_id: str | None = None,
     ):
         quotes = []
+        highlight_scope = "none"
+        located = None
+        pdf = workspace.specs.read_pdf(document_id)
         if requirement_id:
             run = (
                 workspace.specs.load_extraction(document_id, run_id)
@@ -376,16 +425,52 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             )
             if requirement is None:
                 raise HTTPException(404, "This requirement is not in the selected extraction.")
-            quotes = [evidence.quote for evidence in requirement.evidence if evidence.page == page]
+            if claim_id:
+                views, unit_proofs = physical_parameter_views(
+                    run.extraction.requirements, workspace.current_document(document_id).document
+                )
+                requirement = views[requirement_id]
+                claim = next(
+                    (
+                        item
+                        for item in normalize_requirement(
+                            requirement, source_unit_proofs=unit_proofs[requirement_id]
+                        ).claims
+                        if item.id == claim_id
+                    ),
+                    None,
+                )
+                if claim is None:
+                    raise HTTPException(404, "This parameter is not in the selected test.")
+                quotes, highlight_scope = parameter_preview_quotes(requirement, page, claim)
+            else:
+                quotes, highlight_scope = field_preview_quotes(requirement, page, field)
+            if highlight_scope in {"field", "parameter"}:
+                located = inspect_pdf_highlights(pdf, page_number=page, quotes=quotes)
+                if not located.matches or any(
+                    match.status != "matched" for match in located.matches
+                ):
+                    quotes, highlight_scope = field_preview_quotes(requirement, page, None)
+                    located = None
+            if located is None and quotes:
+                located = inspect_pdf_highlights(pdf, page_number=page, quotes=quotes)
+        elif claim_id:
+            raise HTTPException(422, "Select a test before locating its parameter.")
+        if located is not None and not located.rectangles:
+            highlight_scope = "none"
+        headers = {"X-Highlight-Scope": highlight_scope}
+        if located is not None and located.focus_y is not None:
+            headers["X-Highlight-Focus"] = str(round(located.focus_y, 6))
         return Response(
             render_pdf_page(
-                workspace.specs.read_pdf(document_id),
+                pdf,
                 page_number=page,
                 scale=2.4,
                 max_dimension=2000,
                 highlight_quotes=quotes,
             ),
             media_type="image/png",
+            headers=headers,
         )
 
     @app.post("/api/specifications/{document_id}/review")
@@ -417,15 +502,17 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
     def source_facts(document_id: str, body: SourceFactsEdit):
         return jsonable_encoder(workspace.correct_facts(document_id, body))
 
+    @app.post("/api/specifications/{document_id}/requirements")
+    def source_requirement_add(document_id: str, body: SourceRequirementAdd):
+        return jsonable_encoder(workspace.add_source_requirement(document_id, body))
+
     @app.get("/api/specifications/{document_id}/analysis-failures/{attempt_id}/artifacts")
     def analysis_failure_artifacts(document_id: str, attempt_id: str):
         artifact = workspace.specs.load_failure_artifact(document_id, attempt_id)
         return Response(
             artifact.model_dump_json(indent=2),
             media_type="application/json",
-            headers={
-                "Content-Disposition": 'attachment; filename="scione-failed-analysis.json"'
-            },
+            headers={"Content-Disposition": 'attachment; filename="scione-failed-analysis.json"'},
         )
 
     @app.post("/api/specifications/{document_id}/analysis")
@@ -443,7 +530,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             raise HTTPException(
                 400, "Confirm sending permission and acknowledge the provider's API usage terms."
             )
-        stored = workspace.specs.load_document(document_id)
+        stored = workspace.current_document(document_id)
         previous = workspace.specs.load_latest_extraction(document_id)
         try:
             build_plan(stored.document, body.strategy)
@@ -481,6 +568,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
                         strategy=body.strategy,
                         output_limit=body.output_limit,
                         message=message[:4000],
+                        error_code=getattr(exc, "error_code", None),
                         previous_run_id=previous.run_id if previous else None,
                     ),
                     artifact=exc.artifact if isinstance(exc, CustomerExtractionError) else None,
@@ -489,7 +577,8 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
                 message += " Attempt details could not be saved. Existing data was not reset."
             raise HTTPException(
                 400,
-                message + " No automatic retry was made. Your previous saved result is unchanged. "
+                public_analysis_error(message, getattr(exc, "error_code", None))
+                + " No automatic retry was made. Your previous saved result is unchanged. "
                 "Review the failed attempt before starting another analysis.",
             ) from exc
         workspace.library.index(document_id)
@@ -604,6 +693,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
                     run, selected["document"], pdf_bytes=workspace.specs.read_pdf(document_id)
                 ),
                 "comparison": comparison_rows(baseline, run) if baseline else [],
+                "source_review_audits": workspace.source_review_audits(document_id, run),
             }
         )
 

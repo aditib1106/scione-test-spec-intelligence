@@ -18,6 +18,7 @@ from .registry import (
     REGISTRY_VERSION,
     ParameterDefinition,
     fold,
+    known_category,
     normalize_category,
     normalize_stage,
     resolve_definition,
@@ -60,11 +61,23 @@ def _temperature_subjects(claim: AtomicClaim) -> set[str]:
     if unit is None or unit.dimension != "temperature":
         return set()
     text = " ".join((claim.label, claim.source_context or "", claim.raw_text))
-    subjects = {
-        subject
-        for subject, pattern in _TEMPERATURE_SUBJECT_PATTERNS.items()
-        if re.search(pattern, text, flags=re.I)
-    }
+    subjects = set()
+    for subject, pattern in _TEMPERATURE_SUBJECT_PATTERNS.items():
+        for match in re.finditer(pattern, text, flags=re.I):
+            prefix = text[max(0, match.start() - 50) : match.start()]
+            if re.search(
+                r"(?:\b(?:not|no|rather than|instead of|excluding|except)\s+"
+                r"(?:actual\s+)?|不是|并非|而非|非)\s*$",
+                prefix,
+                re.I,
+            ):
+                # An explicit contrast such as 'metal temperature, not oven
+                # setting' names the excluded object; it is not a second
+                # positive temperature subject. Other positive mentions and
+                # conflicting labels still remain independently visible.
+                continue
+            subjects.add(subject)
+            break
     for subject, aliases in _SUBJECTS.items():
         if fold(claim.source_context) in {fold(alias) for alias in aliases}:
             subjects.add(subject)
@@ -134,6 +147,15 @@ def _literal(value: str | None) -> str:
     return " ".join(unicodedata.normalize("NFKC", value or "").casefold().split())
 
 
+def _context_literal(value: str | None) -> str:
+    """Keep case in code-like scope tokens without making prose case-sensitive."""
+    tokens = unicodedata.normalize("NFKC", value or "").split()
+    return " ".join(
+        token if re.search(r"\d|[_+\-/:#@]|(?<=\w)\.(?=\w)", token) else token.casefold()
+        for token in tokens
+    )
+
+
 _SUBJECTS = {
     "water": {"water", "test water", "water temperature", "水", "水温", "试验用水"},
     "air": {"air", "ambient air", "air temperature", "空气", "空气温度", "气温"},
@@ -151,7 +173,7 @@ def _context(claim: AtomicClaim, definition: ParameterDefinition | None) -> tupl
         return "__ambiguous_subject__", ""
     if explicit_subjects:
         subject = next(iter(explicit_subjects))
-    context = _literal(claim.source_context)
+    context = _context_literal(claim.source_context)
     if not context or normalize_stage(context) == claim.stage:
         return subject, ""
     for candidate, aliases in _SUBJECTS.items():
@@ -163,7 +185,7 @@ def _context(claim: AtomicClaim, definition: ParameterDefinition | None) -> tupl
                 else ("__ambiguous_subject__", context)
             )
     material = normalize_category("specimen_material", context)
-    return subject, _literal(material)
+    return subject, _context_literal(material)
 
 
 def generic_reporting_unavailable(request: AtomicClaim, declaration: AtomicClaim) -> bool:
@@ -189,6 +211,7 @@ def generic_reporting_unavailable(request: AtomicClaim, declaration: AtomicClaim
         or declaration.normalization_state == "unresolved"
         or declaration.configuration is not None
         or declaration.sequence is not None
+        or _has_numeric_values(declaration)
     ):
         return False
     requested_context, declared_context = _context(request, first), _context(declaration, second)
@@ -258,10 +281,129 @@ def _result(status: str, reason: str, rule: str) -> PairEvaluation:
 def _entries(claim: AtomicClaim, definition: ParameterDefinition) -> set[str]:
     text = claim.text_value or ""
     return {
-        _literal(normalize_category(definition.id, item))
+        (
+            _literal(normalize_category(definition.id, item))
+            if known_category(definition.id, item)
+            else exact_text_identity(item)
+        )
         for item in re.split(r"[;；\n]+", text)
         if item.strip()
     }
+
+
+def exact_text_identity(value: str | None) -> str:
+    """Normalize Unicode/spacing without inventing case or punctuation aliases."""
+    return " ".join(unicodedata.normalize("NFKC", value or "").split())
+
+
+def _has_numeric_values(claim: AtomicClaim) -> bool:
+    return bool(claim.values) or any(
+        value is not None for value in (claim.value, claim.minimum, claim.maximum, claim.tolerance)
+    )
+
+
+def _numeric_negative_applies(
+    request: AtomicClaim, declaration: AtomicClaim, definition: ParameterDefinition | None
+) -> bool:
+    """A recorded unavailable point/range is evidence only where it overlaps.
+
+    An operating range or discrete set asks for all stated settings. An execution
+    inequality, control tolerance, incomplete boundary or measurement-resolution
+    limit does not establish a complete set of requested settings here.
+    """
+    if (
+        not _has_numeric_values(request)
+        or request.tolerance
+        or declaration.tolerance
+        or request.operator in {"text", "required", "<", ">"}
+        or declaration.operator not in {"=", "range", "one_of"}
+        or (request.operator in {"<=", ">="} and request.kind in {"condition", "scope"})
+        or (definition is not None and definition.rule == "lower_is_better")
+    ):
+        return False
+    units = (
+        _units(request, declaration, definition)
+        if definition is not None
+        else (resolve_unit(request.unit), resolve_unit(declaration.unit))
+    )
+    if units is None:
+        return False
+    first, second = units
+    if first is None or second is None or first.dimension != second.dimension:
+        return False
+    low, high = _bounds(request, first)
+    cap_low, cap_high = _bounds(declaration, second)
+    if any(value is None for value in (low, high, cap_low, cap_high)):
+        return False
+    if request.operator == "one_of":
+        points = {convert_value(value, first) for value in request.values}
+        if declaration.operator == "one_of":
+            return bool(points & {convert_value(value, second) for value in declaration.values})
+        return any(cap_low <= value <= cap_high for value in points)
+    if declaration.operator == "one_of":
+        return any(low <= convert_value(value, second) <= high for value in declaration.values)
+    return max(low, cap_low) <= min(high, cap_high)
+
+
+def unavailability_applies(request: AtomicClaim, declaration: AtomicClaim) -> bool:
+    """Check value scope after identity, role, source and context validation.
+
+    A negative for a different category/resource must not become a global
+    capability gap merely because both facts use the same parameter name.
+    """
+    definition = resolve_definition(request.parameter_id)
+    if _has_numeric_values(declaration):
+        return _numeric_negative_applies(request, declaration, definition)
+    if definition is not None and definition.rule in {"category", "required_set"}:
+        requested, unavailable = _entries(request, definition), _entries(declaration, definition)
+        return bool(requested and unavailable and requested & unavailable)
+    if definition is not None and definition.rule == "boolean_presence":
+        requested_identity = exact_text_identity(request.text_value)
+        declared_identity = exact_text_identity(declaration.text_value)
+        if requested_identity and requested_identity == declared_identity:
+            return True
+        requested, declared = fold(request.text_value), fold(declaration.text_value)
+        generic_requests = {
+            "",
+            "available",
+            "yes",
+            "present",
+            "supported",
+            "有",
+            "是",
+            "可用",
+            "提供",
+            "master panel",
+            "reference panel",
+            "标准样板",
+            "参考板",
+        }
+        generic_negatives = {
+            "",
+            "not available",
+            "unavailable",
+            "unsupported",
+            "not supported",
+            "not reportable",
+            "no",
+            "none",
+            "无",
+            "没有",
+            "不可用",
+            "不支持",
+            "master panel",
+            "reference panel",
+            "标准样板",
+            "参考板",
+        }
+        return requested in generic_requests and declared in generic_negatives
+    if definition is None and request.operator in {"text", "required"}:
+        requested = exact_text_identity(request.text_value)
+        declared = exact_text_identity(declaration.text_value)
+        return bool(requested and requested == declared)
+    # A typed numeric parameter (or registered presence flag) may explicitly
+    # declare the entire capability unavailable without a value restriction.
+    return declaration.operator in {"text", "required"}
 
 
 def _categorical(
@@ -475,6 +617,10 @@ def evaluate_pair(request: AtomicClaim, declaration: AtomicClaim) -> PairEvaluat
     whole test. This function deliberately never merges declarations.
     """
     request, declaration = normalize_claim(request), normalize_claim(declaration)
+    from scione.specifications.review_audits import compound_reporting_problem
+
+    if problem := compound_reporting_problem(request):
+        return _result("unknown", problem, "compound_reporting_request")
     first, second = (
         resolve_definition(request.parameter_id),
         resolve_definition(declaration.parameter_id),
@@ -509,6 +655,13 @@ def evaluate_pair(request: AtomicClaim, declaration: AtomicClaim) -> PairEvaluat
             "role",
         )
     if declaration.availability == "unsupported":
+        if not unavailability_applies(request, declaration):
+            return _result(
+                "unknown",
+                "The unavailable declaration does not establish unavailability "
+                "of the requested value or resource.",
+                "negative_scope",
+            )
         if generic_reporting_unavailable(request, declaration):
             return _result(
                 "gap",
@@ -536,11 +689,27 @@ def evaluate_pair(request: AtomicClaim, declaration: AtomicClaim) -> PairEvaluat
             *positives,
             *named_resources,
         }
+
+        def reference_identity(value):
+            # This registered lexical alias preserves the untouched qualifier;
+            # generic/touched panels and customer identifiers are not folded.
+            if first.id == "reference_panel" and re.fullmatch(
+                r"untouched master(?: panel)?", fold(value)
+            ):
+                return "untouched master panel"
+            return value
+
         named_presence = (
-            request.operator == "required"
+            request.operator in {"required", "text"}
             and declaration.operator in {"required", "text"}
-            and fold(request.text_value) in named_resources
-            and fold(request.text_value) == fold(declaration.text_value)
+            and bool(request.text_value)
+            and reference_identity(request.text_value) == reference_identity(declaration.text_value)
+            and not re.search(
+                r"\b(?:not|no|never|without|missing|unknown|unavailable|possibly|maybe|"
+                r"conditional|if|unless|except|none)\b|不|无|未|可能",
+                request.text_value,
+                re.I,
+            )
         )
         if (
             named_presence

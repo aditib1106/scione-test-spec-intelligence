@@ -238,7 +238,7 @@ def test_decisive_exact_rules_survive_ai_deferral_and_keep_machine_proposal(
     assert artifact["comparison_validated"][0]["status"] == "needs_information"
 
 
-def test_partial_rule_item_does_not_fall_back_to_known_claim_when_ai_defers(setup, monkeypatch):
+def test_partial_rule_item_backfills_only_decisive_exact_field_when_ai_defers(setup, monkeypatch):
     client, workspace, document_id, provider, _settings = setup
     lab = workspace.labs.load_or_create()
     lab.capabilities[0].atomic_claims[0].parameter_id = "temperature"
@@ -283,9 +283,26 @@ def test_partial_rule_item_does_not_fall_back_to_known_claim_when_ai_defers(setu
     temperature = next(
         check for check in row["comparison"]["checks"] if check["parameter_id"] == "temperature"
     )
-    assert temperature["status"] == "unknown"
-    assert temperature["capability_claim_ids"] == []
-    assert row["comparison"]["unknown_count"] == 2
+    assert temperature["status"] == "supported"
+    assert temperature["comparison_basis"] == "deterministic_exact_fields"
+    assert temperature["capability_claim_ids"]
+    unknown = [check for check in row["comparison"]["checks"] if check["status"] == "unknown"]
+    assert len(unknown) == 1
+    duration = unknown[0]
+    assert duration["status"] == "unknown"
+    assert duration["capability_claim_ids"] == []
+    # This added duration is absent from the original PDF evidence as well as
+    # the lab declaration: the numeric backfill must not give it an identity.
+    assert duration["requirement_claim"]["raw_text"] == "1"
+    assert duration["requirement_claim"]["normalization_state"] == "unresolved"
+    assert row["comparison"]["unknown_count"] == 1
+    assert row["comparison"]["status"] == "needs_information"
+    artifact = workspace.matching.artifacts(document_id, response.json()["run_id"])
+    assert all(
+        link["relation"] == "unknown" and not link["capability_claim_ids"]
+        for item in artifact["matching_machine"]["output"]["items"]
+        for link in item["claim_alignments"]
+    )
 
 
 def test_rules_first_policy_does_not_collide_with_or_rewrite_old_comparison_snapshot(setup):

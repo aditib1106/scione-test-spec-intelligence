@@ -305,7 +305,8 @@ def test_missing_category_does_not_mean_explicit_inability():
         raw_text="Steel only",
     )
     assert assess(request, lab) == "unknown"
-    assert assess(request, lab.model_copy(update={"availability": "unsupported"})) == "gap"
+    # Unavailability of steel establishes nothing about the requested aluminium.
+    assert assess(request, lab.model_copy(update={"availability": "unsupported"})) == "unknown"
 
 
 def test_set_inclusion_uses_explicit_entries_and_does_not_split_prose_commas():
@@ -362,6 +363,47 @@ def test_generic_boolean_does_not_guarantee_a_named_customer_resource():
         "reference_panel", operator="required", value=None, unit=None, text_value="available"
     )
     assert assess(requested, declared) == "unknown"
+
+
+@pytest.mark.parametrize("operator", ["text", "required"])
+def test_same_explicit_resource_identity_establishes_presence_without_a_generic_yes(operator):
+    requested = claim(
+        "reference_panel",
+        operator=operator,
+        value=None,
+        unit=None,
+        text_value="untouched master panel BMW-Z2",
+    )
+    declared = requested.model_copy(update={"operator": "required"})
+    assert assess(requested, declared) == "supported"
+    assert assess(requested, declared.model_copy(update={"availability": "unknown"})) == "unknown"
+    assert (
+        assess(
+            requested, declared.model_copy(update={"text_value": "untouched master panel BMW-z2"})
+        )
+        == "unknown"
+    )
+
+
+@pytest.mark.parametrize(
+    "text", ["possibly available", "no master panel", "unknown master", "without reference panel"]
+)
+def test_same_uncertain_or_negative_presence_text_is_not_a_positive_declaration(text):
+    requested = claim("reference_panel", operator="text", value=None, unit=None, text_value=text)
+    assert assess(requested, requested) == "unknown"
+
+
+def test_untouched_master_alias_keeps_the_scientific_qualifier_and_custom_identity():
+    requested = claim(
+        "reference_panel", operator="required", value=None, unit=None, text_value="untouched master"
+    )
+    declared = requested.model_copy(update={"text_value": "untouched master panel"})
+    assert assess(requested, declared) == "supported"
+    for value in ["master panel", "touched master panel", "untouched master panel XQ-A"]:
+        assert assess(requested, declared.model_copy(update={"text_value": value})) == "unknown"
+    assert (
+        assess(requested.model_copy(update={"text_value": "master panel"}), declared) == "unknown"
+    )
 
 
 def test_nominal_tolerance_is_not_silently_a_selectable_lab_range():

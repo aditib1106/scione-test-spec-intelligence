@@ -13,6 +13,7 @@ from uuid import uuid4
 _TARGETS = {
     "lab.json": "file",
     "specifications": "directory",
+    "derived_documents": "directory",
     "reports": "directory",
     "library.sqlite3": "file",
     "library.sqlite3-wal": "file",

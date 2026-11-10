@@ -3,13 +3,20 @@
 from fastapi import HTTPException
 
 from scione.library.store import digest
-from scione.matching import SemanticMatchingRunner, build_matching_input, compile_matching_run
+from scione.matching import build_matching_input, compile_matching_run
+from scione.matching.batching import MATCHING_BATCH_POLICY_VERSION, run_bounded_matching
 from scione.matching.projection import MATCHING_PROJECTION_VERSION
+from scione.matching.retrieval import (
+    DEFAULT_REQUEST_METHOD_LIMIT,
+    RETRIEVAL_POLICY_VERSION,
+    RetrievalLimitError,
+    retrieve_identity_candidates,
+)
 from scione.matching.service import SemanticMatchingError, input_fingerprint
 from scione.matching.store import SQLMatchingStore
 from scione.parameters import REGISTRY_VERSION, normalization_evidence
 from scione.reports.matching import _method_resolution, lab_fingerprint
-from scione.structured import normalize_requirement
+from scione.specifications.conditional_notes import conditional_route_proofs
 
 
 class MatchingWorkspace:
@@ -18,39 +25,89 @@ class MatchingWorkspace:
         self.store = SQLMatchingStore(workspace.library.store, workspace.labs.workspace_id)
 
     def snapshot(self, report):
-        choices = {
-            line.requirement.id: (
-                [line.mapping_choice.canonical_test_id]
-                if line.mapping_choice and line.mapping_choice.canonical_test_id
-                else list(
-                    dict.fromkeys(
-                        [
-                            *([line.canonical_test_id] if line.canonical_test_id else []),
-                            *line.candidate_test_ids,
-                        ]
-                    )
+        return self._snapshot_and_retrieval(report)[0]
+
+    def _snapshot_and_retrieval(self, report):
+        try:
+            retrieved = [
+                retrieve_identity_candidates(
+                    line.requirement,
+                    report.catalog,
+                    preferred_test_ids=list(
+                        dict.fromkeys(
+                            [
+                                *([line.canonical_test_id] if line.canonical_test_id else []),
+                                *line.candidate_test_ids,
+                            ]
+                        )
+                    ),
+                    pinned_test_id=(
+                        line.mapping_choice.canonical_test_id if line.mapping_choice else None
+                    ),
+                    human_reviewed=line.mapping_choice is not None,
                 )
-                + [
-                    test.id
-                    for test in self.workspace.catalog.tests
-                    if test.id not in {line.canonical_test_id, *line.candidate_test_ids}
+                for line in report.lines
+            ]
+        except RetrievalLimitError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        choices = {row.requirement_id: list(row.test_ids) for row in retrieved}
+        capability_choices = {}
+        for line in report.lines:
+            allowed = {
+                cap.id
+                for cap in report.lab.capabilities
+                if cap.canonical_test_id in choices[line.requirement.id]
+            }
+            if line.mapping_choice is not None:
+                allowed &= {line.mapping_choice.capability_id}
+            capability_choices[line.requirement.id] = allowed
+        allowed_capabilities = set().union(*capability_choices.values())
+        scoped_lab = report.lab.model_copy(
+            update={
+                "capabilities": [
+                    cap for cap in report.lab.capabilities if cap.id in allowed_capabilities
                 ]
+            }
+        )
+        method_ids = {identifier for row in retrieved for identifier in row.method_ids}
+        method_ids.update(
+            identifier for cap in scoped_lab.capabilities for identifier in cap.method_ids
+        )
+        if len(method_ids) > DEFAULT_REQUEST_METHOD_LIMIT:
+            raise HTTPException(
+                422,
+                "The selected source and lab identities exceed the method metadata budget. "
+                "Review the candidates or split the matching request; no method was dropped.",
             )
-            for line in report.lines
+        retrieval = {
+            "policy_version": RETRIEVAL_POLICY_VERSION,
+            "catalog_test_count": len(report.catalog.tests),
+            "catalog_method_count": len(report.catalog.methods),
+            "transmitted_method_count": len(method_ids),
+            "request_method_limit": DEFAULT_REQUEST_METHOD_LIMIT,
+            "requirements": [row.diagnostics for row in retrieved],
         }
-        # This pilot bank is small: rank rule candidates first, then expose the
-        # remaining compact metadata. A weak shortlist must not permanently
-        # hide the correct test from semantic matching. The request budget is
-        # still checked before inference, never silently truncate candidates.
-        return build_matching_input(
-            report.source_run,
+        workspace = getattr(self, "workspace", None)
+        if workspace is None:
+            # Pure/offline retrieval probes have no physical-document
+            # authority. Preserve source facts and use the ordinary strict
+            # normalizer; do not infer an externally printed unit.
+            source_view, normalized_source = report.source_run, None
+        else:
+            source_view, normalized_source = workspace.comparison_source(
+                report.document_id, report.source_run
+            )
+        snapshot = build_matching_input(
+            source_view,
             report.catalog,
-            report.lab,
+            scoped_lab,
             capability_revision=lab_fingerprint(report.lab),
             review_revision=digest(
                 [
                     REGISTRY_VERSION,
                     MATCHING_PROJECTION_VERSION,
+                    MATCHING_BATCH_POLICY_VERSION,
+                    retrieval,
                     report.source_facts_revision_id,
                     report.source_review.model_dump(mode="json"),
                     {
@@ -60,7 +117,19 @@ class MatchingWorkspace:
                 ]
             ),
             candidate_test_ids=choices,
+            candidate_method_ids=sorted(method_ids),
+            normalized_requirements=normalized_source,
         )
+        # A global catalog snapshot can be shared across requests, but each
+        # row retains its own allowed capability IDs, including human pins.
+        for row in snapshot.requirements:
+            row.capability_ids = [
+                identifier
+                for identifier in row.capability_ids
+                if identifier in capability_choices[row.requirement.id]
+            ]
+        # Revalidate the detached projection before it becomes a run artifact.
+        return type(snapshot).model_validate(snapshot.model_dump(mode="json")), retrieval
 
     def overview(self, document_id: str) -> dict:
         report = self.workspace.draft(document_id)
@@ -84,7 +153,7 @@ class MatchingWorkspace:
             or report.input_fingerprint != body.input_fingerprint
         ):
             raise HTTPException(409, "Inputs changed. Reload the report before AI matching.")
-        snapshot = self.snapshot(report)
+        snapshot, retrieval = self._snapshot_and_retrieval(report)
         reviews = {
             "source_review": report.source_review.model_dump(mode="json"),
             "report_workspace": report.workspace.model_dump(mode="json"),
@@ -92,6 +161,14 @@ class MatchingWorkspace:
         }
         machine_source = self.workspace.specs.load_extraction(document_id, report.source_run.run_id)
         policies = {
+            "source_review_audits": self.workspace.source_review_audits(
+                document_id, report.source_run
+            ),
+            "verified_optional_route_proofs": conditional_route_proofs(
+                report.source_run,
+                self.workspace.current_document(document_id).document,
+            ),
+            "candidate_retrieval": retrieval,
             "parameter_policy_version": REGISTRY_VERSION,
             "request_canonicalization": [
                 normalization_evidence(claim)
@@ -104,8 +181,8 @@ class MatchingWorkspace:
                 for claim in row.claims
             ],
             "machine_normalized_source": [
-                normalize_requirement(item).model_dump(mode="json")
-                for item in machine_source.extraction.requirements
+                item.model_dump(mode="json")
+                for item in self.workspace.comparison_source(document_id, machine_source)[1]
             ],
         }
         cached = self.store.latest_completed(
@@ -118,13 +195,14 @@ class MatchingWorkspace:
         if cached is not None and not body.rerun:
             return {"run_id": cached.run_id, "status": cached.status, "cached": True}
         try:
-            attempt = SemanticMatchingRunner(
+            attempt = run_bounded_matching(
                 provider,
+                snapshot,
                 max_input_characters=self.workspace.settings.scione_matching_input_character_limit,
-            ).run(snapshot)
+            )
         except SemanticMatchingError as exc:
             exc.run.review_snapshot = reviews
-            exc.run.policy_snapshot = policies
+            exc.run.policy_snapshot = {**exc.run.policy_snapshot, **policies}
             self.store.save(document_id, exc.run)
             raise HTTPException(
                 502,
@@ -134,9 +212,9 @@ class MatchingWorkspace:
                     "error_code": exc.run.error_code,
                 },
             ) from exc
-        comparisons, _selected = self._compile(report, attempt)
         attempt.review_snapshot = reviews
-        attempt.policy_snapshot = policies
+        attempt.policy_snapshot = {**attempt.policy_snapshot, **policies}
+        comparisons, _selected = self._compile(report, attempt)
         attempt.validated_comparison = comparisons
         self.store.save(document_id, attempt)
         if self.workspace.draft(document_id).input_fingerprint != report.input_fingerprint:
@@ -235,8 +313,8 @@ class MatchingWorkspace:
                 "machine_normalized_source"
             )
             or [
-                normalize_requirement(item).model_dump(mode="json")
-                for item in source.extraction.requirements
+                item.model_dump(mode="json")
+                for item in self.workspace.comparison_source(document_id, source)[1]
             ],
             "extraction_normalized_effective": [
                 row.normalized.model_dump(mode="json")

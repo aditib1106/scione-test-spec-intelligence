@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import subprocess
+import sys
+import time
 from collections import Counter
 from datetime import UTC, datetime
 from html import escape
@@ -14,6 +19,17 @@ from scione.structured.models import ClaimCheck, StructuredComparison
 
 class ComparisonPDFError(RuntimeError):
     """A saved structured assessment could not be exported without losing data."""
+
+
+PDF_WORKER_TIMEOUT_SECONDS = 20
+PDF_INLINE_TIMEOUT_SECONDS = 10
+PDF_MAX_PAGES = 64
+PDF_MAX_LAYOUT_CALLBACKS = 256
+_CHECK_TABLE_OPEN = (
+    "<table><tr><th width='30%'>Customer requirement</th>"
+    "<th width='25%'>Lab declaration</th><th width='15%'>Result</th>"
+    "<th width='30%'>Reason / action</th></tr>"
+)
 
 
 _STATUS = {
@@ -154,6 +170,7 @@ def _signature(check: ClaimCheck) -> tuple:
         tuple(sorted(set(check.source_pages))),
         check.requirement_claim.sequence if check.requirement_claim else None,
         check.requirement_claim.configuration if check.requirement_claim else None,
+        check.requirement_claim.source_context if check.requirement_claim else None,
     )
 
 
@@ -199,11 +216,7 @@ def _check_rows(
     comparison: StructuredComparison,
     applies_to: dict[str, list[str]] | None = None,
 ) -> str:
-    parts = [
-        "<table><tr><th width='30%'>Customer requirement</th>"
-        "<th width='25%'>Lab declaration</th><th width='15%'>Result</th>"
-        "<th width='30%'>Reason / action</th></tr>"
-    ]
+    parts = [_CHECK_TABLE_OPEN]
     for check in comparison.checks:
         requested = check.requested
         declared = check.declared or "Not recorded by the lab"
@@ -212,6 +225,17 @@ def _check_rows(
         stage_label = _stage(check.stage)
         if sequence is not None:
             stage_label += f" · Step {sequence}"
+        context_parts = []
+        if check.requirement_claim:
+            if check.requirement_claim.source_context:
+                context_parts.append(f"Context: {check.requirement_claim.source_context}")
+            if check.requirement_claim.configuration:
+                context_parts.append(f"Configuration: {check.requirement_claim.configuration}")
+        context = (
+            "<br><span class='stage'>" + _text(" · ".join(context_parts)) + "</span>"
+            if context_parts
+            else ""
+        )
         stage = (
             f"<br><span class='stage'>{_text(stage_label)}</span>"
             if check.stage != "general" or sequence is not None
@@ -233,21 +257,36 @@ def _check_rows(
         )
         # Very long source prose needs flowing paragraphs. An unbreakable table
         # row must never consume the entire page or silently lose a requirement.
-        if max(map(len, (requested, declared, reason))) > 600:
+        combined_length = sum(
+            map(
+                len,
+                (
+                    check.label,
+                    requested,
+                    declared,
+                    reason,
+                    stage_label,
+                    *context_parts,
+                    *(applies_to.get(check.id, []) if applies_to else []),
+                ),
+            )
+        )
+        if combined_length > 600:
             parts.extend(
                 [
                     "</table><div class='long-check'>",
-                    f"<p><b>{_text(check.label)}</b>{stage}{sources}{scope}</p>",
+                    f"<p><b>{_text(check.label)}</b>{stage}{context}{sources}{scope}</p>",
                     f"<p><b>Customer requirement:</b> {_text(requested)}</p>",
                     f"<p><b>Lab declaration:</b> {_text(declared)}</p>",
                     f"<p class='{check.status}'><b>{_STATUS[check.status]}:</b> "
                     f"{_text(reason)}</p></div>",
-                    "<table>",
+                    _CHECK_TABLE_OPEN,
                 ]
             )
             continue
         parts.append(
-            f"<tr><td><b>{_text(check.label)}</b><br>{_text(requested)}{stage}{sources}{scope}</td>"
+            f"<tr><td><b>{_text(check.label)}</b><br>{_text(requested)}"
+            f"{stage}{context}{sources}{scope}</td>"
             f"<td>{_text(declared)}</td><td class='{check.status}'>"
             f"<b>{_STATUS[check.status]}</b></td><td>{_text(reason)}</td></tr>"
         )
@@ -286,6 +325,10 @@ def _html(payload: dict) -> str:
     ]
     if document.get("provider") == "manual_reference":
         parts.append("<p class='draft'><b>Prepared reference example; no model was called.</b></p>")
+    revision_questions = document.get("document_review_issues", [])
+    if revision_questions:
+        parts.append("<h2>Check document revision</h2>")
+        parts.extend(f"<p>{_text(question)}</p>" for question in revision_questions)
     excluded = sum(
         _excluded(row) for row in payload.get("requirements", []) if isinstance(row, dict)
     )
@@ -348,20 +391,40 @@ def _html(payload: dict) -> str:
     return "".join(parts)
 
 
-def render_comparison_pdf(payload: dict) -> bytes:
-    """Render a saved assessment without model calls, source mutation or diagnostics."""
+def _render_comparison_pdf_inline(payload: dict) -> bytes:
+    """Worker-only renderer with explicit time, page and callback bounds."""
 
+    started = time.monotonic()
+    callbacks = 0
     try:
         story = pymupdf.Story(html=_html(payload), user_css=_CSS)
         media = pymupdf.paper_rect("a4")
         content = pymupdf.Rect(36, 62, media.width - 36, media.height - 45)
 
         def page_rect(_number: int, _filled: pymupdf.Rect) -> tuple:
+            nonlocal callbacks
+            callbacks += 1
+            if (
+                callbacks > PDF_MAX_LAYOUT_CALLBACKS
+                or _number > PDF_MAX_PAGES
+                or time.monotonic() - started > PDF_INLINE_TIMEOUT_SECONDS
+            ):
+                raise ComparisonPDFError(
+                    "Unable to create the comparison PDF within its layout limit."
+                )
             return media, content, None
 
         with story.write_with_links(page_rect) as pdf:
             total = len(pdf)
+            if total > PDF_MAX_PAGES:
+                raise ComparisonPDFError(
+                    "Unable to create the comparison PDF within its page limit."
+                )
             for index, page in enumerate(pdf, 1):
+                if time.monotonic() - started > PDF_INLINE_TIMEOUT_SECONDS:
+                    raise ComparisonPDFError(
+                        "Unable to create the comparison PDF within its time limit."
+                    )
                 # Story's continued tables can leave an active clipping path in
                 # the page content. Isolate it before drawing repeated chrome.
                 page.wrap_contents()
@@ -412,5 +475,44 @@ def render_comparison_pdf(payload: dict) -> bytes:
                 }
             )
             return pdf.tobytes(garbage=4, deflate=True, no_new_id=True)
+    except ComparisonPDFError:
+        raise
     except Exception as exc:
-        raise ComparisonPDFError(f"Unable to create the comparison PDF: {exc}") from exc
+        raise ComparisonPDFError(
+            "Unable to create the comparison PDF from the saved assessment."
+        ) from exc
+
+
+def render_comparison_pdf(payload: dict) -> bytes:
+    """Render in an isolated, hard-timed worker; never return a partial PDF.
+
+    PyMuPDF native layout can stall before calling Python again. The outer
+    subprocess timeout kills that renderer while the web/JSON report stays usable.
+    Worker environment variables contain no model keys or database credentials.
+    """
+    try:
+        serialized = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+        result = subprocess.run(
+            [sys.executable, "-m", "scione.structured.pdf_worker"],
+            input=serialized,
+            capture_output=True,
+            timeout=PDF_WORKER_TIMEOUT_SECONDS,
+            check=False,
+            env={"PATH": os.defpath, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"},
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ComparisonPDFError(
+            "Unable to create the comparison PDF within the 20-second rendering limit. "
+            "The web report and JSON remain available; no partial PDF was saved."
+        ) from exc
+    except (OSError, TypeError, ValueError) as exc:
+        raise ComparisonPDFError(
+            "Unable to create the comparison PDF. The web report and JSON remain available."
+        ) from exc
+    if result.returncode != 0 or not result.stdout.startswith(b"%PDF-"):
+        raise ComparisonPDFError(
+            "Unable to create the comparison PDF: the saved assessment exceeded a layout "
+            "limit or could not be rendered. The web report and JSON remain available; "
+            "no partial PDF was saved."
+        )
+    return result.stdout

@@ -42,6 +42,7 @@ class QuoteHighlight:
 @dataclass(frozen=True)
 class PDFHighlightResult:
     matches: tuple[QuoteHighlight, ...]
+    focus_y: float | None = None
 
     @property
     def rectangles(self) -> tuple[Rectangle, ...]:
@@ -288,7 +289,19 @@ def _inspect_page_highlights(page: pymupdf.Page, quotes: Sequence[str]) -> PDFHi
                 ambiguous_segments=ambiguous_segments,
             )
         )
-    return PDFHighlightResult(tuple(matches))
+    # Convert source coordinates to the rendered orientation, including rotation.
+    visible = [
+        pymupdf.Rect(rectangle) * page.rotation_matrix
+        for match in matches
+        for rectangle in match.rectangles
+    ]
+    first = min(visible, key=lambda rectangle: (rectangle.y0, rectangle.x0)) if visible else None
+    focus_y = (
+        min(1.0, max(0.0, ((first.y0 + first.y1) / 2) / page.rect.height))
+        if first is not None and page.rect.height > 0
+        else None
+    )
+    return PDFHighlightResult(tuple(matches), focus_y=focus_y)
 
 
 def inspect_pdf_highlights(

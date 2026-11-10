@@ -14,7 +14,7 @@ from scione.catalogs.models import (
 
 
 def load_reference_catalog() -> ReferenceCatalog:
-    """Return a fresh pilot catalog without reading files or calling a model.
+    """Return fresh identities from pilot metadata and a packaged bank excerpt.
 
     Existing pilot identities are retained alongside the CSP-EN-301 synthetic
     sample. Chinese aliases are curated demo terminology. Editions are unknown
@@ -330,7 +330,7 @@ def load_reference_catalog() -> ReferenceCatalog:
             method_ids=["synthetic_iso_60152_2025"],
         )
     )
-    return ReferenceCatalog(
+    pilot = ReferenceCatalog(
         id="ms_pnt_410_pilot",
         name="Synthetic coatings test catalog",
         version=3,
@@ -349,6 +349,11 @@ def load_reference_catalog() -> ReferenceCatalog:
         tests=tests,
         methods=methods,
     )
+    # Package resources are stable reviewed metadata. Application startup never
+    # scans local PDFs or imports a user's lab capabilities from this bank.
+    from scione.catalogs.generated import enrich_reference_catalog
+
+    return enrich_reference_catalog(pilot)
 
 
 def default_demo_lab() -> LabProfile:

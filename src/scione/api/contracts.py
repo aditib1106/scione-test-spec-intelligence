@@ -15,7 +15,11 @@ class WriteModel(BaseModel):
 
 class LabExample(WriteModel):
     version: int = Field(ge=1)
-    example: Literal["legacy", "csp301"] = "legacy"
+    example: Literal[
+        "legacy", "csp301", "csp301_typed", "csp301_detailed", "csp301_demo"
+    ] = "legacy"
+    replace_existing: bool = False
+    acknowledged: bool = False
 
 
 class LibraryMetadata(WriteModel):
@@ -45,10 +49,20 @@ class SourceFactsEdit(WriteModel):
     note: str = Field(min_length=1, max_length=4000)
 
 
+class SourceRequirementAdd(WriteModel):
+    run_id: str
+    expected_version: int = Field(ge=0)
+    expected_review_version: int = Field(ge=0)
+    requirement: CustomerRequirement
+    note: str = Field(min_length=1, max_length=4000)
+
+
 class AnalysisRequest(WriteModel):
     provider: ProviderName
     model: str = Field(min_length=1, max_length=500)
-    strategy: Literal["compact_document", "whole_document", "focused_passes"] = "compact_document"
+    strategy: Literal[
+        "inventory_compact_document", "compact_document", "whole_document", "focused_passes"
+    ] = "inventory_compact_document"
     output_limit: int = Field(ge=512, le=65536)
     permission: bool = False
     free_tier_confirmed: bool = False

@@ -223,3 +223,38 @@ def test_runner_transmits_projection_and_saves_exact_full_snapshot_and_fingerpri
     assert original.model_dump(mode="json") == untouched
     assert attempt.input_fingerprint == input_fingerprint(original)
     assert attempt.output.items[0].claim_alignments[0].capability_claim_ids == ["lab_atom"]
+
+
+def test_projection_retains_normalization_metadata_review_and_original_source_context():
+    source = snapshot()
+    row = source.requirements[0]
+    row.requirement.atomic_claims[0].source_context = "Unconfirmed aluminium configuration"
+    row.normalized.claims[0].source_context = row.requirement.atomic_claims[0].source_context
+    row.normalized.review_issues = ["Unique numeric source occurrence; metadata is unconfirmed."]
+    projected = project_matching_input(source)
+    assert projected.requirements[0].normalized.review_issues == row.normalized.review_issues
+    assert projected.requirements[0].normalized.claims[0].source_context == (
+        row.requirement.atomic_claims[0].source_context
+    )
+
+
+@pytest.mark.parametrize("valid", [True, False])
+def test_projection_accepts_only_source_proved_exposure_to_cycle_stage(valid):
+    original = snapshot()
+    row = original.requirements[0]
+    raw = "Execute five cycles between -35 °C for 3 h and 80 °C for 2 h."
+    source = row.requirement.atomic_claims[0].model_copy(update={
+        "raw_text": raw, "stage": "exposure", "value": Decimal(-35), "sequence": 1,
+    })
+    row.requirement.atomic_claims = [source]
+    row.requirement.evidence = [
+        RequirementEvidence(page=1, quote=raw if valid else "Another cycle.")
+    ]
+    row.normalized.claims = [
+        source.model_copy(update={"id": "normalized", "stage": "thermal_cycle"})
+    ]
+    if valid:
+        assert project_matching_input(original).requirements[0].normalized.claims[0].value == -35
+    else:
+        with pytest.raises(MatchingProjectionError):
+            project_matching_input(original)

@@ -25,8 +25,14 @@ from scione.specifications.models import (
     RequirementEvidence,
     RequirementValue,
 )
-from scione.specifications.review import assess_requirements
+from scione.specifications.review import (
+    assess_requirements,
+    document_review_issues,
+    is_provenance_notice,
+)
+from scione.specifications.review_audits import scoped_specimen_review_reasons
 from scione.specifications.store import RequirementReview, RequirementReviewSet
+from scione.structured.models import AtomicClaim
 
 
 def _document() -> IngestedDocument:
@@ -159,6 +165,255 @@ def test_model_issues_are_conservatively_scoped(issue: str, expected: set[str]) 
     )
     actual = assess_requirements(run, _document())
     assert {identifier for identifier, item in actual.items() if item.reasons} == expected
+
+
+def _two_method_rows() -> list[CustomerRequirement]:
+    other = _requirement("req_002")
+    other.original_test_name = "Hardness"
+    other.requested_methods = [RequestedMethod(code="ISO 15184")]
+    other.evidence = [RequirementEvidence(page=1, quote="Hardness per ISO 15184: 750 g.")]
+    return [_requirement(), other]
+
+
+def test_unnumbered_literal_method_issue_only_flags_its_owning_row() -> None:
+    issue = "The acceptance class for ISO 2409 is not stated; confirm it with the customer."
+    run = _run(rows=_two_method_rows(), issues=[issue])
+    result = assess_requirements(run, _document())
+    assert result["req_001"].state == "needs_attention"
+    assert result["req_002"].state == "ready"
+    assert run.extraction.review_issues == [issue]
+
+
+@pytest.mark.parametrize("issue", [
+    "ISO 2409 and ISO 15184 have inconsistent specimen preparation.",
+    "ISO 2409 and ISO 99999:2025 have an unclear relationship.",
+    "All tests including ISO 2409 may have missing conditions.",
+    "Document revision conflict affects ISO 2409 and the remaining tests.",
+])
+def test_cross_test_unknown_reference_or_global_conflict_does_not_get_under_routed(issue):
+    result = assess_requirements(_run(rows=_two_method_rows(), issues=[issue]), _document())
+    assert {key for key, item in result.items() if item.state == "needs_attention"} == {
+        "req_001", "req_002",
+    }
+
+
+def _synthetic_document() -> IngestedDocument:
+    source = _document()
+    page = source.pages[0]
+    text = page.text + "\nAll method IDs are synthetic bank entries."
+    source.pages[0] = page.model_copy(update={"text": text})
+    return source
+
+
+@pytest.mark.parametrize("issue", [
+    "The document is a synthetic benchmark sample; all cited method designations are "
+    "fictional and no equivalence between ISO 2409 and ISO 15184 is declared.",
+    "Les identifiants de méthodes cités (ISO 2409, ISO 15184) sont déclarés synthétiques "
+    "par le document; aucune équivalence officielle n’est revendiquée.",
+    "req_001: 方法编号为 SciOne AI 方法库 synthetic reference，非正式标准。",
+    "The source states all method IDs (ISO 2409, ISO 15184) are synthetic and no official "
+    "equivalence is claimed; method designations are retained exactly as printed.",
+    "El documento indica que los identificadores de métodos citados son entradas sintéticas "
+    "del banco y no se afirma equivalencia oficial; los códigos se conservan tal como están "
+    "impresos.",
+])
+def test_exact_source_backed_provenance_notices_do_not_require_row_approval(issue):
+    run = _run(rows=_two_method_rows(), issues=[issue])
+    source = _synthetic_document()
+    assert is_provenance_notice(issue, source)
+    assert all(item.state == "ready" for item in assess_requirements(run, source).values())
+    assert run.extraction.review_issues == [issue]
+
+
+@pytest.mark.parametrize("suffix", [
+    " The test conditions are ambiguous.",
+    " Two requirements are missing.",
+    " Confirm the correct acceptance class.",
+    " 温度的单位不清楚。",
+])
+def test_provenance_mixed_with_real_concerns_remains_actionable(suffix):
+    issue = "方法编号为 SciOne AI 方法库 synthetic reference，非正式标准。" + suffix
+    assert not is_provenance_notice(issue, _synthetic_document())
+    result = assess_requirements(
+        _run(rows=_two_method_rows(), issues=[issue]), _synthetic_document()
+    )
+    assert all(item.state == "needs_attention" for item in result.values())
+
+
+def test_provenance_notice_not_proved_by_source_remains_actionable():
+    issue = "方法编号为 SciOne AI 方法库 synthetic reference，非正式标准。"
+    assert not is_provenance_notice(issue, _document())
+    result = assess_requirements(_run(issues=[issue]), _document())["req_001"]
+    assert result.state == "needs_attention"
+
+
+def test_exact_curated_property_phrase_routes_an_unnumbered_concern_to_its_row():
+    rows = _two_method_rows()
+    rows[0].original_test_name = "Master-panel colour difference"
+    issue = "Colour-difference unit symbol should be checked against the PDF."
+    result = assess_requirements(_run(rows=rows, issues=[issue]), _document())
+    assert result["req_001"].state == "needs_attention"
+    assert result["req_002"].state == "ready"
+
+
+@pytest.mark.parametrize("issue", [
+    "Several tests including colour difference may have missing requirements.",
+    "Colour difference method ISO 99999:2025 has an unclear relationship.",
+    "Document revision affects colour difference and remaining tests.",
+])
+def test_property_phrase_cannot_hide_global_or_unknown_method_concerns(issue):
+    rows = _two_method_rows()
+    rows[0].original_test_name = "Master-panel colour difference"
+    result = assess_requirements(_run(rows=rows, issues=[issue]), _document())
+    assert all(item.state == "needs_attention" for item in result.values())
+
+
+def _scope_fixture(clause, *, atom_fragment=None):
+    rows = _two_method_rows()
+    source = _document()
+    source.pages[0].text += "\n" + clause
+    for row in rows:
+        row.conditions = [RequirementValue(name="Conditioning", raw_value=clause)]
+        row.evidence.append(RequirementEvidence(page=1, quote=clause))
+        row.atomic_claims = [AtomicClaim(
+            id="native_duration", parameter_id="duration", label="Duration", kind="condition",
+            stage="conditioning", operator="=", value=48, unit="h", source_pages=[1],
+            raw_text=atom_fragment or clause,
+        )]
+    return rows, source
+
+
+def test_test_specific_specimens_cannot_silently_make_another_test_ready():
+    rows, source = _scope_fixture("Condition five adhesion panels for 48 h.")
+    issues = scoped_specimen_review_reasons(rows, source)
+    assert set(issues) == {"req_002"}
+    result = assess_requirements(_run(rows=rows), source)
+    assert result["req_001"].state == "ready"
+    assert result["req_002"].state == "needs_attention"
+    assert "another test's specimens" in result["req_002"].reasons[0]
+
+
+@pytest.mark.parametrize("clause", [
+    "Condition all panels, including adhesion panels, for 48 h.",
+    "Condition adhesion panels and hardness panels for 48 h.",
+    "Condition five painted panels for 48 h.",
+])
+def test_universal_joint_or_unidentified_specimens_do_not_receive_invented_owners(clause):
+    rows, source = _scope_fixture(clause)
+    assert scoped_specimen_review_reasons(rows, source) == {}
+
+
+def test_anaphoric_other_specimens_keep_their_explicit_source_sentence_owner():
+    clause = "Condition five adhesion panels for 48 h; hold the other five for 48 h."
+    rows, source = _scope_fixture(clause, atom_fragment="hold the other five for 48 h")
+    assert set(scoped_specimen_review_reasons(rows, source)) == {"req_002"}
+
+
+@pytest.mark.parametrize("parameter,unit,raw", [
+    ("specimen_length", "mm", "Specimen thickness: 3.2 mm."),
+    ("impact_energy", "kJ/m²", "Impact response: 3.2 kJ/m²."),
+    ("temperature", "°C/min", "Heating rate: 3.2 °C/min."),
+])
+def test_known_native_scientific_conflicts_flag_only_the_affected_row(parameter, unit, raw):
+    rows = _two_method_rows()
+    source = _document()
+    source.pages[0].text += "\n" + raw
+    rows[0].conditions = [RequirementValue(name="Condition", raw_value=raw)]
+    rows[0].evidence.append(RequirementEvidence(page=1, quote=raw))
+    rows[0].atomic_claims = [AtomicClaim(
+        id="native_wrong_quantity", parameter_id=parameter, label=parameter,
+        kind="condition", operator="=", value="3.2", unit=unit,
+        raw_text=raw, source_pages=[1],
+    )]
+    result = assess_requirements(_run(rows=rows), source)
+    assert result["req_001"].state == "needs_attention"
+    assert any("different quantity" in reason for reason in result["req_001"].reasons)
+    assert result["req_002"].state == "ready"
+    assert rows[0].atomic_claims[0].parameter_id == parameter
+
+
+def test_known_source_code_mismatch_is_actionable_without_using_confidence_scores():
+    rows = _two_method_rows()
+    source = _document()
+    raw = "Use D65 illuminant."
+    source.pages[0].text += "\n" + raw
+    rows[0].conditions = [RequirementValue(name="Illuminant", raw_value=raw)]
+    rows[0].evidence.append(RequirementEvidence(page=1, quote=raw))
+    rows[0].atomic_claims = [AtomicClaim(
+        id="native_code", parameter_id="illuminant", label="Illuminant", kind="condition",
+        operator="text", text_value="D50", raw_text=raw, source_pages=[1],
+    )]
+    result = assess_requirements(_run(rows=rows), source)
+    assert result["req_001"].state == "needs_attention"
+    assert result["req_002"].state == "ready"
+
+
+def test_unfamiliar_units_and_unresolved_count_parsing_do_not_blanket_require_approval():
+    rows = _two_method_rows()
+    source = _document()
+    raw = "Record two lots and an unfamiliar reading of 37 bananas."
+    source.pages[0].text += "\n" + raw
+    rows[0].conditions = [RequirementValue(name="Condition", raw_value=raw)]
+    rows[0].evidence.append(RequirementEvidence(page=1, quote=raw))
+    rows[0].atomic_claims = [
+        AtomicClaim(
+            id="unfamiliar", parameter_id="unfamiliar_reading", label="Reading",
+            kind="condition", operator="=", value=37, unit="bananas",
+            raw_text=raw, source_pages=[1],
+        ),
+        AtomicClaim(
+            id="count", parameter_id="specimen_count", label="Count", kind="condition",
+            operator="=", value=2, unit="lots", raw_text=raw, source_pages=[1],
+        ),
+    ]
+    result = assess_requirements(_run(rows=rows), source)
+    assert all(item.state == "ready" for item in result.values())
+
+
+def test_source_proved_revision_conflict_is_one_document_question_not_each_test_error():
+    rows = _two_method_rows()
+    source = _document()
+    source.pages[0].text += "\nSPEC-218 | REV A\nRevision / date B / 19 October 2026"
+    issue = (
+        "Document header states 'SPEC-218 | REV A' while the revision block states "
+        "'Revision / date B / 19 October 2026'; the controlling revision is ambiguous "
+        "and requires confirmation."
+    )
+    run = _run(rows=rows, issues=[issue])
+    assert document_review_issues(run, source) == (issue,)
+    assert all(item.state == "ready" for item in assess_requirements(run, source).values())
+    assert run.extraction.review_issues == [issue]
+
+
+def test_scientific_method_revision_is_not_reclassified_as_document_metadata():
+    issue = "Document revision for ISO 2409 is ambiguous; confirm its test conditions."
+    run = _run(rows=_two_method_rows(), issues=[issue])
+    assert document_review_issues(run, _document()) == ()
+    assert assess_requirements(run, _document())["req_001"].state == "needs_attention"
+
+
+def test_literal_quoted_missing_setpoints_only_flags_the_source_owner():
+    rows = _two_method_rows()
+    source = _document()
+    clause = "Exposure uses the agreed operating set points."
+    source.pages[0].text += "\n" + clause
+    rows[0].conditions.append(RequirementValue(name="Exposure", raw_value=clause))
+    rows[0].evidence.append(RequirementEvidence(page=1, quote=clause))
+    issue = "The salt-fog 'agreed operating set points' are not numerically defined."
+    result = assess_requirements(_run(rows=rows, issues=[issue]), source)
+    assert result["req_001"].state == "needs_attention"
+    assert result["req_002"].state == "ready"
+
+
+def test_global_question_is_not_under_routed_by_a_single_quoted_fragment():
+    rows = _two_method_rows()
+    source = _document()
+    clause = "Exposure uses the agreed operating set points."
+    source.pages[0].text += "\n" + clause
+    rows[0].evidence.append(RequirementEvidence(page=1, quote=clause))
+    issue = "All tests may miss conditions, including 'agreed operating set points'."
+    result = assess_requirements(_run(rows=rows, issues=[issue]), source)
+    assert all(item.state == "needs_attention" for item in result.values())
 
 
 def test_empty_method_is_actionable_not_an_inferred_method() -> None:

@@ -107,6 +107,22 @@ def test_highlights_change_pixels_but_never_change_the_original_pdf() -> None:
         assert list(pdf[0].annots()) == []
 
 
+@pytest.mark.parametrize(
+    ("rotation", "low", "high"),
+    [(0, 0.85, 0.92), (90, 0.07, 0.2), (180, 0.08, 0.15), (270, 0.8, 0.93)],
+)
+def test_focus_uses_proved_rendered_position_including_rotated_pages(rotation, low, high):
+    with pymupdf.open() as document:
+        page = document.new_page(width=600, height=900)
+        page.insert_text((50, 800), "Located source")
+        page.set_rotation(rotation)
+        data = document.tobytes()
+    located = inspect_pdf_highlights(data, quotes=["Located source"])
+    assert located.matched_count == 1
+    assert low < located.focus_y < high
+    assert inspect_pdf_highlights(data, quotes=["Not in this source"]).focus_y is None
+
+
 def test_partial_table_quote_reports_unmatched_cells_instead_of_inventing_locations() -> None:
     result = inspect_pdf_highlights(
         table_pdf_bytes(), 1, ["Cross-cut adhesion | ISO 99999, 8 mm spacing | GT 0 to 1"]

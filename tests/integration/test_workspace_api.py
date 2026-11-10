@@ -217,7 +217,7 @@ def test_empty_workspace_is_local_and_does_not_seed_demo_or_analyze(client):
             "label": "Sail",
             "model": "zai-org/GLM-5.3",
             "available": False,
-            "output_limit": 8192,
+            "output_limit": 12288,
         },
     ]
     lab = http.get("/api/lab").json()

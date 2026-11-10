@@ -47,6 +47,31 @@ def test_conditioning_labels_and_curated_aliases_are_not_extra_requirements():
     assert all(claim.normalization_state == "parsed" for claim in claims)
 
 
+def test_same_unresolved_whole_text_is_not_added_again_by_legacy_fallback():
+    raw = "Use the customer-supplied unusual witness fixture."
+    claim = atom(
+        "unusual", "unusual_fixture", raw, text_value=raw, normalization_state="unresolved"
+    )
+    normalized = normalize_requirement(requirement(raw, [claim]))
+    assert len(normalized.claims) == 1
+    assert normalized.claims[0].normalization_state == "unresolved"
+
+
+def test_same_source_curated_quantity_alias_retained_once_with_scope_review():
+    raw = "Cure duration: 20 minutes at 140 °C."
+    duration = atom(
+        "d", "cure_duration", "20 minutes at 140 °C", value=20, unit="minutes", stage="curing"
+    )
+    normalized = normalize_requirement(requirement(raw, [duration]))
+    durations = [claim for claim in normalized.claims if claim.value == Decimal(20)]
+    assert len(durations) == 1
+    assert durations[0].parameter_id == "duration"
+    assert duration.parameter_id == "cure_duration"
+    assert normalized.review_issues
+    # The temperature and unparsed wording remain independently visible.
+    assert any(claim.value == Decimal(140) for claim in normalized.claims)
+
+
 def test_measurement_and_acceptance_headers_do_not_create_residual_claims():
     angle = "Measurement stage: observation angle 60°."
     claims = normalize_requirement(
@@ -174,10 +199,11 @@ def test_step_header_does_not_override_a_named_conflicting_stage():
         stage="thermal_cycle",
         sequence=2,
     )
-    claims = normalize_requirement(requirement(raw, [claim])).claims
-    assert any(
-        item.parameter_id == "temperature" and item.stage == "conditioning" for item in claims
-    )
+    normalized = normalize_requirement(requirement(raw, [claim]))
+    # One quantity remains, with the unsupported stage made explicit for review.
+    assert len([item for item in normalized.claims if item.parameter_id == "temperature"]) == 1
+    assert normalized.review_issues
+    assert normalized.claims[0].stage == "thermal_cycle"
 
 
 def test_duration_short_quote_inherits_only_its_unique_source_step():
@@ -230,8 +256,10 @@ def test_short_quote_cannot_inherit_a_different_step_than_its_source_position():
     wrong = atom(
         "d", "duration", "24 °C for 75 min", value=75, unit="min", stage="thermal_cycle", sequence=1
     )
-    claims = normalize_requirement(requirement(raw, [wrong])).claims
-    assert any(item.parameter_id == "duration" and item.sequence is None for item in claims)
+    normalized = normalize_requirement(requirement(raw, [wrong]))
+    assert len([item for item in normalized.claims if item.parameter_id == "duration"]) == 1
+    assert normalized.review_issues
+    assert normalized.claims[0].sequence == 1
 
 
 def test_repeated_short_quote_cannot_hide_a_second_source_step():

@@ -23,7 +23,7 @@ import pymupdf
 from pydantic import BaseModel, ConfigDict, Field
 
 from scione.ingestion import IngestionError, PyMuPDFTextIngestor
-from scione.schemas import IngestedDocument, TextExtractionStatus
+from scione.schemas import IngestedDocument, TextExtractionStatus, TextReadingOrder
 from scione.specifications.attempts import ExtractionFailureArtifact
 from scione.specifications.models import CustomerExtractionRun
 
@@ -72,6 +72,7 @@ class ExtractionFailure(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     previous_run_id: str | None = None
     attempt_id: str | None = None
+    error_code: str | None = None
 
 
 class _Metadata(BaseModel):
@@ -118,6 +119,15 @@ class FileSpecStore:
 
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root).absolute() / "specifications"
+        # The HTTP workspace can resolve source-backed human additions from its
+        # immutable SQL facts revisions. Standalone file callers stay strict.
+        self.added_requirement_ids: Callable[[str, str], set[str]] | None = None
+
+    def _reviewable_ids(self, run: CustomerExtractionRun) -> set[str]:
+        identifiers = {item.id for item in run.extraction.requirements}
+        if self.added_requirement_ids is not None:
+            identifiers.update(self.added_requirement_ids(run.document_id, run.run_id))
+        return identifiers
 
     def import_pdf(self, filename: str, data: bytes) -> StoredSpecification:
         """Validate, preserve, and parse a PDF; identical bytes reuse the first upload."""
@@ -138,7 +148,12 @@ class FileSpecStore:
                     staging = Path(temporary)
                     pdf_path = staging / "original.pdf"
                     pdf_path.write_bytes(data)
-                    document = PyMuPDFTextIngestor().ingest(pdf_path)
+                    # Reading the content stream can move a footer/next section
+                    # into the middle of a visually contiguous paragraph. Keep
+                    # the selected order in the immutable document artifact.
+                    document = PyMuPDFTextIngestor(
+                        reading_order=TextReadingOrder.GEOMETRIC
+                    ).ingest(pdf_path)
                     document.file_name = filename
                     metadata = _Metadata(
                         document_id=document_id,
@@ -177,7 +192,7 @@ class FileSpecStore:
                         page_count=item.document.page_count,
                         extraction_status=item.document.extraction_status,
                         latest_run_id=run.run_id if run else None,
-                        requirement_count=len(run.extraction.requirements) if run else 0,
+                        requirement_count=len(self._reviewable_ids(run)) if run else 0,
                         review_version=review.version if review else 0,
                         confirmed_count=sum(
                             entry.status == "confirmed" for entry in review.decisions.values()
@@ -341,7 +356,7 @@ class FileSpecStore:
             return RequirementReviewSet(document_id=document_id, run_id=run_id)
         try:
             review = RequirementReviewSet.model_validate_json(self._read_bytes(path))
-            valid_ids = {item.id for item in run.extraction.requirements}
+            valid_ids = self._reviewable_ids(run)
             if (
                 review.document_id != document_id
                 or review.run_id != run_id
@@ -387,7 +402,7 @@ class FileSpecStore:
         require_latest: bool = True,
         validate_current: Callable[[], None] | None = None,
     ) -> RequirementReviewSet:
-        """Atomically apply one explicit action to the selected run's original rows.
+        """Atomically review original rows and registered source-backed additions.
 
         The complete selection is validated under the write lock before any change.
         A batch advances the review version once, not once per selected record.
@@ -409,7 +424,7 @@ class FileSpecStore:
                 selected = list(requirement_ids)
                 if not selected or len(set(selected)) != len(selected):
                     raise SpecStoreError("Select one or more distinct requirements to review.")
-                if not set(selected) <= {item.id for item in run.extraction.requirements}:
+                if not set(selected) <= self._reviewable_ids(run):
                     raise SpecStoreError("Unknown requirement in this extraction run.")
                 review = self.load_review(document_id, run_id)
                 if expected_version is not None and review.version != expected_version:

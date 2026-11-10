@@ -5,9 +5,11 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
-NORMALIZER_VERSION = "atomic_requirements_v0_9"
+from scione.numeric_literals import validate_numeric_complexity
+
+NORMALIZER_VERSION = "atomic_requirements_v0_32"
 ClaimKind = Literal["condition", "criterion", "reporting", "scope", "instruction"]
 
 
@@ -44,6 +46,9 @@ class AtomicClaim(BaseModel):
 
     @model_validator(mode="after")
     def consistent_values(self) -> Self:
+        for value in [self.value, self.minimum, self.maximum, self.tolerance, *self.values]:
+            if value is not None:
+                validate_numeric_complexity(value)
         if any(page < 1 for page in self.source_pages):
             raise ValueError("Source pages must be positive.")
         if any(not value.is_finite() for value in self.values):
@@ -91,6 +96,17 @@ class NormalizedRequirement(BaseModel):
     test_name: str
     normalizer_version: str = NORMALIZER_VERSION
     claims: list[AtomicClaim] = Field(default_factory=list)
+    review_issues: list[str] = Field(default_factory=list)
+    normalization_actions: list[dict] = Field(default_factory=list)
+
+    @model_serializer(mode="wrap")
+    def retain_legacy_empty_audit_shape(self, handler):
+        data = handler(self)
+        # Empty additive audit metadata must not invalidate the fingerprint of
+        # an immutable older matching snapshot. Nonempty actions are hashed.
+        if not self.normalization_actions:
+            data.pop("normalization_actions", None)
+        return data
 
 
 class ClaimCheck(BaseModel):
@@ -108,6 +124,12 @@ class ClaimCheck(BaseModel):
     source_pages: list[int] = Field(default_factory=list)
     requirement_claim: AtomicClaim | None = None
     capability_claim_ids: list[str] = Field(default_factory=list)
+    comparison_basis: Literal[
+        "semantic_alignment", "deterministic_exact_fields", "deterministic_literal_text",
+        "literal_descriptive_correspondence",
+        "source_optional_route_policy",
+    ] | None = None
+    comparison_metadata: list[dict] = Field(default_factory=list)
 
 
 class StructuredComparison(BaseModel):

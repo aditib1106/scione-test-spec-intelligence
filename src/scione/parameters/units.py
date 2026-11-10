@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from fractions import Fraction
 
+from scione.numeric_literals import NUMBER, NUMBER_START
+
 
 @dataclass(frozen=True)
 class Unit:
@@ -67,10 +69,21 @@ _add("kN", "force", (), 1000)
 _add("Pa", "pressure", ("pascal", "帕"))
 _add("kPa", "pressure", (), 1000)
 _add("MPa", "pressure", (), 1_000_000)
+_add("GPa", "pressure", (), 1_000_000_000)
 _add("bar", "pressure", ("巴",), 100_000)
+_add("J", "energy", ("joule", "joules", "焦耳"))
+_add("kJ", "energy", (), 1000)
+_add("HRC", "hardness_rockwell_c", ("Rockwell C",))
+_add("HV", "hardness_vickers", ("Vickers HV",))
 _add("°", "angle", ("deg", "degree", "degrees", "度"))
 _add("cycles", "cycles", ("cycle", "次循环"))
 _add("locations", "locations", ("location", "positions", "position", "点"))
+_add(
+    "specimens",
+    "specimens",
+    ("specimen", "sample", "samples", "test specimen", "test specimens", "试样", "试件"),
+)
+_add("panels", "panels", ("panel", "test panel", "test panels", "试板", "块试板"))
 _add("%", "fraction", ("percent", "百分比"), Fraction(1, 100))
 _add("% RH", "humidity", ("%RH", "RH%"), Fraction(1, 100))
 _add("GU", "gloss", ("glossunit", "glossunits"))
@@ -87,7 +100,7 @@ def resolve_unit(
     value: str | None, *, dimension: str | None = None, difference: bool = False
 ) -> Unit | None:
     if value is None:
-        if dimension in {"cycles", "locations", "adhesion_class"}:
+        if dimension in {"cycles", "locations", "adhesion_class", "specimens", "panels"}:
             return Unit(dimension, dimension)
         return None
     unit = _lookup(value)
@@ -151,10 +164,9 @@ def source_numbers_for_unit(value: str, text: str) -> set[Decimal]:
         aliases.append(pattern)
     if not aliases:
         return set()
-    number = r"[+-]?\d+(?:\.\d+)?"
     expression = (
-        rf"(?<![\d.])(?P<first>{number})"
-        rf"(?:\s*(?:±\s*(?P<tolerance>{number})|(?:-|\bto\b)\s*(?P<second>{number})))?"
+        rf"{NUMBER_START}(?P<first>{NUMBER})"
+        rf"(?:\s*(?:±\s*(?P<tolerance>{NUMBER})|(?:-|\bto\b)\s*(?P<second>{NUMBER})))?"
         rf"\s*(?:{'|'.join(sorted(aliases, key=len, reverse=True))})(?![A-Za-zµμ])"
     )
     source = unicodedata.normalize("NFKC", text).replace("−", "-").replace("–", "-")

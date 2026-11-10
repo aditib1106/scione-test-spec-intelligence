@@ -42,10 +42,13 @@ def recorded_sail_claim(**updates):
 def payload(claim):
     return {
         "document": {"title": None, "identifier": None, "revision": None},
+        "shared_requirements": [],
+        "document_notices": [],
         "requirements": [
             {
                 "test": "Colour difference",
                 "methods": [],
+                "method_roles": [],
                 "conditions": [claim["raw_text"]],
                 "criteria": [],
                 "scope": [],
@@ -123,6 +126,16 @@ def test_unknown_qualifier_and_textual_alternatives_remain_source_preserving():
     assert expanded.text_value == source
     assert expanded.source_context == "on Miralum-B only"
 
+
+def test_native_unit_limit_matches_the_expanded_atomic_contract():
+    claim = recorded_sail_claim(operator="text", unit="a" * 41)
+    assert not Draft202012Validator(wire_schema()).is_valid(payload(claim))
+    claim["unit"] = "a" * 40
+    compact = CompactCustomerExtraction.model_validate(payload(claim))
+    assert compact.requirements[0].atomic_claims[0].expand("atom_bounded_unit").unit == "a" * 40
+
+
+def test_textual_alternatives_remain_unresolved_without_invented_numeric_values():
     alternate = recorded_sail_claim(
         parameter_id="substrate",
         operator="one_of",

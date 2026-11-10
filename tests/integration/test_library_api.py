@@ -224,6 +224,58 @@ def test_comparison_exposes_explicit_limit_and_missing_layer_capability(client):
     )
 
 
+def test_unretained_article_scope_remains_visible_in_saved_comparison(client, monkeypatch):
+    """A correct measured limit does not establish full document coverage."""
+    http, root = client
+    original_pdf = _pdf
+
+    def source_with_article(revision="Issue A"):
+        with pymupdf.open(stream=original_pdf(revision), filetype="pdf") as document:
+            document[0].insert_text(
+                (35, 720), "Covered supply: Mild-steel witness panels", fontsize=10
+            )
+            return document.tobytes(no_new_id=True)
+
+    monkeypatch.setitem(_seed.__globals__, "_pdf", source_with_article)
+    source, original_run = _seed(root)
+    response = http.get(f"/api/comparisons/{source.document_id}")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert "Mild-steel witness panels" in " ".join(data["source_coverage_issues"])
+    assert all(hint in data["notes"] for hint in data["source_coverage_issues"])
+    assert data["summary"]["partially_matched"] == 1
+    assert FileSpecStore(root).load_latest_extraction(source.document_id) == original_run
+    saved = http.get(f"/api/comparison-snapshots/{data['comparison_id']}/json")
+    assert saved.status_code == 200
+    assert saved.json()["source_coverage_issues"] == data["source_coverage_issues"]
+
+
+def test_new_coverage_policy_creates_a_new_immutable_snapshot_with_same_inputs(client, monkeypatch):
+    """New software hints must not cause a 409 or rewrite a previous report."""
+    import scione.library.workspace as library_workspace
+
+    http, root = client
+    source, original_run = _seed(root)
+    before_response = http.get(f"/api/comparisons/{source.document_id}")
+    assert before_response.status_code == 200
+    before = before_response.json()
+    monkeypatch.setattr(
+        library_workspace,
+        "coverage_issues",
+        lambda *_args: ["Check source context: an additional policy cue needs review."],
+    )
+    after_response = http.get(f"/api/comparisons/{source.document_id}")
+    assert after_response.status_code == 200, after_response.text
+    after = after_response.json()
+    assert before["source_run_id"] == after["source_run_id"] == original_run.run_id
+    assert before["report_input_fingerprint"] == after["report_input_fingerprint"]
+    assert before["comparison_id"] != after["comparison_id"]
+    assert before["requirements"] == after["requirements"]
+    assert http.get(f"/api/comparisons/{source.document_id}").json() == after
+    assert http.get(f"/api/comparison-snapshots/{before['comparison_id']}/json").json() == before
+    assert FileSpecStore(root).load_latest_extraction(source.document_id) == original_run
+
+
 def test_pending_method_identity_does_not_report_lab_values_as_missing(client, monkeypatch):
     from scione.api.workspace import Workspace
 
@@ -241,6 +293,14 @@ def test_pending_method_identity_does_not_report_lab_values_as_missing(client, m
         line.capability = None
         line.unknown_methods = ["Method identity needs confirmation"]
         line.requirement.special_instructions.append("Use the buyer's special sample holder.")
+        # A report line is a detached presentation copy. Keep the captured
+        # source consistent with the simulated input; derived comparisons now
+        # normalize that captured source with its physical PDF evidence.
+        captured = next(
+            row for row in report.source_run.extraction.requirements
+            if row.id == line.requirement.id
+        )
+        captured.special_instructions.append("Use the buyer's special sample holder.")
         return report
 
     monkeypatch.setattr(Workspace, "draft", ambiguous_method)
@@ -441,16 +501,16 @@ def test_comparison_rejects_concurrent_input_changes_without_publishing_mixed_sn
     client, monkeypatch, changed
 ):
     """An analysis/edit completing during comparison must not mix source versions."""
-    import scione.library.workspace as library_workspace
+    from scione.api.workspace import Workspace
 
     http, root = client
     source, initial = _seed(root)
     newer = initial.model_copy(update={"run_id": str(uuid4())}, deep=True)
     specs = FileSpecStore(root)
-    original_normalize = library_workspace.normalize_requirement
+    original_source = Workspace.comparison_source
     changed_once = False
 
-    def change_while_normalizing(requirement):
+    def change_while_normalizing(workspace, document_id, run):
         nonlocal changed_once
         if not changed_once:
             changed_once = True
@@ -480,9 +540,9 @@ def test_comparison_rejects_concurrent_input_changes_without_publishing_mixed_sn
                     record["version"],
                 )
                 archive.close()
-        return original_normalize(requirement)
+        return original_source(workspace, document_id, run)
 
-    monkeypatch.setattr(library_workspace, "normalize_requirement", change_while_normalizing)
+    monkeypatch.setattr(Workspace, "comparison_source", change_while_normalizing)
     rejected = http.get(f"/api/comparisons/{source.document_id}")
     assert changed_once
     assert rejected.status_code == 409, rejected.text
@@ -492,7 +552,7 @@ def test_comparison_rejects_concurrent_input_changes_without_publishing_mixed_sn
     archive.close()
 
     # Retrying once inputs are stable produces one source-consistent snapshot.
-    monkeypatch.setattr(library_workspace, "normalize_requirement", original_normalize)
+    monkeypatch.setattr(Workspace, "comparison_source", original_source)
     retried = http.get(f"/api/comparisons/{source.document_id}")
     assert retried.status_code == 200, retried.text
     saved = retried.json()

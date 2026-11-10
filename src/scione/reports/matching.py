@@ -55,7 +55,7 @@ _METHOD = re.compile(
     re.IGNORECASE,
 )
 _REVISION = re.compile(r"^\s*:\s*(\d{4})\s*$")
-MATCHING_POLICY_VERSION = "0.6"
+MATCHING_POLICY_VERSION = "0.7"
 
 
 @dataclass(frozen=True)
@@ -130,6 +130,21 @@ def _method_resolution(
             for value in identifiers
         ):
             candidates.append(method)
+    embedded = _revision(identity.revision)
+    explicit = _revision(requested.revision)
+    if embedded and explicit and embedded != explicit:
+        return None, f"Conflicting method revisions: {requested.code} / {requested.revision}."
+    requested_revision = explicit or embedded
+    # Several editions may legitimately coexist. An explicit source edition
+    # narrows identity before ambiguity is assessed; it never establishes
+    # equivalence to an older/newer edition or removes an extra qualifier.
+    if requested_revision:
+        same_edition = [
+            method for method in candidates
+            if _revision(method.edition) == requested_revision
+        ]
+        if same_edition:
+            candidates = same_edition
     if len(candidates) != 1:
         message = "Unknown" if not candidates else "Ambiguous"
         return None, f"{message} catalog method: {requested.code}."
@@ -139,11 +154,6 @@ def _method_resolution(
             f"Method qualifier needs review: {requested.code}; the base identifier alone "
             "does not establish support."
         )
-    embedded = _revision(identity.revision)
-    explicit = _revision(requested.revision)
-    if embedded and explicit and embedded != explicit:
-        return method.id, f"Conflicting method revisions: {requested.code} / {requested.revision}."
-    requested_revision = explicit or embedded
     catalog_revision = _revision(method.edition)
     if requested_revision and requested_revision != catalog_revision:
         return method.id, (

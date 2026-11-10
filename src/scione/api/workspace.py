@@ -1,6 +1,6 @@
 """Translate local domain operations to HTTP without changing persisted contracts."""
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
@@ -14,10 +14,13 @@ from scione.api.contracts import (
     ReportEdit,
     ScopeReview,
     SourceFactsEdit,
+    SourceRequirementAdd,
 )
 from scione.catalogs import load_reference_catalog
 from scione.catalogs.sql_lab_store import SQLLabStore
 from scione.config import Settings
+from scione.ingestion import IngestionError
+from scione.ingestion.source_views import current_document_view
 from scione.library.store import LibraryConflict, digest
 from scione.library.workspace import LibraryWorkspace
 from scione.matching.workspace import MatchingWorkspace
@@ -31,11 +34,28 @@ from scione.reports.models import (
 )
 from scione.reports.review import batch_eligible, needs_review, quote_eligible, scope_review_state
 from scione.reports.store import FileReportStore
+from scione.specifications.context_coverage import source_context_coverage_audits
 from scione.specifications.corrections import SQLFactsStore, effective_facts
 from scione.specifications.extraction import coverage_issues
+from scione.specifications.manual_atoms import validate_parameter_edits
+from scione.specifications.parameter_view import parameter_review_view
+from scione.specifications.parameter_views import (
+    physical_normalized_requirements,
+    physical_parameter_views,
+    physical_unit_proofs,
+)
 from scione.specifications.pdf_preview import inspect_pdf_highlights
-from scione.specifications.review import assess_requirements
-from scione.specifications.store import FileSpecStore
+from scione.specifications.public_errors import public_analysis_error
+from scione.specifications.review import (
+    REVIEW_POLICY_VERSION,
+    assess_requirements,
+    document_review_issues,
+)
+from scione.specifications.review_comments import review_model_comment_audits
+from scione.specifications.revision_notes import source_revision_notes
+from scione.specifications.store import FileSpecStore, SpecStoreError
+from scione.specifications.summary_reconciliation import source_summary_reconciliation
+from scione.structured import normalize_requirement
 
 
 class Workspace:
@@ -50,6 +70,68 @@ class Workspace:
         )
         self.matching = MatchingWorkspace(self)
         self.facts = SQLFactsStore(self.library.store, self.labs.workspace_id)
+        self.specs.added_requirement_ids = self._added_requirement_ids
+
+    def current_document(self, document_id: str):
+        """Use a versioned readable view; the originally ingested file stays saved."""
+        stored = self.specs.load_document(document_id)
+        try:
+            document = current_document_view(
+                self.settings.scione_workspace_dir,
+                stored.document,
+                self.specs.root / document_id / "original.pdf",
+            )
+        except IngestionError as exc:
+            raise SpecStoreError(
+                "This PDF's readable text could not be prepared. The original file "
+                "and earlier results are preserved."
+            ) from exc
+        return replace(stored, document=document)
+
+    def comparison_source(self, document_id, run):
+        """A detached, physically checked normalization input, never an archive edit."""
+        document = self.current_document(document_id).document
+        views, proofs = physical_parameter_views(run.extraction.requirements, document)
+        normalized = [
+            normalize_requirement(views[row.id], source_unit_proofs=proofs[row.id])
+            for row in run.extraction.requirements
+        ]
+        extraction = run.extraction.model_copy(update={"requirements": list(views.values())})
+        return run.model_copy(update={"extraction": extraction}), normalized
+
+    def source_review_audits(self, document_id, run):
+        """Export the evidence behind derived triage, separately from raw output.
+
+        Matching captures this bundle before inference. Developer diagnostics
+        expose a current-policy replay; neither path rewrites a source run.
+        """
+        document = self.current_document(document_id).document
+        return {
+            "review_policy_version": REVIEW_POLICY_VERSION,
+            "source_run_id": run.run_id,
+            "document_sha256": document.sha256,
+            "summary_reconciliation": list(source_summary_reconciliation(run, document).proofs),
+            "revision_notes": list(source_revision_notes(run, document).proofs),
+            "unused_model_comments": review_model_comment_audits(run),
+            "context_retention_hints": source_context_coverage_audits(
+                run.extraction, document
+            ),
+            "physical_unit_citations": [
+                {"requirement_id": row.id, **proof}
+                for row in run.extraction.requirements
+                for proof in physical_unit_proofs(
+                    row, document, run.extraction.requirements
+                ).values()
+            ],
+        }
+
+    def _added_requirement_ids(self, document_id: str, run_id: str) -> set[str]:
+        revision = self.facts.latest(document_id, run_id)
+        return (
+            {item.id for item in revision.requirements if item.id.startswith("req_human_")}
+            if revision
+            else set()
+        )
 
     def effective_source(self, document_id: str, run=None):
         run = run or self.specs.load_latest_extraction(document_id)
@@ -68,40 +150,94 @@ class Workspace:
             review = self.specs.load_review(document_id, run.run_id)
             if review.version != body.expected_review_version:
                 raise LibraryConflict("Source review changed. Reload before correcting content.")
-            current, _, _ = self.effective_source(document_id, run)
-            previous = {item.id: item for item in current.extraction.requirements}
-            pdf = self.specs.read_pdf(document_id)
-            for item in body.requirements:
-                if item == previous.get(item.id):
-                    continue
-                old = previous.get(item.id)
-                if (
-                    old
-                    and (
-                        item.conditions != old.conditions
-                        or item.acceptance_criteria != old.acceptance_criteria
-                        or item.applicability != old.applicability
-                        or item.special_instructions != old.special_instructions
-                    )
-                    and item.atomic_claims == old.atomic_claims
-                ):
-                    # Old machine atoms cannot outlive a correction to the
-                    # source fields they supposedly describe.
-                    item.atomic_claims = []
-                for evidence in item.evidence:
-                    located = inspect_pdf_highlights(
-                        pdf, page_number=evidence.page, quotes=(evidence.quote,)
-                    )
-                    if not located.matches or located.matches[0].status != "matched":
-                        raise HTTPException(
-                            400,
-                            "Locate each corrected test's quotation in the "
-                            "source PDF before saving. Keep uncertain content pending.",
-                        )
+            current, _, revision = self.effective_source(document_id, run)
+            if (revision.version if revision else 0) != body.expected_version:
+                raise LibraryConflict(
+                    "Extracted content changed. Reload before saving corrections."
+                )
+            self._validate_source_edits(document_id, current, body.requirements)
             self.facts.save(
-                run, body.requirements, body.note, expected_version=body.expected_version
+                run,
+                body.requirements,
+                body.note,
+                expected_version=body.expected_version,
+                normalized_requirements=physical_normalized_requirements(
+                    body.requirements, self.current_document(document_id).document
+                ),
             )
         return self.specification(document_id)
+
+    def add_source_requirement(self, document_id: str, body: SourceRequirementAdd) -> dict:
+        """Recover an omitted source test without rewriting the AI's raw output."""
+        with self.specs.write_guard():
+            run = self.latest(document_id, body.run_id)
+            review = self.specs.load_review(document_id, run.run_id)
+            if review.version != body.expected_review_version:
+                raise LibraryConflict("Source review changed. Reload before adding a test.")
+            current, _, revision = self.effective_source(document_id, run)
+            if (revision.version if revision else 0) != body.expected_version:
+                raise LibraryConflict("Extracted content changed. Reload before adding a test.")
+            if len(current.extraction.requirements) >= 1000:
+                raise HTTPException(400, "This specification already has 1,000 test items.")
+            added = body.requirement.model_copy(
+                deep=True, update={"id": f"req_human_{uuid4().hex}", "atomic_claims": []}
+            )
+            # Identical source-backed entries should be edited, not added twice.
+            if any(
+                item.model_dump(exclude={"id", "atomic_claims"})
+                == added.model_dump(exclude={"id", "atomic_claims"})
+                for item in current.extraction.requirements
+            ):
+                raise HTTPException(400, "This test is already listed. Edit the existing item.")
+            requirements = [*current.extraction.requirements, added]
+            self._validate_source_edits(document_id, current, requirements)
+            self.facts.save(
+                run,
+                requirements,
+                body.note,
+                expected_version=body.expected_version,
+                allow_additions=True,
+                normalized_requirements=physical_normalized_requirements(
+                    requirements, self.current_document(document_id).document
+                ),
+            )
+        return self.specification(document_id)
+
+    def _validate_source_edits(self, document_id, current, requirements):
+        previous = {item.id: item for item in current.extraction.requirements}
+        pdf = self.specs.read_pdf(document_id)
+        document = self.current_document(document_id).document
+        for item in requirements:
+            old = previous.get(item.id)
+            if item == old:
+                continue
+            if (
+                old
+                and (
+                    item.conditions != old.conditions
+                    or item.acceptance_criteria != old.acceptance_criteria
+                    or item.applicability != old.applicability
+                    or item.special_instructions != old.special_instructions
+                )
+                and item.atomic_claims == old.atomic_claims
+            ):
+                item.atomic_claims = []
+            for evidence in item.evidence:
+                located = inspect_pdf_highlights(
+                    pdf, page_number=evidence.page, quotes=(evidence.quote,)
+                )
+                if not located.matches or located.matches[0].status != "matched":
+                    raise HTTPException(
+                        400,
+                        "Locate each test's quotation in the source PDF before saving. "
+                        "Copy the source wording and select its page.",
+                    )
+            try:
+                validate_parameter_edits(
+                    old, item, source_unit_proofs=physical_unit_proofs(item, document, requirements)
+                )
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
 
     def overview(self) -> dict:
         providers = []
@@ -139,7 +275,7 @@ class Workspace:
         }
 
     def specification(self, document_id: str, run_id: str | None = None) -> dict:
-        stored = self.specs.load_document(document_id)
+        stored = self.current_document(document_id)
         run = (
             self.specs.load_extraction(document_id, run_id)
             if run_id
@@ -155,6 +291,16 @@ class Workspace:
             if run
             else {}
         )
+        failure = self.specs.load_failure(document_id)
+        if failure:
+            failure = failure.model_copy(
+                update={"message": public_analysis_error(failure.message, failure.error_code)}
+            )
+        views, unit_proofs = (
+            physical_parameter_views(run.extraction.requirements, stored.document)
+            if run
+            else ({}, {})
+        )
         return {
             "document_id": document_id,
             "original_name": stored.original_name,
@@ -164,8 +310,22 @@ class Workspace:
             "facts_revision": revision,
             "facts_version": revision.version if revision else 0,
             "assessments": {key: asdict(value) for key, value in assessments.items()},
+            "normalized_requirements": {
+                item.id: parameter_review_view(
+                    views[item.id],
+                    self.library.present_claim,
+                    self.catalog,
+                    source_unit_proofs=unit_proofs[item.id],
+                )
+                for item in run.extraction.requirements
+            }
+            if run
+            else {},
             "coverage_issues": coverage_issues(run.extraction, stored.document) if run else [],
-            "failure": self.specs.load_failure(document_id),
+            "document_review_issues": list(document_review_issues(run, stored.document))
+            if run
+            else [],
+            "failure": failure,
         }
 
     def latest(self, document_id: str, run_id: str):
@@ -175,11 +335,15 @@ class Workspace:
         return run
 
     def draft(self, document_id: str) -> ReportSnapshot:
-        stored = self.specs.load_document(document_id)
+        stored = self.current_document(document_id)
         run = self.specs.load_latest_extraction(document_id)
-        if run is None or not run.extraction.requirements:
+        if run is None:
             raise HTTPException(400, "Analyze this PDF in Specifications before creating a report.")
         run, review, revision = self.effective_source(document_id, run)
+        if not run.extraction.requirements:
+            raise HTTPException(
+                400, "Add a source test in Specifications before creating a report."
+            )
         report_workspace = self.reports.load_workspace(document_id, run.run_id)
         if revision:
             # Earlier manual support/quantity decisions cannot approve changed
@@ -239,7 +403,7 @@ class Workspace:
                 for item in self.reports.list_reports(document_id)
             ],
             "coverage_issues": coverage_issues(
-                report.source_run.extraction, self.specs.load_document(document_id).document
+                report.source_run.extraction, self.current_document(document_id).document
             ),
         }
 

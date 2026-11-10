@@ -14,6 +14,7 @@ from scione.library.store import digest
 from scione.reports.matching import lab_fingerprint
 from scione.reports.models import MappingChoice
 from scione.structured import normalize_requirement
+from scione.structured.models import AtomicClaim
 
 
 def edit_body(client, document_id, name="Pencil hardness, customer-defined scope"):
@@ -210,3 +211,40 @@ def test_library_detail_captures_one_run_during_concurrent_reanalysis(setup, mon
     assert detail["document"]["run_id"] == first.run_id
     assert detail["facts_revision_id"] is None
     assert detail["requirements"][0]["test_name"] == "Pencil hardness"
+
+
+def test_explicit_parameter_rebuild_keeps_reviewed_text_and_original_model_atoms(setup):
+    client, workspace, document_id, provider, _settings = setup
+    machine = workspace.specs.load_latest_extraction(document_id).model_copy(deep=True)
+    machine.run_id = str(uuid4())
+    machine.extraction.requirements[0].atomic_claims = [AtomicClaim(
+        id="bad_model_identity", parameter_id="specimen_length", label="Temperature",
+        operator="=", value=23, unit="°C", raw_text="operating temperature 23 degrees C",
+        source_pages=[1],
+    )]
+    workspace.specs.save_extraction(document_id, machine)
+    before = client.get(f"/api/specifications/{document_id}").json()
+    reviewed = deepcopy(before["run"]["extraction"]["requirements"])
+    reviewed[0]["atomic_claims"] = []
+    response = client.post(f"/api/specifications/{document_id}/facts", json={
+        "run_id": machine.run_id,
+        "expected_version": before["facts_version"],
+        "expected_review_version": before["review"]["version"],
+        "requirements": reviewed,
+        "note": "Rebuild detailed parameters from the checked source text.",
+    })
+    assert response.status_code == 200, response.text
+    data = response.json()
+    effective = data["run"]["extraction"]["requirements"][0]
+    assert effective["atomic_claims"] == []
+    assert effective["conditions"] == before["run"]["extraction"]["requirements"][0]["conditions"]
+    effective_run, _, _ = workspace.effective_source(document_id)
+    normalized = normalize_requirement(effective_run.extraction.requirements[0])
+    assert any(
+        claim.parameter_id == "temperature" and str(claim.value) == "23"
+        for claim in normalized.claims
+    )
+    assert not any(claim.parameter_id == "specimen_length" for claim in normalized.claims)
+    assert workspace.specs.load_extraction(document_id, machine.run_id) == machine
+    assert data["facts_revision"]["changed_requirement_ids"] == ["req_pencil"]
+    assert provider.calls == 0

@@ -118,6 +118,17 @@ def test_structured_pdf_escapes_html_and_preserves_long_requirements() -> None:
     assert "END_MARKER" in text
 
 
+def test_document_revision_question_remains_visible_without_repeating_per_test() -> None:
+    payload = _payload()
+    question = "Header says Rev A while the issue block says Rev B. Confirm the revision."
+    payload["document"]["document_review_issues"] = [question]
+    before = copy.deepcopy(payload)
+    text, _pages = _compact(render_comparison_pdf(payload))
+    assert "Check document revision" in text
+    assert text.count(question) == 1
+    assert payload == before
+
+
 def test_structured_pdf_keeps_excluded_tests_outside_assessed_counts() -> None:
     payload = _payload()
     payload["requirements"][0]["excluded"] = True
@@ -209,3 +220,147 @@ def test_shared_duration_checks_keep_distinct_thermal_cycle_steps() -> None:
     assert "Step 1" in text
     assert "Step 2" in text
     assert text.count("The same cycle step is declared.") == 2
+
+
+def test_long_combined_row_context_flows_and_following_table_restores_full_columns():
+    from scione.structured.pdf import _CHECK_TABLE_OPEN, _html
+
+    payload = _payload()
+    check = payload["requirements"][0]["comparison"]["checks"][0]
+    check["requested"] = "BEGIN_REQUEST " + "requested detail " * 12 + " END_REQUEST"
+    check["reason"] = "BEGIN_REASON " + "reason detail " * 12 + " END_REASON"
+    check["requirement_claim"] = {
+        "id": "context_atom",
+        "parameter_id": "custom_metric",
+        "label": "Retention",
+        "kind": "criterion",
+        "operator": "text",
+        "text_value": check["requested"],
+        "raw_text": check["requested"],
+        "source_context": "CONTEXT_MARKER " + "each panel " * 14,
+        "configuration": "CONFIGURATION_MARKER",
+        "stage": "after_cycle",
+    }
+    payload["requirements"][0]["comparison"]["checks"].append(
+        {
+            "id": "following",
+            "label": "FOLLOWING_ROW",
+            "kind": "scope",
+            "requested": "FOLLOWING_VALUE",
+            "status": "unknown",
+            "reason": "FOLLOWING_REASON",
+        }
+    )
+    html = _html(payload)
+    assert "</div>" + _CHECK_TABLE_OPEN in html
+    assert re.search(r"</div><table>(?!<tr><th)", html) is None
+    text, _pages = _compact(render_comparison_pdf(payload))
+    for marker in [
+        "BEGIN_REQUEST",
+        "END_REQUEST",
+        "BEGIN_REASON",
+        "END_REASON",
+        "CONTEXT_MARKER",
+        "CONFIGURATION_MARKER",
+        "FOLLOWING_ROW",
+        "FOLLOWING_VALUE",
+    ]:
+        assert marker in text
+
+
+def test_equal_values_with_different_source_material_or_statistic_never_merge():
+    payload = _payload()
+    for index, context in enumerate(["CONCRETE_MEAN of six cores", "STEEL_INDIVIDUAL specimen"]):
+        payload["requirements"][index]["comparison"]["checks"].append(
+            {
+                "id": f"strength_{index}",
+                "parameter_id": "compressive_strength",
+                "label": "Strength",
+                "kind": "condition",
+                "requested": "38 MPa",
+                "declared": None,
+                "status": "unknown",
+                "reason": "Declare the matching material and statistic.",
+                "requirement_claim": {
+                    "id": f"strength_atom_{index}",
+                    "parameter_id": "compressive_strength",
+                    "label": "Strength",
+                    "operator": "=",
+                    "value": 38,
+                    "unit": "MPa",
+                    "raw_text": "Strength 38 MPa",
+                    "source_context": context,
+                    "configuration": "Rig-A",
+                },
+            }
+        )
+    text, _pages = _compact(render_comparison_pdf(payload))
+    assert text.count("Declare the matching material and statistic.") == 2
+    assert "CONCRETE_MEAN" in text and "STEEL_INDIVIDUAL" in text and "Rig-A" in text
+
+
+def test_renderer_timeout_discards_partial_bytes_and_never_forwards_credentials(monkeypatch):
+    import subprocess
+
+    from scione.structured import pdf as module
+
+    monkeypatch.setenv("SAIL_API_KEY", "not-forwarded")
+    monkeypatch.setenv("SCIONE_DATABASE_URL", "not-forwarded")
+    captured = {}
+
+    def stalled(command, **options):
+        captured.update(command=command, **options)
+        raise subprocess.TimeoutExpired(command, options["timeout"], output=b"%PDF-PARTIAL")
+
+    monkeypatch.setattr(module.subprocess, "run", stalled)
+    with pytest.raises(ComparisonPDFError, match="20-second rendering limit") as caught:
+        render_comparison_pdf(_payload())
+    assert "PARTIAL" not in str(caught.value)
+    assert "web report and JSON remain available" in str(caught.value)
+    assert captured["timeout"] == 20
+    assert captured["command"][-2:] == ["-m", "scione.structured.pdf_worker"]
+    assert "SAIL_API_KEY" not in captured["env"] and "SCIONE_DATABASE_URL" not in captured["env"]
+
+
+@pytest.mark.parametrize("returncode,output", [(1, b"%PDF-PARTIAL"), (0, b"unexpected output")])
+def test_failed_or_nonpdf_worker_output_is_never_returned(monkeypatch, returncode, output):
+    from types import SimpleNamespace
+
+    from scione.structured import pdf as module
+
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *_a, **_k: SimpleNamespace(
+            returncode=returncode, stdout=output, stderr=b"source text must not leak"
+        ),
+    )
+    with pytest.raises(ComparisonPDFError) as caught:
+        render_comparison_pdf(_payload())
+    assert "source text" not in str(caught.value)
+
+
+@pytest.mark.parametrize("mode", ["page", "callback", "elapsed"])
+def test_worker_inline_renderer_has_explicit_layout_bounds(monkeypatch, mode):
+    from scione.structured import pdf as module
+
+    class LayoutLimitProbe:
+        def __init__(self, **_kwargs):
+            pass
+
+        def write_with_links(self, callback):
+            if mode == "page":
+                callback(65, pymupdf.Rect())
+            elif mode == "callback":
+                for _ in range(257):
+                    callback(0, pymupdf.Rect())
+            else:
+                callback(0, pymupdf.Rect())
+            pytest.fail("The renderer must stop before accepting a partial document.")
+
+    monkeypatch.setattr(module.pymupdf, "Story", LayoutLimitProbe)
+    if mode == "elapsed":
+        ticks = iter([0, 11])
+        monkeypatch.setattr(module.time, "monotonic", lambda: next(ticks))
+    with pytest.raises(ComparisonPDFError, match="layout limit"):
+        module._render_comparison_pdf_inline(_payload())

@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from importlib.resources import files
 
+from scione.ingestion.context_inventory import source_context_guidance
+from scione.ingestion.method_inventory import source_method_inventory
 from scione.parameters import REGISTRY_VERSION, definitions
 from scione.schemas import IngestedDocument
 
 CUSTOMER_REQUIREMENTS_PROMPT_VERSION = "customer_requirements_v0.3"
 _PROMPT_FILE = "customer_requirements_v0_3.txt"
-CUSTOMER_REQUIREMENTS_COMPACT_PROMPT_VERSION = "customer_requirements_compact_v0.5"
-_COMPACT_PROMPT_FILE = "customer_requirements_compact_v0_5.txt"
+CUSTOMER_REQUIREMENTS_COMPACT_PROMPT_VERSION = "customer_requirements_compact_v0.18"
+_COMPACT_PROMPT_FILE = "customer_requirements_compact_v0_18.txt"
 
 
 def load_customer_requirements_system_prompt() -> str:
@@ -48,6 +50,16 @@ def build_customer_requirements_user_prompt(
             "Naming hints only; source evidence determines whether any parameter exists.",
             *[f"{item.id}: {item.label}; {item.description}" for item in definitions()],
             "</PARAMETER_VOCABULARY>",
+            "<SOURCE_METHOD_MENTIONS>",
+            "Literal, non-exhaustive source checklist, NOT a list of requested tests. "
+            "Determine applicability and roles from the original source. Use the exact "
+            "designation alone in methods, not its test heading or bank family label.",
+            *[
+                f"{item['code']} | physical pages: {','.join(map(str, item['pages']))}"
+                for item in source_method_inventory(document)
+            ],
+            "</SOURCE_METHOD_MENTIONS>",
+            source_context_guidance(document),
             "<SOURCE_DOCUMENT>",
             f"document_id: {document.document_id}",
             f"file_name: {document.file_name}",

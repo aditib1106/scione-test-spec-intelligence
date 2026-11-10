@@ -2,8 +2,8 @@
 
 Revisions change facts, not whether a lab can perform a test. A changed row loses
 its earlier confirmation; a later explicit review can confirm the corrected row.
-The initial editor corrects existing rows. Add/remove use source review exclusions
-for now, so IDs remain stable across report actions and evaluation artifacts.
+Existing rows retain their IDs and order. A separate source-backed append action
+can recover missed tests; removal uses review exclusions rather than deleting facts.
 """
 
 from __future__ import annotations
@@ -127,17 +127,36 @@ class SQLFactsStore:
         note: str,
         *,
         expected_version: int,
+        allow_additions: bool = False,
+        normalized_requirements: list | None = None,
     ) -> FactsRevision:
         current = self.latest(run.document_id, run.run_id)
         if (current.version if current else 0) != expected_version:
             raise LibraryConflict("Extracted content changed. Reload before saving corrections.")
         previous = current.requirements if current else run.extraction.requirements
-        if [item.id for item in requirements] != [item.id for item in previous]:
+        old_ids = [item.id for item in previous]
+        new_ids = [item.id for item in requirements]
+        additions_valid = (
+            allow_additions
+            and len(new_ids) == len(old_ids) + 1
+            and new_ids[: len(old_ids)] == old_ids
+            and new_ids[-1].startswith("req_human_")
+            and len(new_ids) == len(set(new_ids))
+        )
+        if new_ids != old_ids and not additions_valid:
             raise LibraryStoreError("Corrections must retain the existing test IDs and order.")
-        changed = [a.id for a, b in zip(requirements, previous, strict=True) if a != b]
+        by_id = {item.id: item for item in previous}
+        changed = [item.id for item in requirements if item != by_id.get(item.id)]
         if not changed:
             raise LibraryStoreError("No extracted content has changed.")
         now = datetime.now(UTC)
+        normalized = (
+            normalized_requirements
+            if normalized_requirements is not None
+            else [normalize_requirement(item) for item in requirements]
+        )
+        if [item.requirement_id for item in normalized] != new_ids:
+            raise LibraryStoreError("Normalized corrections must match the reviewed test order.")
         revision = FactsRevision(
             revision_id=str(uuid4()),
             document_id=run.document_id,
@@ -165,8 +184,7 @@ class SQLFactsStore:
                         created_at=now.isoformat(),
                         payload=revision.model_dump(mode="json"),
                         normalized_requirements=[
-                            normalize_requirement(item).model_dump(mode="json")
-                            for item in requirements
+                            item.model_dump(mode="json") for item in normalized
                         ],
                     )
                 )

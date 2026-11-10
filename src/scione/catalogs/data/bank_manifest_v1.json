@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "teammate_synthetic_method_bank_v1",
+  "source_csv_name": "test_methods.csv",
+  "source_csv_sha256": "c66684bdea3df054b792ade15100a83208da06f95750b6d8dfc588a4720c6a91",
+  "source_audit_name": "Customer Spec Method Reference Audit - 2026-10-29.xlsx",
+  "source_audit_sha256": "33b3a9bc3ecdd59f3a30683f2624977e894d1d6f42a8feb07229a6ce0c20cfa5",
+  "bank_record_count": 32000,
+  "bank_family_count": 71,
+  "runtime_bank_method_count": 77,
+  "runtime_excerpt_sha256": "944b9340bb81b2fba4372e9d342071f578d91ee12bdb6aef43fa2ca3320bf666",
+  "build_policy": "synthetic_bank_exact_identifiers_v1",
+  "runtime_selection": "All source test_item families; only explicit bank method IDs selected by the reviewed method-reference audit. Non-method observations, custom procedures, customer expectations and lab support are not imported.",
+  "equivalence_policy": "No official equivalence. Concept and cross-standard links are unvalidated candidate metadata, never aliases or support declarations."
+}

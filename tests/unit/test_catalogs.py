@@ -20,15 +20,15 @@ from scione.catalogs.seed import default_csp301_lab
 
 def test_pilot_catalog_retains_aliases_and_explicit_synthetic_editions() -> None:
     catalog = load_reference_catalog()
-    assert len(catalog.tests) == 39
-    assert len(catalog.methods) == 40
-    assert catalog.version == 3
+    assert len(catalog.tests) == 99
+    assert len(catalog.methods) == 113
+    assert catalog.version == 4
     assert catalog.synthetic
     assert "not an authoritative" in catalog.source_note
     assert all(
         method.edition is None
         for method in catalog.methods
-        if not method.id.startswith("synthetic_")
+        if not method.id.startswith(("synthetic_", "bank_"))
     )
     pencil = catalog.test_by_id("pencil_hardness")
     assert Alias(text="铅笔硬度", language="zh") in pencil.aliases
@@ -39,22 +39,23 @@ def test_pilot_catalog_retains_aliases_and_explicit_synthetic_editions() -> None
 def test_seed_catalog_returns_fresh_objects() -> None:
     first = load_reference_catalog()
     first.tests.clear()
-    assert len(load_reference_catalog().tests) == 39
+    assert len(load_reference_catalog().tests) == 99
 
 
 def test_csp301_methods_are_distinct_from_the_original_pilot_methods() -> None:
     catalog = load_reference_catalog()
-    assert catalog.test_by_id("cross_cut_adhesion").method_ids == [
-        "iso_2409", "astm_d3359", "gb_t_9286", "synthetic_iso_60038_2021"
+    assert catalog.test_by_id("cross_cut_adhesion").method_ids[:4] == [
+        "iso_2409",
+        "astm_d3359",
+        "gb_t_9286",
+        "synthetic_iso_60038_2021",
     ]
     method = catalog.method_by_id("synthetic_iso_60038_2021")
     assert method.identifier == "ISO 60038:2021"
     assert method.edition == "2021"
     assert "ISO 2409" not in {alias.text for alias in method.aliases}
     assert catalog.method_by_id("synthetic_astm_d1627_16").edition == "16"
-    assert catalog.test_by_id("dry_film_thickness").method_ids == [
-        "synthetic_iso_60152_2025"
-    ]
+    assert catalog.test_by_id("dry_film_thickness").method_ids[:1] == ["synthetic_iso_60152_2025"]
 
 
 def test_csp301_lab_retains_data_team_declarations_without_inventing_coverage() -> None:

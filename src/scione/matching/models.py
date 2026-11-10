@@ -18,8 +18,8 @@ from scione.specifications.models import CustomerRequirement
 from scione.structured.models import AtomicClaim, NormalizedRequirement, StructuredComparison
 
 MATCHING_SCHEMA_VERSION = "0.1"
-MATCHING_PROMPT_VERSION = "semantic_matching_v0_2"
-MATCHING_VALIDATION_VERSION = "semantic_alignment_guards_v0_3"
+MATCHING_PROMPT_VERSION = "semantic_matching_v0_8"
+MATCHING_VALIDATION_VERSION = "semantic_alignment_guards_v0_17"
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
@@ -110,6 +110,18 @@ class MatchingInput(MatchingModel):
         return self
 
 
+class ProposedEquivalence(MatchingModel):
+    """A model-proposed wording correspondence between two existing strings.
+
+    This is not a new source fact or a capability verdict. The validator binds
+    both strings to the selected input pair and retains the proposal for audit.
+    """
+
+    requested_text: Text
+    declared_text: Text
+    reason: Text
+
+
 class ClaimAlignment(MatchingModel):
     """Parameter correspondence, never a declaration that values are satisfied."""
 
@@ -117,6 +129,9 @@ class ClaimAlignment(MatchingModel):
     capability_claim_ids: list[Identifier] = Field(default_factory=list)
     relation: Literal["same_parameter", "unknown", "ambiguous"]
     reason: Text
+    context_equivalence: ProposedEquivalence | None = None
+    value_equivalence: ProposedEquivalence | None = None
+    joint_scope_equivalence: ProposedEquivalence | None = None
 
     @model_validator(mode="after")
     def consistent_relation(self) -> Self:
@@ -126,6 +141,12 @@ class ClaimAlignment(MatchingModel):
             raise ValueError("An aligned parameter needs an existing lab claim.")
         if self.relation != "same_parameter" and self.capability_claim_ids:
             raise ValueError("Unresolved alignments cannot select lab claims.")
+        if (
+            self.context_equivalence or self.value_equivalence or self.joint_scope_equivalence
+        ) and (self.relation != "same_parameter" or len(self.capability_claim_ids) != 1):
+            raise ValueError("Wording equivalence requires one explicitly selected lab claim.")
+        if self.joint_scope_equivalence and (self.context_equivalence or self.value_equivalence):
+            raise ValueError("Joint scope wording cannot be combined with field-wise bridges.")
         return self
 
 
@@ -166,7 +187,7 @@ class AlignmentValidationIssue(MatchingModel):
 
 
 class SemanticMatchingRun(MatchingModel):
-    """One attempted provider call and immutable reproducibility artifacts."""
+    """An individual provider attempt or an explicit parent execution artifact."""
 
     run_id: Identifier
     started_at: datetime
@@ -194,6 +215,16 @@ class SemanticMatchingRun(MatchingModel):
     usage: TokenUsage = Field(default_factory=TokenUsage)
     provider_request_id: str | None = None
     generation_settings: dict[str, Any] = Field(default_factory=dict)
+    wire_format: Literal[
+        "matching_array_v1",
+        "matching_keyed_v1",
+        "matching_keyed_v2",
+        "matching_keyed_v3",
+        "matching_batch_manifest_v1",
+    ] = "matching_array_v1"
+    execution_mode: Literal["single_call", "planned_batches"] = "single_call"
+    planned_count: int = Field(default=1, ge=1)
+    child_attempts: list[SemanticMatchingRun] = Field(default_factory=list)
     error_code: Identifier | None = None
     error_message: Text | None = None
 
@@ -205,4 +236,67 @@ class SemanticMatchingRun(MatchingModel):
             raise ValueError("A completed matching run needs validated output and no error.")
         if self.status == "failed" and (self.output is not None or self.error_code is None):
             raise ValueError("A failed run cannot expose an accepted output.")
+        if self.execution_mode == "single_call":
+            if self.child_attempts or self.planned_count != 1:
+                raise ValueError("A single call cannot contain child attempts or a batch plan.")
+        else:
+            if self.raw_response is not None or self.parsed_response is not None:
+                raise ValueError(
+                    "A batch parent has no provider raw response; inspect its children."
+                )
+            if len(self.child_attempts) > self.planned_count:
+                raise ValueError("Attempted batches cannot exceed the declared plan.")
+            expected = {row.requirement.id: row for row in self.input_snapshot.requirements}
+            capabilities = {row.capability.id: row for row in self.input_snapshot.capabilities}
+            tests = {row.id: row for row in self.input_snapshot.catalog.tests}
+            methods = {row.id: row for row in self.input_snapshot.catalog.methods}
+            seen: set[str] = set()
+            for child in self.child_attempts:
+                if child.execution_mode != "single_call":
+                    raise ValueError(
+                        "Matching batch children must be individual provider attempts."
+                    )
+                if any(
+                    getattr(child.input_snapshot, name) != getattr(self.input_snapshot, name)
+                    for name in (
+                        "lab_id",
+                        "extraction_run_id",
+                        "catalog_revision",
+                        "capability_revision",
+                        "review_revision",
+                    )
+                ):
+                    raise ValueError("A matching child belongs to another source revision or lab.")
+                for rows, original, key in (
+                    (
+                        child.input_snapshot.capabilities,
+                        capabilities,
+                        lambda row: row.capability.id,
+                    ),
+                    (child.input_snapshot.catalog.tests, tests, lambda row: row.id),
+                    (child.input_snapshot.catalog.methods, methods, lambda row: row.id),
+                ):
+                    if any(
+                        key(row) not in original
+                        or row.model_dump(mode="json") != original[key(row)].model_dump(mode="json")
+                        for row in rows
+                    ):
+                        raise ValueError("Matching child declaration or catalog facts changed.")
+                for row in child.input_snapshot.requirements:
+                    identifier = row.requirement.id
+                    if identifier in seen or identifier not in expected:
+                        raise ValueError(
+                            "Matching children must have disjoint original source rows."
+                        )
+                    if row.model_dump(mode="json") != expected[identifier].model_dump(mode="json"):
+                        raise ValueError("Matching child source facts or candidate IDs changed.")
+                    seen.add(identifier)
+            if self.status == "completed" and (
+                len(self.child_attempts) != self.planned_count
+                or any(child.status != "completed" for child in self.child_attempts)
+                or seen != expected.keys()
+            ):
+                raise ValueError(
+                    "A completed batch parent needs every planned source row and child."
+                )
         return self

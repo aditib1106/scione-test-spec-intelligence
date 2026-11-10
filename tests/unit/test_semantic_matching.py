@@ -72,6 +72,8 @@ def claim(identifier, **changes):
         "raw_text": "Water temperature 60 °C",
     }
     values.update(changes)
+    if "parameter_id" in changes and "label" not in changes:
+        values["label"] = (changes["parameter_id"] or "Unknown parameter").replace("_", " ")
     return AtomicClaim(**values)
 
 
@@ -160,6 +162,9 @@ def proposal(*, requested_ids=None, declared_ids=None):
                         "reason": "Both declarations refer to water temperature."
                         if declared_ids
                         else "No corresponding lab declaration was supplied.",
+                        "context_equivalence": None,
+                        "value_equivalence": None,
+                        "joint_scope_equivalence": None,
                     }
                     for identifier in requested_ids
                 ],
@@ -187,7 +192,8 @@ def test_success_is_one_explicit_call_with_snapshot_prompt_usage_and_raw_respons
     assert result.request.schema_name == "semantic_matching_v0_1"
     assert "untrusted source" in result.request.system_prompt
     assert "supported" not in result.output.model_dump_json()
-    assert "value" not in result.output.model_dump_json()
+    assert '"value":' not in result.output.model_dump_json()
+    assert '"status":' not in result.output.model_dump_json()
     source.requirements[0].normalized.claims[0].value = Decimal(999)
     assert result.input_snapshot.requirements[0].normalized.claims[0].value == 60
 
@@ -761,3 +767,18 @@ def test_compiler_revalidates_references_after_loading_or_mutating_a_run():
     run.output.items[0].claim_alignments[0].capability_claim_ids = ["foreign_claim"]
     with pytest.raises(ValueError):
         compile_matching_run(run, {"req_001": "supported"})
+
+
+def test_requirement_wide_normalization_review_survives_semantic_compile_once():
+    source = snapshot()
+    source.requirements[0].normalized.review_issues = [
+        "Same source occurrence; supplied stage association is unconfirmed."
+    ]
+    result = SemanticMatchingRunner(RecordingProvider(proposal())).run(source)
+    comparison = compile_matching_run(result, {"req_001": "supported"})[0]
+    assert comparison.status == "needs_information"
+    notes = [check for check in comparison.checks
+             if check.id == "req_001_normalization_review"]
+    assert len(notes) == 1
+    assert notes[0].status == "unknown"
+    assert result.input_snapshot.requirements[0].normalized.review_issues

@@ -14,12 +14,14 @@ from scione.parameters import (
     normalize_claim,
     normalize_claims,
 )
+from scione.parameters.engine import exact_text_identity, unavailability_applies
 from scione.structured.models import (
     AtomicClaim,
     ClaimCheck,
     NormalizedRequirement,
     StructuredComparison,
 )
+from scione.structured.planning import is_planning_instruction
 
 _UNIT_FACTORS = {
     "°C": ("temperature", Decimal(1)),
@@ -42,6 +44,8 @@ def _context_matches(request: AtomicClaim, declaration: AtomicClaim) -> bool:
 
 
 def _factor(request: AtomicClaim, declaration: AtomicClaim) -> Fraction | None:
+    from scione.parameters.units import resolve_unit
+
     if request.unit is not None and request.unit == declaration.unit:
         return Fraction(1)
     # Counts can be expressed without repeating the parameter's own count label.
@@ -49,6 +53,8 @@ def _factor(request: AtomicClaim, declaration: AtomicClaim) -> Fraction | None:
     count_units = {
         "cycles": {None, "cycle", "cycles"},
         "measurement_locations": {None, "location", "locations"},
+        "specimen_count": {None, "specimen", "specimens", "sample", "samples"},
+        "panel_count": {None, "panel", "panels"},
     }
     units = count_units.get(request.parameter_id)
     if (
@@ -58,10 +64,18 @@ def _factor(request: AtomicClaim, declaration: AtomicClaim) -> Fraction | None:
         and declaration.unit in units
     ):
         return Fraction(1)
-    first = _UNIT_FACTORS.get(request.unit or "")
-    second = _UNIT_FACTORS.get(declaration.unit or "")
-    if first and second and first[0] == second[0]:
-        return Fraction(first[1]) / Fraction(second[1])
+    first = resolve_unit(request.unit)
+    second = resolve_unit(declaration.unit)
+    # A multiplicative fallback cannot apply affine temperature offsets. The
+    # registered temperature policy handles those explicitly. Unknown custom
+    # units still compare only by exact literal identity above.
+    if (
+        first is not None
+        and second is not None
+        and first.dimension == second.dimension
+        and first.offset == second.offset == 0
+    ):
+        return first.factor / second.factor
     return None
 
 
@@ -77,24 +91,41 @@ def _points(claim: AtomicClaim) -> tuple[Decimal | None, Decimal | None]:
 
 
 def _one(request: AtomicClaim, declaration: AtomicClaim) -> tuple[str, str]:
+    if (
+        request.kind == "criterion"
+        and request.operator in {"required", "text"}
+        and declaration.kind == "reporting"
+    ):
+        return (
+            "unknown",
+            "A qualitative acceptance requirement needs an explicit assessment policy; "
+            "a reporting declaration alone does not establish that it can be assessed "
+            "or that the specimen passes.",
+        )
     typed = evaluate_pair(request, declaration)
     if typed is not None:
         return typed.status, typed.reason
-    if declaration.availability == "unsupported":
-        return "gap", "The lab explicitly declares this output or condition unavailable."
     if declaration.availability == "unknown" or declaration.normalization_state == "unresolved":
         return "unknown", "The lab has not declared a usable value for this requirement."
+    if declaration.availability == "unsupported":
+        if unavailability_applies(request, declaration):
+            return "gap", "The lab explicitly declares this output or condition unavailable."
+        return (
+            "unknown",
+            "The unavailable declaration does not establish unavailability "
+            "of the requested value or resource.",
+        )
     if request.operator == "required":
         if (
-            request.kind in {"reporting", "criterion"}
+            request.kind == "reporting"
             and declaration.kind == "reporting"
             and declaration.operator not in {"required", "text"}
         ):
             return "supported", "The lab explicitly declares this measurable/reportable output."
         if declaration.operator in {"required", "text"}:
-            left = (request.text_value or "").casefold().strip()
-            right = (declaration.text_value or "").casefold().strip()
-            if not left or left == right:
+            left = exact_text_identity(request.text_value)
+            right = exact_text_identity(declaration.text_value)
+            if left and left == right:
                 return (
                     "supported",
                     "The requested item is explicitly included in the lab declaration.",
@@ -104,8 +135,8 @@ def _one(request: AtomicClaim, declaration: AtomicClaim) -> tuple[str, str]:
             "The declaration does not establish the requested item in the same context.",
         )
     if request.operator == "text":
-        left = (request.text_value or request.raw_text).casefold().strip()
-        right = (declaration.text_value or declaration.raw_text).casefold().strip()
+        left = exact_text_identity(request.text_value or request.raw_text)
+        right = exact_text_identity(declaration.text_value or declaration.raw_text)
         if left == right:
             return "supported", "The requested value matches the lab's explicit declaration."
         return "unknown", "The wording differs; a matching declaration has not been established."
@@ -194,6 +225,23 @@ def compare_requirement(
             reason=method_reasons[method_status],
         )
     ]
+    if normalized.review_issues:
+        checks.append(
+            ClaimCheck(
+                id=f"{normalized.requirement_id}_normalization_review",
+                parameter_id=None,
+                label="Source association needs review",
+                kind="scope",
+                requested="Confirm source stage, context and applicability",
+                status="unknown",
+                reason=(
+                    "Some source quantities need their stage, context or applicability checked. "
+                    "Review the source before confirming lab support."
+                ),
+                source_pages=sorted({page for claim in normalized.claims
+                                     for page in claim.source_pages}),
+            )
+        )
     # Work on canonical copies. Exported requirement/source claims retain their
     # original names, units and values for provenance and extraction evaluation.
     capability_claims = normalize_claims(capability_claims)
@@ -219,7 +267,7 @@ def compare_requirement(
             source_pages=claim.source_pages,
             requirement_claim=source_claim,
         )
-        workflow = (
+        workflow = is_planning_instruction(claim) or (
             claim.kind == "instruction"
             and not any(
                 value is not None

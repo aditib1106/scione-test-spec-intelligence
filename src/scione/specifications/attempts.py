@@ -53,6 +53,8 @@ class ExtractionAttemptCall(AttemptModel):
     request: StructuredGenerationRequest
     response: StructuredGenerationResponse | None = None
     failure: GenerationFailure | None = None
+    purpose: Literal["extraction", "inventory"] = "extraction"
+    prompt_version: str | None = None
 
 
 class ExtractionFailureArtifact(AttemptModel):

@@ -6,14 +6,20 @@ from collections import Counter
 
 from fastapi import HTTPException
 
+from scione.library.candidate_display import candidate_lab_entries
 from scione.library.store import LibraryStore, digest
 from scione.parameters import REGISTRY_VERSION
 from scione.reports.matching import lab_fingerprint
-from scione.specifications.review import assess_requirements
-from scione.structured import compare_requirement, normalize_capability, normalize_requirement
+from scione.specifications.extraction import coverage_issues
+from scione.specifications.review import (
+    REVIEW_POLICY_VERSION,
+    assess_requirements,
+    document_review_issues,
+)
+from scione.structured import compare_requirement, normalize_capability
 from scione.structured.models import NORMALIZER_VERSION, AtomicClaim
 
-COMPARISON_POLICY_VERSION = "decisive_rules_first_v1"
+COMPARISON_POLICY_VERSION = "decisive_rules_first_v5"
 
 
 class LibraryWorkspace:
@@ -28,11 +34,11 @@ class LibraryWorkspace:
         )
 
     def index(self, document_id: str):
-        stored = self.workspace.specs.load_document(document_id)
+        stored = self.workspace.current_document(document_id)
         run = self.workspace.specs.load_latest_extraction(document_id)
         self.store.ensure_document(stored, run.extraction.document if run else None)
         if run:
-            normalized = [normalize_requirement(item) for item in run.extraction.requirements]
+            _, normalized = self.workspace.comparison_source(document_id, run)
             self.store.save_requirements(run, normalized)
         return stored, run
 
@@ -63,6 +69,9 @@ class LibraryWorkspace:
             "provider": run.provider if run else None,
             "requirement_count": len(run.extraction.requirements) if run else 0,
             "review_count": sum(item.state == "needs_attention" for item in assessments.values()),
+            "document_review_issues": list(document_review_issues(run, stored.document))
+            if run
+            else [],
         }
 
     def listing(self) -> dict:
@@ -78,6 +87,14 @@ class LibraryWorkspace:
             self.workspace.effective_source(document_id, machine) if machine else (None, None, None)
         )
         document = self._document_view(stored, effective, review)
+        normalized_effective = (
+            {
+                row.requirement_id: row
+                for row in self.workspace.comparison_source(document_id, effective)[1]
+            }
+            if effective and revision
+            else {}
+        )
         rows = (
             [
                 {
@@ -86,7 +103,7 @@ class LibraryWorkspace:
                     "methods": [method.code for method in item.requested_methods],
                     "claims": [
                         claim.model_dump(mode="json")
-                        for claim in normalize_requirement(item).claims
+                        for claim in normalized_effective[item.id].claims
                     ],
                 }
                 for item in effective.extraction.requirements
@@ -132,15 +149,18 @@ class LibraryWorkspace:
         # lab and matching decisions. Derive every exported field from it.
         report = self.workspace.draft(document_id)
         run = report.source_run
-        stored = self.workspace.specs.load_document(document_id)
+        stored = self.workspace.current_document(document_id)
         self.store.ensure_document(stored, run.extraction.document)
         document = self._document_view(stored, run, report.source_review)
         # Machine extraction rows are immutable. Reviewed facts have their own
         # SQL revision and normalized snapshot, never overwrite this raw index.
         machine = self.workspace.specs.load_extraction(document_id, run.run_id)
         self.store.save_requirements(
-            machine, [normalize_requirement(item) for item in machine.extraction.requirements]
+            machine, self.workspace.comparison_source(document_id, machine)[1]
         )
+        rule_normalized = {
+            row.requirement_id: row for row in self.workspace.comparison_source(document_id, run)[1]
+        }
         fingerprint = lab_fingerprint(report.lab)
         self.store.save_capability_revision(report.lab, fingerprint)
         matching_run, semantic_comparisons, semantic_capabilities = (
@@ -156,7 +176,7 @@ class LibraryWorkspace:
                 method_status = "supported"
             rule_claims = normalize_capability(line.capability) if line.capability else []
             rule_comparison = compare_requirement(
-                normalize_requirement(requirement), rule_claims, method_status
+                rule_normalized[requirement.id], rule_claims, method_status
             )
             # An AI deferral must not undo a complete, independently grounded
             # comparison. This is deliberately item-scoped: unresolved claims
@@ -228,6 +248,16 @@ class LibraryWorkspace:
                         else ", ".join(line.lab_method_identifiers)
                     ) or None
                 comparison = result.model_dump(mode="json")
+                suggestions = candidate_lab_entries(
+                    matching_run if use_semantic else None,
+                    requirement.id,
+                    capability.id if capability else None,
+                )
+                for check in comparison["checks"]:
+                    if check["status"] == "unknown" and not check.get("declared"):
+                        entries = suggestions.get(check["id"], [])
+                        if entries:
+                            check["candidate_lab_entries"] = entries
                 choice = line.mapping_choice
                 if (
                     choice
@@ -325,6 +355,7 @@ class LibraryWorkspace:
             )
         }
         summary.update(Counter(item["comparison"]["status"] for item in rows))
+        source_coverage = coverage_issues(run.extraction, stored.document)
         payload = {
             "document": document,
             "lab_name": report.lab.name,
@@ -332,11 +363,15 @@ class LibraryWorkspace:
             "normalizer_version": NORMALIZER_VERSION,
             "parameter_policy_version": REGISTRY_VERSION,
             "comparison_policy_version": COMPARISON_POLICY_VERSION,
+            "source_review_policy_version": REVIEW_POLICY_VERSION,
             "requirements": rows,
             "summary": summary,
+            "source_coverage_issues": source_coverage,
             "notes": [
                 "Draft capability assessment. It does not predict specimen pass/fail.",
                 "Missing lab information remains unresolved; it is not an explicit limitation.",
+                *document["document_review_issues"],
+                *source_coverage,
             ],
             "source_run_id": run.run_id,
             "source_facts_revision_id": report.source_facts_revision_id,
@@ -347,16 +382,11 @@ class LibraryWorkspace:
             "report_workspace_version": report.workspace.version,
         }
         self._assert_comparison_inputs_current(report, document)
-        identity = digest(
-            [
-                report.input_fingerprint,
-                document,
-                NORMALIZER_VERSION,
-                REGISTRY_VERSION,
-                COMPARISON_POLICY_VERSION,
-                matching_run.run_id if matching_run else None,
-            ]
-        )
+        # A policy upgrade can change derived warnings or presentation while
+        # source/lab inputs stay identical. Address the complete computed view
+        # so it creates a new immutable assessment instead of trying to replace
+        # the earlier snapshot with the same input-based identifier.
+        identity = digest(payload)
         saved = self.store.save_comparison(identity, payload)
         # Pagination is presentation metadata; the persisted comparison remains immutable.
         return saved

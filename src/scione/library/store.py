@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from pydantic import ValidationError
 from sqlalchemy import (
     JSON,
     Column,
@@ -37,6 +38,8 @@ from sqlalchemy.dialects.mysql import LONGBLOB
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import StaticPool
+
+from scione.specifications.models import CustomerExtraction
 
 
 class LibraryStoreError(RuntimeError):
@@ -146,6 +149,23 @@ def digest(value: object) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, ensure_ascii=False, default=str).encode()
     ).hexdigest()
+
+
+def _same_extraction_source(archived: object, current: dict) -> bool:
+    """Allow additive contract defaults without replacing historical source JSON.
+
+    Older archives can omit newly introduced optional fields, such as an atom's
+    source_context. Revalidate that snapshot through the current strict contract
+    for comparison only. Unknown fields, invalid records and actual source edits
+    still conflict; no normalized content is written back to the source archive.
+    """
+    if archived == current:
+        return True
+    try:
+        compatible = CustomerExtraction.model_validate(archived).model_dump(mode="json")
+    except ValidationError:
+        return False
+    return compatible == current
 
 
 class LibraryStore:
@@ -470,7 +490,8 @@ class LibraryStore:
                 .first()
             )
             if previous and (
-                previous["document_id"] != run.document_id or previous["source"] != source
+                previous["document_id"] != run.document_id
+                or not _same_extraction_source(previous["source"], source)
             ):
                 raise LibraryConflict(
                     "An extraction run cannot be replaced with different source data."

@@ -7,16 +7,23 @@ The full immutable snapshot and exact transmitted request remain run artifacts.
 from __future__ import annotations
 
 from scione.matching.models import MatchingInput
+from scione.specifications.models import CustomerRequirement
 from scione.structured.models import AtomicClaim
+from scione.structured.source_clauses import ordered_thermal_cycle_proof
 
-MATCHING_PROJECTION_VERSION = "authoritative_atoms_v0_2"
+MATCHING_PROJECTION_VERSION = "authoritative_atoms_v0_3"
 
 
 class MatchingProjectionError(ValueError):
     """A source atom would be lost by projecting an inconsistent snapshot."""
 
 
-def _retains_source_fact(source: AtomicClaim, normalized: AtomicClaim) -> bool:
+def _retains_source_fact(
+    source: AtomicClaim,
+    normalized: AtomicClaim,
+    requirement: CustomerRequirement | None = None,
+    normalization_actions: list[dict] | None = None,
+) -> bool:
     # Grounding may intentionally change identity/state/availability, or attach
     # a more specific context/stage. It must not change the quoted source facts.
     fields = (
@@ -37,19 +44,51 @@ def _retains_source_fact(source: AtomicClaim, normalized: AtomicClaim) -> bool:
     if source.source_context and source.source_context != normalized.source_context:
         return False
     if source.stage != "general" and source.stage != normalized.stage:
-        return False
+        # One explicit source-owned thermal cycle may canonicalize the broad
+        # 'exposure' label. Every scalar, quotation, sequence and other scope
+        # field above must still match; arbitrary model stages remain invalid.
+        proved_cycle = bool(
+            requirement is not None
+            and source.stage == "exposure"
+            and normalized.stage == "thermal_cycle"
+            and ordered_thermal_cycle_proof(source, requirement)
+        )
+        if not proved_cycle:
+            return False
     if source.unit != normalized.unit:
         count_units = {"cycles": "cycles", "measurement_locations": "locations"}
-        if not (source.unit is None and count_units.get(source.parameter_id) == normalized.unit):
+        named_scale = False
+        if requirement is not None:
+            from scione.structured.normalization import _named_scale_unit_proof
+
+            for action in normalization_actions or []:
+                if (
+                    action.get("rule") == "source_named_scale_summary_unit"
+                    and action.get("source_claim_id") == source.id
+                    and action.get("canonical") == normalized.unit
+                    and _named_scale_unit_proof(source, requirement, {source.id: action})
+                ):
+                    named_scale = True
+                    break
+        if not (
+            named_scale
+            or (source.unit is None and count_units.get(source.parameter_id) == normalized.unit)
+        ):
             return False
     return set(source.source_pages) <= set(normalized.source_pages)
 
 
 def _assert_source_facts_retained(
-    source: list[AtomicClaim], authoritative: list[AtomicClaim]
+    source: list[AtomicClaim],
+    authoritative: list[AtomicClaim],
+    requirement: CustomerRequirement | None = None,
+    normalization_actions: list[dict] | None = None,
 ) -> None:
     for claim in source:
-        if not any(_retains_source_fact(claim, target) for target in authoritative):
+        if not any(
+            _retains_source_fact(claim, target, requirement, normalization_actions)
+            for target in authoritative
+        ):
             raise MatchingProjectionError(
                 "The matching snapshot does not retain a source atom in its authoritative "
                 "normalized claims. Rebuild the snapshot before requesting semantic matching."
@@ -67,7 +106,12 @@ def project_matching_input(snapshot: MatchingInput) -> MatchingInput:
     The ordinary MatchingInput schema can still parse the serialized request.
     """
     for row in snapshot.requirements:
-        _assert_source_facts_retained(row.requirement.atomic_claims, row.normalized.claims)
+        _assert_source_facts_retained(
+            row.requirement.atomic_claims,
+            row.normalized.claims,
+            row.requirement,
+            row.normalized.normalization_actions,
+        )
     for row in snapshot.capabilities:
         _assert_source_facts_retained(row.capability.atomic_claims, row.claims)
     data = snapshot.model_dump(mode="json")

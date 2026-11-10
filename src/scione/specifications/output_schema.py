@@ -27,7 +27,9 @@ def constrain_compact_extraction_schema(schema: dict[str, Any]) -> dict[str, Any
     try:
         definition = result["$defs"]["CompactAtomicClaim"]
         properties = definition["properties"]
-        values = properties["values"]
+        # Local Decimal fields accept exact strings on artifact reload. Model
+        # generation still emits JSON numbers, parsed losslessly by the adapter.
+        values = {**properties["values"], "items": {"type": "number"}}
         text_value = properties["text_value"]
         non_null_text = next(
             option for option in text_value["anyOf"] if option.get("type") == "string"

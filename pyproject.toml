@@ -39,7 +39,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-scione = ["prompts/*.txt"]
+scione = ["prompts/*.txt", "catalogs/data/*.json", "catalogs/data/*.csv.gz"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"

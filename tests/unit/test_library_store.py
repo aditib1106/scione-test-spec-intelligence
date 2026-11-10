@@ -8,7 +8,7 @@ from threading import Barrier
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects import mysql, sqlite
 from sqlalchemy.schema import CreateTable
 
@@ -20,6 +20,7 @@ from scione.library.store import (
     companies,
     digest,
     metadata,
+    runs,
 )
 from scione.providers import TokenUsage
 from scione.specifications.models import CustomerDocumentMetadata, CustomerExtractionRun
@@ -344,6 +345,88 @@ def test_run_identity_cannot_be_reused_for_different_source(store):
         store.save_requirements(changed, _normalized(changed))
 
     assert store.load_requirements(run.run_id) == original
+
+
+def _legacy_atomic_archive(store):
+    """Represent the existing archive predating AtomicClaim.source_context."""
+    _document(store)
+    run = _run()
+    for requirement, normalized in zip(run.extraction.requirements, _normalized(run), strict=True):
+        requirement.atomic_claims = normalized.claims
+    store.save_requirements(run, _normalized(run))
+    legacy = run.extraction.model_dump(mode="json")
+    for requirement in legacy["requirements"]:
+        for claim in requirement["atomic_claims"]:
+            del claim["source_context"]
+    with store.engine.begin() as connection:
+        connection.execute(
+            update(runs)
+            .where(runs.c.run_id == run.run_id)
+            .values(source=legacy, normalizer_version="atomic_requirements_v0_4")
+        )
+    return run, legacy
+
+
+def test_legacy_optional_defaults_allow_derived_upgrade_without_rewriting_source(store):
+    run, legacy = _legacy_atomic_archive(store)
+    fresh = _normalized(run)
+
+    store.save_requirements(run, fresh)
+
+    with store.engine.connect() as connection:
+        archived = (
+            connection.execute(select(runs).where(runs.c.run_id == run.run_id)).mappings().one()
+        )
+    assert archived["source"] == legacy
+    assert archived["normalizer_version"] == fresh[0].normalizer_version
+    rows = store.load_requirements(run.run_id)
+    assert rows[0]["claims"][0]["source_context"] is None
+    assert rows[0]["claims"][0]["value"] == "1"
+    # A repeated index read remains idempotent and keeps the original JSON.
+    store.save_requirements(run, fresh)
+    with store.engine.connect() as connection:
+        assert connection.execute(
+            select(runs.c.source).where(runs.c.run_id == run.run_id)
+        ).scalar_one() == legacy
+
+
+def test_legacy_default_compatibility_still_rejects_a_new_source_context(store):
+    run, legacy = _legacy_atomic_archive(store)
+    before = store.load_requirements(run.run_id)
+    changed = run.model_copy(deep=True)
+    changed.extraction.requirements[0].atomic_claims[0].source_context = "test water"
+
+    with pytest.raises(LibraryConflict, match="different source"):
+        store.save_requirements(changed, _normalized(changed))
+
+    assert store.load_requirements(run.run_id) == before
+    with store.engine.connect() as connection:
+        archived = (
+            connection.execute(select(runs).where(runs.c.run_id == run.run_id)).mappings().one()
+        )
+    assert archived["source"] == legacy
+    assert archived["normalizer_version"] == "atomic_requirements_v0_4"
+
+
+@pytest.mark.parametrize("invalid", ["unknown_field", "missing_required"])
+def test_legacy_source_validation_cannot_discard_unknown_or_missing_required_data(store, invalid):
+    run, legacy = _legacy_atomic_archive(store)
+    if invalid == "unknown_field":
+        legacy["requirements"][0]["atomic_claims"][0]["unrecognized_source_field"] = "preserve me"
+    else:
+        del legacy["requirements"][0]["original_test_name"]
+    with store.engine.begin() as connection:
+        connection.execute(update(runs).where(runs.c.run_id == run.run_id).values(source=legacy))
+    before = store.load_requirements(run.run_id)
+
+    with pytest.raises(LibraryConflict, match="different source"):
+        store.save_requirements(run, _normalized(run))
+
+    assert store.load_requirements(run.run_id) == before
+    with store.engine.connect() as connection:
+        assert connection.execute(
+            select(runs.c.source).where(runs.c.run_id == run.run_id)
+        ).scalar_one() == legacy
 
 
 def test_mismatched_or_duplicate_normalized_requirement_ids_are_rejected(store):
