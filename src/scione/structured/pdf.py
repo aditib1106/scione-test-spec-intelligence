@@ -25,6 +25,7 @@ PDF_WORKER_TIMEOUT_SECONDS = 20
 PDF_INLINE_TIMEOUT_SECONDS = 10
 PDF_MAX_PAGES = 64
 PDF_MAX_LAYOUT_CALLBACKS = 256
+_SECTION_BOUNDARY = "<!-- scione-comparison-section -->"
 _CHECK_TABLE_OPEN = (
     "<table><tr><th width='30%'>Customer requirement</th>"
     "<th width='25%'>Lab declaration</th><th width='15%'>Result</th>"
@@ -145,7 +146,8 @@ def _checked_rows(payload: dict) -> list[tuple[dict, StructuredComparison]]:
                 **data,
                 "checks": [
                     {key: value for key, value in check.items() if key != "candidate_lab_entries"}
-                    if isinstance(check, dict) else check
+                    if isinstance(check, dict)
+                    else check
                     for check in data["checks"]
                 ],
             }
@@ -231,9 +233,13 @@ def _shared_checks(
 def _check_rows(
     comparison: StructuredComparison,
     applies_to: dict[str, list[str]] | None = None,
+    *,
+    section_breaks: bool = False,
 ) -> str:
     parts = [_CHECK_TABLE_OPEN]
-    for check in comparison.checks:
+    for index, check in enumerate(comparison.checks):
+        if section_breaks and index and index % 8 == 0:
+            parts.extend(["</table>", _SECTION_BOUNDARY, _CHECK_TABLE_OPEN])
         requested = check.requested
         declared = check.declared or "Not recorded by the lab"
         reason = check.reason
@@ -310,7 +316,7 @@ def _check_rows(
     return "".join(parts)
 
 
-def _html(payload: dict) -> str:
+def _html(payload: dict, *, section_breaks: bool = False) -> str:
     document = payload.get("document", {})
     if not isinstance(document, dict):
         raise ValueError("Document metadata must be a record.")
@@ -370,6 +376,7 @@ def _html(payload: dict) -> str:
         ]
         parts.extend(
             [
+                _SECTION_BOUNDARY,
                 "<div class='test-head'>",
                 f"<h2>{index:02d} · {_text(row.get('test_name', 'Requested test'))}</h2>",
                 f"<p><b>{_STATUS[comparison.status]}</b> · "
@@ -380,12 +387,16 @@ def _html(payload: dict) -> str:
                     if len(own_checks) < len(comparison.checks)
                     else ""
                 ),
-                _check_rows(comparison.model_copy(update={"checks": own_checks})),
+                _check_rows(
+                    comparison.model_copy(update={"checks": own_checks}),
+                    section_breaks=section_breaks,
+                ),
             ]
         )
     if shared:
         parts.extend(
             [
+                _SECTION_BOUNDARY,
                 "<h2 class='shared-start'>Shared requirements</h2>",
                 "<p class='meta'>Identical requirements, declarations and outcomes are shown "
                 "once here. The named tests retain these checks in their assessments above.</p>",
@@ -396,6 +407,7 @@ def _html(payload: dict) -> str:
                         checks=shared,
                     ),
                     applicability,
+                    section_breaks=section_breaks,
                 ),
             ]
         )
@@ -412,25 +424,59 @@ def _render_comparison_pdf_inline(payload: dict) -> bytes:
 
     started = time.monotonic()
     callbacks = 0
+    budget_exhausted = False
     try:
-        story = pymupdf.Story(html=_html(payload), user_css=_CSS)
+        html = _html(payload)
+        story = pymupdf.Story(html=html, user_css=_CSS)
         media = pymupdf.paper_rect("a4")
         content = pymupdf.Rect(36, 62, media.width - 36, media.height - 45)
 
         def page_rect(_number: int, _filled: pymupdf.Rect) -> tuple:
-            nonlocal callbacks
+            nonlocal callbacks, budget_exhausted
             callbacks += 1
-            if (
-                callbacks > PDF_MAX_LAYOUT_CALLBACKS
-                or _number > PDF_MAX_PAGES
-                or time.monotonic() - started > PDF_INLINE_TIMEOUT_SECONDS
-            ):
-                raise ComparisonPDFError(
-                    "Unable to create the comparison PDF within its layout limit."
-                )
-            return media, content, None
+            if callbacks > PDF_MAX_LAYOUT_CALLBACKS:
+                budget_exhausted = True
+            elif _number > PDF_MAX_PAGES:
+                pass
+            elif time.monotonic() - started > PDF_INLINE_TIMEOUT_SECONDS:
+                budget_exhausted = True
+            else:
+                return media, content, None
+            raise ComparisonPDFError("Unable to create the comparison PDF within its layout limit.")
 
-        with story.write_with_links(page_rect) as pdf:
+        try:
+            pdf = story.write_with_links(page_rect)
+        except ComparisonPDFError:
+            if budget_exhausted:
+                raise
+            # MuPDF can restart an entire multi-table flow at its final table,
+            # repeating the same pages until the callback bound is reached.
+            # Independent section flows avoid that native pagination state;
+            # retain the identical overview, checks and shared applicability.
+            # The overall time, callback and final-page bounds still apply.
+            sections = _html(payload, section_breaks=True).split(_SECTION_BOUNDARY)
+            if len(sections) == 1:
+                raise
+            pdf = pymupdf.open()
+            try:
+                for section in sections:
+                    section = section.removeprefix("<html><body>").removesuffix("</body></html>")
+                    # Each isolated flow already starts on a fresh page. A
+                    # leading forced break can itself restart MuPDF's flow.
+                    section = section.replace(" class='shared-start'", "")
+                    section_story = pymupdf.Story(
+                        html="<html><body>" + section + "</body></html>", user_css=_CSS
+                    )
+                    with section_story.write_with_links(page_rect) as section_pdf:
+                        if len(pdf) + len(section_pdf) > PDF_MAX_PAGES:
+                            raise ComparisonPDFError(
+                                "Unable to create the comparison PDF within its page limit."
+                            )
+                        pdf.insert_pdf(section_pdf)
+            except Exception:
+                pdf.close()
+                raise
+        with pdf:
             total = len(pdf)
             if total > PDF_MAX_PAGES:
                 raise ComparisonPDFError(

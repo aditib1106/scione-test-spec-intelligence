@@ -149,14 +149,16 @@ def test_structured_pdf_rejects_invalid_saved_comparison() -> None:
 def test_saved_web_candidate_hints_do_not_break_or_change_the_printed_assessment():
     payload = _payload()
     check = payload["requirements"][2]["comparison"]["checks"][0]
-    check["candidate_lab_entries"] = [{
-        "claim_id": "UNCONFIRMED_CANDIDATE_ID",
-        "label": "Unconfirmed nearby lab field",
-        "value": "UNCONFIRMED_CANDIDATE_VALUE",
-        "stage": "general",
-        "context": None,
-        "confirmed": False,
-    }]
+    check["candidate_lab_entries"] = [
+        {
+            "claim_id": "UNCONFIRMED_CANDIDATE_ID",
+            "label": "Unconfirmed nearby lab field",
+            "value": "UNCONFIRMED_CANDIDATE_VALUE",
+            "stage": "general",
+            "context": None,
+            "confirmed": False,
+        }
+    ]
     before = copy.deepcopy(payload)
     text, _pages = _compact(render_comparison_pdf(payload))
     assert "Needs information" in text
@@ -172,34 +174,95 @@ def test_pdf_adapter_still_rejects_unrecognized_machine_check_fields():
         render_comparison_pdf(payload)
 
 
+def test_native_layout_restart_uses_complete_bounded_section_fallback(monkeypatch):
+    import scione.structured.pdf as renderer
+
+    payload = _payload()
+    for row_index, row in enumerate(payload["requirements"]):
+        for index in range(18):
+            row["comparison"]["checks"].append(
+                {
+                    "id": f"shared_{row_index}_{index}",
+                    "parameter_id": f"shared_preparation_{index}",
+                    "label": f"Preparation setting {index}",
+                    "kind": "condition",
+                    "stage": "preparation",
+                    "requested": f"SHARED_REQUIRED_VALUE_{index}",
+                    "declared": f"SHARED_LAB_VALUE_{index}",
+                    "status": "supported",
+                    "reason": f"SHARED_REASON_{index}",
+                    "source_pages": [1],
+                }
+            )
+    before = copy.deepcopy(payload)
+    real_story = renderer.pymupdf.Story
+    calls = []
+
+    class RestartingLayout(real_story):
+        def write_with_links(self, *args, **kwargs):
+            if not calls:
+                calls.append("native_failure")
+                raise ComparisonPDFError("Unable to create PDF within its layout limit.")
+            calls.append("bounded_section")
+            return super().write_with_links(*args, **kwargs)
+
+    monkeypatch.setattr(renderer.pymupdf, "Story", RestartingLayout)
+    text, pages = _compact(renderer._render_comparison_pdf_inline(payload))
+    assert 4 < pages < renderer.PDF_MAX_PAGES
+    assert calls[0] == "native_failure" and len(calls) > 5
+    for index in range(18):
+        assert text.count(f"SHARED_REQUIRED_VALUE_{index} ") == 1
+        assert f"SHARED_LAB_VALUE_{index}" in text
+        assert f"SHARED_REASON_{index}" in text
+    for row in payload["requirements"]:
+        assert row["test_name"] in text
+    assert "Applies to:" in text and payload == before
+
+
+def test_layout_fallback_cannot_bypass_the_overall_page_bound(monkeypatch):
+    import scione.structured.pdf as renderer
+
+    monkeypatch.setattr(renderer, "PDF_MAX_PAGES", 1)
+    with pytest.raises(ComparisonPDFError, match="limit"):
+        renderer._render_comparison_pdf_inline(_payload())
+
+
 def test_long_report_keeps_shared_preparation_and_every_test_on_complete_pages():
     payload = _payload()
     for index, row in enumerate(payload["requirements"]):
         checks = []
         for number in range(24):
-            checks.append({
-                "id": f"own_{index}_{number}",
-                "parameter_id": f"measurement_{index}_{number}",
-                "label": f"Specific measurement {number + 1}",
-                "kind": "criterion", "stage": "measurement",
-                "requested": f"OWN_{index}_{number} Customer threshold and reporting context.",
-                "declared": "Recorded laboratory operating and reporting range.",
-                "status": "supported",
-                "reason": "The requested result is within this method's declared capability.",
-                "source_pages": [2],
-            })
+            checks.append(
+                {
+                    "id": f"own_{index}_{number}",
+                    "parameter_id": f"measurement_{index}_{number}",
+                    "label": f"Specific measurement {number + 1}",
+                    "kind": "criterion",
+                    "stage": "measurement",
+                    "requested": f"OWN_{index}_{number} Customer threshold and reporting context.",
+                    "declared": "Recorded laboratory operating and reporting range.",
+                    "status": "supported",
+                    "reason": "The requested result is within this method's declared capability.",
+                    "source_pages": [2],
+                }
+            )
         for number in range(25):
-            checks.append({
-                "id": f"shared_{index}_{number}",
-                "parameter_id": f"preparation_{number}",
-                "label": f"Shared preparation setting {number + 1}",
-                "kind": "condition", "stage": "conditioning",
-                "requested": f"SHARED_{number}_VALUE Customer preparation and handling details.",
-                "declared": "Recorded laboratory preparation setting.",
-                "status": "supported",
-                "reason": "The preparation is included in the saved declaration.",
-                "source_pages": [1],
-            })
+            checks.append(
+                {
+                    "id": f"shared_{index}_{number}",
+                    "parameter_id": f"preparation_{number}",
+                    "label": f"Shared preparation setting {number + 1}",
+                    "kind": "condition",
+                    "stage": "conditioning",
+                    "requested": (
+                        f"SHARED_{number}_VALUE Customer preparation and handling details."
+                    ),
+                    "declared": "Recorded laboratory preparation setting.",
+                    "status": "supported",
+                    "reason": "The preparation is included in the saved declaration.",
+                    "source_pages": [1],
+                }
+            )
         row["comparison"]["checks"] = checks
     before = copy.deepcopy(payload)
     text, pages = _compact(render_comparison_pdf(payload))
