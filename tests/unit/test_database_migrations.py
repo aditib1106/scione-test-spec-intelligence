@@ -279,3 +279,24 @@ def test_status_supports_existing_sqlite_uri(tmp_path):
     with readonly.connect() as connection:
         assert state(connection) == "0001"
     readonly.dispose()
+
+
+def test_generated_column_drift_refused_without_stamp():
+    engine = create_engine("sqlite://")
+    frozen = baseline()
+    frozen.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            insert(frozen.tables["schema_versions"]).values(component="library", version=1)
+        )
+        connection.execute(text("ALTER TABLE companies DROP COLUMN name"))
+        connection.execute(
+            text(
+                "ALTER TABLE companies ADD COLUMN name VARCHAR(300) "
+                "GENERATED ALWAYS AS (lookup_key) VIRTUAL NOT NULL"
+            )
+        )
+    with pytest.raises(MigrationError, match="Incompatible column definition in companies"):
+        upgrade(engine)
+    assert "alembic_version" not in inspect(engine).get_table_names()
+    engine.dispose()

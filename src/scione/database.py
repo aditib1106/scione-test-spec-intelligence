@@ -48,6 +48,8 @@ def compatible(connection):
                 != wanted.compile(dialect=connection.dialect).upper()
                 or actual["nullable"] != column.nullable
                 or actual.get("default") is not None
+                or actual.get("computed") is not None
+                or actual.get("identity") is not None
             ):
                 raise MigrationError(f"Incompatible column definition in {name}.")
         pk = inspector.get_pk_constraint(name)["constrained_columns"]
