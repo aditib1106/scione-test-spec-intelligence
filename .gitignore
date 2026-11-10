@@ -226,6 +226,12 @@ __marimo__/
 !/docs/samples/MS-PNT-410_demo_spec.pdf
 !/docs/samples/CSP-EN-301_demo_spec.pdf
 
+# Local copies of the team's bank inputs. The exact CSV is packaged losslessly
+# as catalogs/data/synthetic_method_bank_v1.csv.gz; retain the small audit below.
+/docs/Generated Customer Spec/*.csv
+/docs/Generated Customer Spec/*.xlsx
+!/docs/Generated Customer Spec/Customer Spec Method Reference Audit - 2026-10-29.xlsx
+
 # Local runtime data
 /runs/
 uploads/
