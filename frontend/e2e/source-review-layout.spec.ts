@@ -219,7 +219,7 @@ test("review keeps a tall PDF, separates parameters from prose, and opens one fo
     await viewport.evaluate((element) => {
       element.scrollTop = 30;
     });
-    await page.getByRole("tab", { name: /^Criteria \(/ }).click();
+    await page.getByRole("tab", { name: /^Acceptance criteria \(/ }).click();
     expect(await viewport.evaluate((element) => element.scrollTop)).toBe(30);
     await page.getByRole("tab", { name: /^Conditions \(/ }).click();
   }
@@ -259,7 +259,7 @@ test("review keeps a tall PDF, separates parameters from prose, and opens one fo
   expect(dimensions.width).toBeLessThanOrEqual(dimensions.viewport + 1);
 });
 
-test("a guarded numeric draft stays visible and can be corrected without duplicating its native atom", async ({
+test("a source-backed numeric draft can be corrected without duplicating its native atom", async ({
   page,
   request,
 }) => {
@@ -317,7 +317,7 @@ test("a guarded numeric draft stays visible and can be corrected without duplica
   const guarded = before.normalized_requirements![selected.id].claims.find(
     (claim) => claim.source_atom_ids?.includes(nativeId),
   )!;
-  expect(guarded.parameter_id).toBeNull();
+  expect(guarded.parameter_id).toBe("cycles");
   await page.goto(
     `/specifications?document=${documentId}&requirement=${selected.id}`,
   );
@@ -327,9 +327,6 @@ test("a guarded numeric draft stays visible and can be corrected without duplica
     .filter({ has: page.getByText("Cycles", { exact: true }) })
     .first();
   await expect(row.getByText("5 cycles", { exact: true })).toBeVisible();
-  await expect(
-    row.getByText("Check interpretation", { exact: true }),
-  ).toBeVisible();
   const dialog = await editRequirement(page, "Conditions", "Cycles");
   await dialog.getByLabel("Parameter", { exact: true }).click();
   await page.getByRole("option", { name: "Cycle count", exact: true }).click();

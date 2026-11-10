@@ -29,7 +29,9 @@ test("source review groups fields, locates citations, and adds or removes a miss
     details.getByRole("rowheader", { name: /^Test name/ }),
   ).toBeVisible();
   await expect(page.getByRole("tab", { name: /^Conditions/ })).toBeVisible();
-  await expect(page.getByRole("tab", { name: /^Criteria/ })).toBeVisible();
+  await expect(
+    page.getByRole("tab", { name: /^Acceptance criteria/ }),
+  ).toBeVisible();
   const parameterTable = page.getByRole("table", {
     name: "Condition parameters",
   });

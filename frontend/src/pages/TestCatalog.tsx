@@ -184,8 +184,8 @@ export default function TestCatalog({ workspace }: PageProps) {
           >
             <TableHead>
               <TableRow>
-                <TableCell sx={{ width: "30%" }}>Test</TableCell>
-                <TableCell sx={{ width: "43%" }}>Methods</TableCell>
+                <TableCell sx={{ width: "30%" }}>Test item</TableCell>
+                <TableCell sx={{ width: "43%" }}>Test methods</TableCell>
                 <TableCell>Also known as</TableCell>
               </TableRow>
             </TableHead>
@@ -305,7 +305,7 @@ export default function TestCatalog({ workspace }: PageProps) {
         sx={{ display: "block", mt: 1.25 }}
       >
         Select a test for all methods and alternative names. Manage your lab's
-        supported tests in My Lab.
+        supported tests in Lab capability.
       </Typography>
       <Dialog
         open={Boolean(selected)}

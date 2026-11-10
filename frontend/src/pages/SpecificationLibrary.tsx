@@ -49,6 +49,7 @@ import DocumentScannerOutlinedIcon from "@mui/icons-material/DocumentScannerOutl
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 import { ApiError, request, useResource } from "../api";
+import { useAuth } from "../auth";
 import FactSummary from "../components/FactSummary";
 import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
 import type { PageProps } from "../types";
@@ -131,6 +132,7 @@ export default function SpecificationLibrary({
   workspace,
   onRefresh,
 }: PageProps) {
+  const { canDevelop } = useAuth();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const library = useResource<{ documents: LibraryDocument[] }>("/api/library");
@@ -146,7 +148,6 @@ export default function SpecificationLibrary({
   const [metadata, setMetadata] = useState<LibraryMetadata>(emptyMetadata);
   const [file, setFile] = useState<File | null>(null);
   const [uploadedId, setUploadedId] = useState<string | null>(null);
-  const [existingUpload, setExistingUpload] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [notice, setNotice] = useState("");
@@ -262,7 +263,6 @@ export default function SpecificationLibrary({
     setMetadata(emptyMetadata());
     setFile(null);
     setUploadedId(null);
-    setExistingUpload(false);
     setSaveError("");
     setDialogOpen(true);
   };
@@ -278,7 +278,6 @@ export default function SpecificationLibrary({
     });
     setFile(null);
     setUploadedId(null);
-    setExistingUpload(false);
     setSaveError("");
     setDialogOpen(true);
   };
@@ -328,11 +327,12 @@ export default function SpecificationLibrary({
         `/api/library/${encodeURIComponent(documentId)}`,
       );
       if (!editing && saved.document.version > 0) {
-        setExistingUpload(true);
+        // Preserve existing company/version metadata when the saved content is reopened.
+        setDialogOpen(false);
         library.refresh();
-        throw new Error(
-          "This PDF is already in the library. Open its saved record to review or update its details.",
-        );
+        onRefresh();
+        navigate(reviewUrl(documentId));
+        return;
       }
       await request(`/api/library/${encodeURIComponent(documentId)}/metadata`, {
         method: "PUT",
@@ -636,6 +636,7 @@ export default function SpecificationLibrary({
                             document.review_count > 0 ? "warning" : "default"
                           }
                           label={
+                            canDevelop &&
                             document.provider === "manual_reference"
                               ? "Prepared example"
                               : !document.run_id
@@ -725,7 +726,7 @@ export default function SpecificationLibrary({
               borderColor: "divider",
             }}
           >
-            {current.provider === "manual_reference" && (
+            {canDevelop && current.provider === "manual_reference" && (
               <Alert severity="info" sx={{ mb: 1.5, py: 0.25 }}>
                 Manually prepared example requirements. Analyze the PDF to
                 evaluate a model.
@@ -993,7 +994,7 @@ export default function SpecificationLibrary({
                         {(
                           [
                             ["condition", "Conditions and scope"],
-                            ["criterion", "Criteria / reporting"],
+                            ["criterion", "Acceptance criteria / reporting"],
                           ] as const
                         ).map(([kind, label]) => {
                           const claims = selectedTest.claims.filter((claim) =>
@@ -1474,20 +1475,19 @@ export default function SpecificationLibrary({
             />
             <Typography variant="caption" color="text.secondary">
               {editing
-                ? "These details organize the saved PDF. The original file and model responses stay available."
+                ? "These details organize the saved customer specification. Earlier versions remain available."
                 : "Choose an existing specification to save a new version. Earlier PDFs and extracted requirements are kept."}
             </Typography>
             {saveError && (
               <Alert severity="error">
                 {saveError}
-                {uploadedId && !existingUpload && (
+                {uploadedId && (
                   <Typography
                     variant="caption"
                     display="block"
                     sx={{ mt: 0.5 }}
                   >
-                    Your PDF is already saved. Retry to finish saving its
-                    details.
+                    Upload complete. Retry to finish saving these details.
                   </Typography>
                 )}
               </Alert>
@@ -1501,20 +1501,9 @@ export default function SpecificationLibrary({
           <Button
             variant="contained"
             disabled={saving}
-            onClick={() => {
-              if (existingUpload && uploadedId) {
-                setDialogOpen(false);
-                setParams({ document: uploadedId });
-              } else void save();
-            }}
+            onClick={() => void save()}
           >
-            {saving
-              ? "Saving…"
-              : existingUpload
-                ? "Open saved specification"
-                : editing
-                  ? "Save details"
-                  : "Save & open PDF"}
+            {saving ? "Saving…" : editing ? "Save details" : "Save & open PDF"}
           </Button>
         </DialogActions>
       </Dialog>

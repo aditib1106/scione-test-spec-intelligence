@@ -124,7 +124,9 @@ export default function CapabilityParameters({
         const group = claims.filter(
           (claim) => isReporting(claim) === reporting,
         );
-        const title = reporting ? "Criteria / reporting" : "Conditions";
+        const title = reporting
+          ? "Acceptance criteria / reporting"
+          : "Conditions";
         return (
           <Box key={title} component="section" aria-label={title}>
             <Stack

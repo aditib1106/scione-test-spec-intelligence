@@ -38,9 +38,15 @@ async function navigateTo(page: Page, label: string) {
       .catch(() => false)
   ) {
     await page.getByRole("button", { name: "Open navigation" }).click();
-    await page.getByRole("link", { name: label }).click();
+    await page
+      .getByRole("list", { name: "Workspace navigation", exact: true })
+      .getByRole("link", { name: label, exact: true })
+      .click();
   } else {
-    await page.getByRole("link", { name: label }).click();
+    await page
+      .getByRole("list", { name: "Workspace navigation", exact: true })
+      .getByRole("link", { name: label, exact: true })
+      .click();
   }
 }
 
@@ -317,10 +323,16 @@ test("seeded source review, lab support, catalog gap, and immutable report histo
       })
       .toBe("confirmed");
   }
-  await page.getByRole("button", { name: "Continue to lab review" }).click();
+  await page.getByRole("button", { name: "Generate report" }).click();
   await expect(
     page.getByRole("heading", { name: "Gap report", exact: true }),
   ).toBeVisible();
+  const generation = page.getByRole("dialog", {
+    name: "Report needs another look",
+    exact: true,
+  });
+  await expect(generation).toBeVisible();
+  await generation.getByRole("button", { name: "Close", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Conditions", exact: true }),
   ).toBeVisible();
@@ -652,7 +664,7 @@ test("saved source fixtures retain atomic requirements and export the same gap a
     page.getByText("Manually prepared example requirements.", { exact: false }),
   ).toBeVisible();
 
-  await navigateTo(page, "Reports");
+  await navigateTo(page, "Gap report");
   await expect(
     page.getByRole("button", { name: "Conditions", exact: true }),
   ).toBeVisible();
@@ -690,11 +702,14 @@ test("saved source fixtures retain atomic requirements and export the same gap a
     fullPage: true,
   });
   await page
-    .getByRole("button", { name: "Criteria / reporting", exact: true })
+    .getByRole("button", {
+      name: "Acceptance criteria / reporting",
+      exact: true,
+    })
     .click();
   const gap = page
     .getByRole("rowgroup", {
-      name: "Specular gloss criteria / reporting comparison",
+      name: "Specular gloss acceptance criteria / reporting comparison",
       exact: true,
     })
     .getByText("Gap", { exact: true });

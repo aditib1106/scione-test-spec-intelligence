@@ -242,7 +242,7 @@ export default function ExtractionReviewTable({
           />
           <Tab
             value="criterion"
-            label={`Criteria (${criteria.filter(isReviewParameter).length})`}
+            label={`Acceptance criteria (${criteria.filter(isReviewParameter).length})`}
           />
         </Tabs>
         {concrete.length > 0 && (
@@ -251,7 +251,7 @@ export default function ExtractionReviewTable({
               aria-label={
                 group === "condition"
                   ? "Condition parameters"
-                  : "Criteria parameters"
+                  : "Acceptance criteria parameters"
               }
               size="small"
               sx={{

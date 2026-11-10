@@ -9,19 +9,73 @@ export class ApiError extends Error {
   }
 }
 
+let csrfToken: string | null = null;
+let sessionEpoch = 0;
+const activeRequests = new Set<AbortController>();
+
+/** Clear every in-flight request before accepting another user's/lab's session. */
+export function configureApiSession(token: string | null) {
+  csrfToken = token;
+  sessionEpoch += 1;
+  for (const controller of activeRequests) controller.abort();
+  activeRequests.clear();
+}
+
+export async function apiFetch(
+  path: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  const epoch = sessionEpoch;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (options.signal?.aborted) controller.abort();
+  options.signal?.addEventListener("abort", abort, { once: true });
+  activeRequests.add(controller);
+  const headers = new Headers(options.headers);
+  const method = (options.method ?? "GET").toUpperCase();
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && csrfToken)
+    headers.set("X-CSRF-Token", csrfToken);
+  try {
+    const response = await fetch(path, {
+      ...options,
+      headers,
+      signal: controller.signal,
+      credentials: "same-origin",
+    });
+    if (epoch !== sessionEpoch)
+      throw new DOMException("The active workspace changed.", "AbortError");
+    if (
+      response.status === 401 &&
+      !["/api/auth/login", "/api/auth/session"].includes(path)
+    )
+      window.dispatchEvent(new Event("scione:session-expired"));
+    if (response.status === 403) {
+      const body = await response
+        .clone()
+        .json()
+        .catch(() => ({}));
+      if (
+        /csrf|session changed/i.test(
+          typeof body.detail === "string" ? body.detail : "",
+        )
+      )
+        window.dispatchEvent(new Event("scione:session-changed"));
+    }
+    return response;
+  } finally {
+    activeRequests.delete(controller);
+    options.signal?.removeEventListener("abort", abort);
+  }
+}
+
 export async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      ...(options.body instanceof FormData
-        ? {}
-        : { "Content-Type": "application/json" }),
-      ...options.headers,
-    },
-  });
+  const headers = new Headers(options.headers);
+  if (!(options.body instanceof FormData) && !headers.has("Content-Type"))
+    headers.set("Content-Type", "application/json");
+  const response = await apiFetch(path, { ...options, headers });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     const detail = body.detail;

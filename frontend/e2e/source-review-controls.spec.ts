@@ -134,7 +134,7 @@ test("source references stay compact, notes expand on demand, and editing focuse
     page.getByRole("tab", { name: "Conditions (1)", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("tab", { name: "Criteria (0)", exact: true }),
+    page.getByRole("tab", { name: "Acceptance criteria (0)", exact: true }),
   ).toBeVisible();
   await expect(table.getByRole("row")).toHaveCount(2); // heading plus one actual parameter
   const reference = table

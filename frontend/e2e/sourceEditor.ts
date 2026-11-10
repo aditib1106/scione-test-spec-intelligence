@@ -3,7 +3,7 @@ import { expect, type Page } from "@playwright/test";
 /** Follow the single user-facing edit action, then choose the intended field. */
 export async function editRequirement(
   page: Page,
-  section: "Conditions" | "Criteria" | "Sample plan",
+  section: "Conditions" | "Acceptance criteria" | "Sample plan",
   label: string,
 ) {
   await page

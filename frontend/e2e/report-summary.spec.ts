@@ -263,7 +263,7 @@ test("report expands conditions and criteria in their own groups", async ({
     exact: true,
   });
   const criteriaButton = page.getByRole("button", {
-    name: "Criteria / reporting",
+    name: "Acceptance criteria / reporting",
     exact: true,
   });
   await expect(
@@ -435,10 +435,13 @@ for (const height of [900, 760]) {
 
     await page.getByRole("button", { name: "Conditions", exact: true }).click();
     await page
-      .getByRole("button", { name: "Criteria / reporting", exact: true })
+      .getByRole("button", {
+        name: "Acceptance criteria / reporting",
+        exact: true,
+      })
       .click();
     const criteria = pane.getByRole("rowgroup", {
-      name: "Water jet adhesion criteria / reporting comparison",
+      name: "Water jet adhesion acceptance criteria / reporting comparison",
       exact: true,
     });
     // A single shared table keeps expanded fields under the same headings.

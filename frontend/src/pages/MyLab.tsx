@@ -483,7 +483,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                   <TableCell sx={{ width: "15%" }}>Method</TableCell>
                   <TableCell sx={{ width: "23%" }}>Conditions</TableCell>
                   <TableCell sx={{ width: "25%" }}>
-                    Criteria / reporting
+                    Acceptance criteria / reporting
                   </TableCell>
                   <TableCell sx={{ width: "13%" }}>Rate</TableCell>
                   <TableCell sx={{ width: "7%" }} align="right">
@@ -648,7 +648,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
               </Box>
               <Box>
                 <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
-                  Criteria / reporting
+                  Acceptance criteria / reporting
                 </Typography>
                 <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
                   {measurements(viewed, sharedKeys) || "Not specified"}

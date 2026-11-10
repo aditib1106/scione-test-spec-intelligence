@@ -38,7 +38,8 @@ import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
 import SourcePageReference from "../components/SourcePageReference";
-import { ApiError, request } from "../api";
+import { ApiError, apiFetch, request } from "../api";
+import { useAuth } from "../auth";
 import PdfPageViewer from "../components/PdfPageViewer";
 import SourceFactsEditor from "../components/SourceFactsEditor";
 import ExtractionReviewTable, {
@@ -108,6 +109,7 @@ function previewIdentity(
   ]);
 }
 export default function Specifications({ workspace, onRefresh }: PageProps) {
+  const { canDevelop } = useAuth();
   const [params, setParams] = useSearchParams();
   const lastRequirementParam = useRef(params.get("requirement"));
   const navigate = useNavigate();
@@ -184,7 +186,6 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const [freeTierConfirmed, setFreeTierConfirmed] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const [uploadNotice, setUploadNotice] = useState("");
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchIds, setBatchIds] = useState<string[]>([]);
   const [batchNote, setBatchNote] = useState("");
@@ -408,7 +409,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     setPageLoading(true);
     setPageError("");
     setHighlightFocus(null);
-    fetch(
+    apiFetch(
       `/api/specifications/${encodeURIComponent(documentId)}/pages/${currentPage}?${query}`,
       { signal: controller.signal },
     )
@@ -592,7 +593,6 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     if (!file) return;
     setUploading(true);
     setUploadError("");
-    setUploadNotice("");
     try {
       const form = new FormData();
       form.append("file", file);
@@ -600,13 +600,6 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         "/api/specifications",
         { method: "POST", body: form },
       );
-      const existing = docs.find(
-        (item) => item.document_id === result.document_id,
-      );
-      if (existing)
-        setUploadNotice(
-          `This PDF is already saved as ${existing.original_name}. Opened the existing record${existing.latest_run_id ? " and its saved analysis" : ""}. You can run a new analysis from Analysis settings.`,
-        );
       onRefresh();
       lastRequirementParam.current = null;
       setParams({ document: result.document_id });
@@ -619,8 +612,8 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const analyze = async () => {
     if (
       analysisSubmitting.current ||
-      !permission ||
-      (requiresUsageAcknowledgment && !freeTierConfirmed) ||
+      (canDevelop && !permission) ||
+      (canDevelop && requiresUsageAcknowledgment && !freeTierConfirmed) ||
       !model.trim() ||
       !data ||
       data.document_id !== documentId
@@ -654,10 +647,11 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
             model: model.trim(),
             strategy,
             output_limit: outputLimit,
-            permission,
-            billing_acknowledged: requiresUsageAcknowledgment
-              ? freeTierConfirmed
-              : true,
+            permission: canDevelop ? permission : true,
+            billing_acknowledged:
+              canDevelop && requiresUsageAcknowledgment
+                ? freeTierConfirmed
+                : true,
           }),
         },
       );
@@ -1238,11 +1232,6 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         </Tooltip>
       </Stack>
       {uploadError && <Alert severity="error">{uploadError}</Alert>}
-      {uploadNotice && (
-        <Alert severity="info" onClose={() => setUploadNotice("")}>
-          {uploadNotice}
-        </Alert>
-      )}
     </Stack>
   );
 
@@ -1354,7 +1343,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         )}
         {!loading && data && data.document_id === documentId && (
           <>
-            {data.run?.provider === "manual_reference" && (
+            {canDevelop && data.run?.provider === "manual_reference" && (
               <Alert severity="info" sx={{ py: 0 }}>
                 Manually prepared example requirements. Analyze the PDF to
                 evaluate a model.
@@ -1362,313 +1351,385 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
             )}
             {data.document.warnings.map((warning, index) => (
               <Alert severity="warning" key={index}>
-                {warning}
+                {canDevelop
+                  ? warning
+                  : /multimodal ingestion|text is sparse/i.test(warning)
+                    ? "Some text may not be readable. Check the PDF before confirming its requirements."
+                    : warning.replace(
+                        "No text was extracted from pages:",
+                        "No readable text on pages:",
+                      )}
               </Alert>
             ))}
             <DocumentRevisionNotice issues={data.document_review_issues} />
-            <Accordion
-              expanded={analysisOpen}
-              onChange={(_, expanded) => setAnalysisOpen(expanded)}
-              disableGutters
-              sx={{
-                ...panelSx,
-                borderRadius: "12px !important",
-                "&:before": { display: "none" },
-              }}
-            >
-              <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 2 }}>
-                <Box>
-                  <Typography variant="subtitle1" fontWeight={700}>
-                    {data.run
-                      ? "Analysis settings"
-                      : "Analyze this specification"}
-                  </Typography>
-                  {analysisOpen && (
-                    <Typography variant="body2" color="text.secondary">
-                      Previous extracted content stays available if a new
-                      request fails.
-                    </Typography>
-                  )}
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails sx={{ pt: 0 }}>
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: {
-                      xs: "1fr",
-                      lg: "minmax(0,1fr) minmax(280px, auto)",
-                    },
-                    gap: 2,
-                    alignItems: "start",
-                  }}
+            {canDevelop ? (
+              <Accordion
+                expanded={analysisOpen}
+                onChange={(_, expanded) => setAnalysisOpen(expanded)}
+                disableGutters
+                sx={{
+                  ...panelSx,
+                  borderRadius: "12px !important",
+                  "&:before": { display: "none" },
+                }}
+              >
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{ px: 2 }}
                 >
                   <Box>
-                    <Stack
-                      direction={{ xs: "column", sm: "row" }}
-                      spacing={1.25}
-                      sx={{ mt: 1.5 }}
-                    >
-                      <FormControl
-                        size="small"
-                        sx={{ minWidth: 160 }}
-                        disabled={analyzing}
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      {data.run
+                        ? "Analysis settings"
+                        : "Analyze this specification"}
+                    </Typography>
+                    {analysisOpen && (
+                      <Typography variant="body2" color="text.secondary">
+                        Previous extracted content stays available if a new
+                        request fails.
+                      </Typography>
+                    )}
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails sx={{ pt: 0 }}>
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "1fr",
+                        lg: "minmax(0,1fr) minmax(280px, auto)",
+                      },
+                      gap: 2,
+                      alignItems: "start",
+                    }}
+                  >
+                    <Box>
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1.25}
+                        sx={{ mt: 1.5 }}
                       >
-                        <InputLabel id="provider-label">Provider</InputLabel>
-                        <Select
-                          labelId="provider-label"
-                          label="Provider"
-                          value={provider}
-                          onChange={(event) => setProvider(event.target.value)}
+                        <FormControl
+                          size="small"
+                          sx={{ minWidth: 160 }}
+                          disabled={analyzing}
                         >
-                          {workspace.providers.map((item) => (
-                            <MenuItem
-                              key={item.id}
-                              value={item.id}
-                              disabled={!item.available}
-                            >
-                              {item.label}
-                              {!item.available ? " · unavailable" : ""}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <FormControl
-                        size="small"
-                        sx={{ minWidth: 200, flex: 1 }}
-                        disabled={analyzing}
-                      >
-                        <InputLabel id="strategy-label">
-                          Reading mode
-                        </InputLabel>
-                        <Select
-                          labelId="strategy-label"
-                          label="Reading mode"
-                          value={strategy}
-                          onChange={(event) => {
-                            setStrategy(event.target.value as typeof strategy);
-                            setPermission(false);
-                            setFreeTierConfirmed(false);
-                          }}
+                          <InputLabel id="provider-label">Provider</InputLabel>
+                          <Select
+                            labelId="provider-label"
+                            label="Provider"
+                            value={provider}
+                            onChange={(event) =>
+                              setProvider(event.target.value)
+                            }
+                          >
+                            {workspace.providers.map((item) => (
+                              <MenuItem
+                                key={item.id}
+                                value={item.id}
+                                disabled={!item.available}
+                              >
+                                {item.label}
+                                {!item.available ? " · unavailable" : ""}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <FormControl
+                          size="small"
+                          sx={{ minWidth: 200, flex: 1 }}
+                          disabled={analyzing}
                         >
-                          <MenuItem value="inventory_compact_document">
-                            Inventory + extraction · two requests
-                          </MenuItem>
-                          <MenuItem value="compact_document">
-                            Compact · complete document
-                          </MenuItem>
-                          <MenuItem value="whole_document">
-                            Detailed · one request
-                          </MenuItem>
-                          <MenuItem value="focused_passes">
-                            Focused coverage passes
-                          </MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Stack>
-                    <Accordion
-                      disableGutters
-                      elevation={0}
-                      sx={{
-                        mt: 0.5,
-                        bgcolor: "transparent",
-                        "&:before": { display: "none" },
-                      }}
-                    >
-                      <AccordionSummary
-                        expandIcon={<ExpandMoreIcon />}
-                        sx={{ px: 0, minHeight: 40 }}
-                      >
-                        <Typography variant="body2" color="primary">
-                          Advanced model settings
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ px: 0 }}>
-                        <Stack
-                          direction={{ xs: "column", sm: "row" }}
-                          spacing={1.25}
-                        >
-                          <TextField
-                            size="small"
-                            label="Model"
-                            value={model}
-                            disabled={analyzing}
+                          <InputLabel id="strategy-label">
+                            Reading mode
+                          </InputLabel>
+                          <Select
+                            labelId="strategy-label"
+                            label="Reading mode"
+                            value={strategy}
                             onChange={(event) => {
-                              setModel(event.target.value);
-                              setPermission(false);
-                              setFreeTierConfirmed(false);
-                            }}
-                            fullWidth
-                          />
-                          <TextField
-                            size="small"
-                            type="number"
-                            label="Max output tokens per request"
-                            value={outputLimit}
-                            disabled={analyzing}
-                            onChange={(event) => {
-                              setOutputLimit(
-                                Math.max(
-                                  512,
-                                  Number(event.target.value) || 512,
-                                ),
+                              setStrategy(
+                                event.target.value as typeof strategy,
                               );
                               setPermission(false);
                               setFreeTierConfirmed(false);
                             }}
-                            sx={{ width: { sm: 240 } }}
-                            inputProps={{ min: 512, step: 128 }}
-                          />
-                        </Stack>
-                      </AccordionDetails>
-                    </Accordion>
-                  </Box>
-                  <Stack spacing={0.25} sx={{ minWidth: { lg: 300 } }}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={permission}
-                          disabled={analyzing}
-                          onChange={(event) =>
-                            setPermission(event.target.checked)
-                          }
-                        />
-                      }
-                      label={
-                        <Typography variant="body2">
-                          I have permission to send this document to{" "}
-                          {selectedProvider?.label ?? "the selected provider"}
-                        </Typography>
-                      }
-                    />
-                    {requiresUsageAcknowledgment && (
+                          >
+                            <MenuItem value="inventory_compact_document">
+                              Inventory + extraction · two requests
+                            </MenuItem>
+                            <MenuItem value="compact_document">
+                              Compact · complete document
+                            </MenuItem>
+                            <MenuItem value="whole_document">
+                              Detailed · one request
+                            </MenuItem>
+                            <MenuItem value="focused_passes">
+                              Focused coverage passes
+                            </MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Stack>
+                      <Accordion
+                        disableGutters
+                        elevation={0}
+                        sx={{
+                          mt: 0.5,
+                          bgcolor: "transparent",
+                          "&:before": { display: "none" },
+                        }}
+                      >
+                        <AccordionSummary
+                          expandIcon={<ExpandMoreIcon />}
+                          sx={{ px: 0, minHeight: 40 }}
+                        >
+                          <Typography variant="body2" color="primary">
+                            Advanced model settings
+                          </Typography>
+                        </AccordionSummary>
+                        <AccordionDetails sx={{ px: 0 }}>
+                          <Stack
+                            direction={{ xs: "column", sm: "row" }}
+                            spacing={1.25}
+                          >
+                            <TextField
+                              size="small"
+                              label="Model"
+                              value={model}
+                              disabled={analyzing}
+                              onChange={(event) => {
+                                setModel(event.target.value);
+                                setPermission(false);
+                                setFreeTierConfirmed(false);
+                              }}
+                              fullWidth
+                            />
+                            <TextField
+                              size="small"
+                              type="number"
+                              label="Max output tokens per request"
+                              value={outputLimit}
+                              disabled={analyzing}
+                              onChange={(event) => {
+                                setOutputLimit(
+                                  Math.max(
+                                    512,
+                                    Number(event.target.value) || 512,
+                                  ),
+                                );
+                                setPermission(false);
+                                setFreeTierConfirmed(false);
+                              }}
+                              sx={{ width: { sm: 240 } }}
+                              inputProps={{ min: 512, step: 128 }}
+                            />
+                          </Stack>
+                        </AccordionDetails>
+                      </Accordion>
+                    </Box>
+                    <Stack spacing={0.25} sx={{ minWidth: { lg: 300 } }}>
                       <FormControlLabel
                         control={
                           <Checkbox
-                            checked={freeTierConfirmed}
+                            checked={permission}
                             disabled={analyzing}
                             onChange={(event) =>
-                              setFreeTierConfirmed(event.target.checked)
+                              setPermission(event.target.checked)
                             }
                           />
                         }
                         label={
                           <Typography variant="body2">
-                            {provider === "gemini"
-                              ? "I understand this uses my Google project's API quota and may incur charges"
-                              : `I understand this uses my ${selectedProvider?.label ?? "provider"} API quota or credits and may incur charges`}
+                            I have permission to send this document to{" "}
+                            {selectedProvider?.label ?? "the selected provider"}
                           </Typography>
                         }
                       />
-                    )}
-                    <Button
-                      variant="contained"
-                      onClick={() => void analyze()}
-                      disabled={
-                        analyzing ||
-                        !permission ||
-                        (requiresUsageAcknowledgment && !freeTierConfirmed) ||
-                        !model.trim() ||
-                        !selectedProvider?.available ||
-                        (strategy === "focused_passes" &&
-                          Math.ceil(data.document.page_count / 3) > 8)
-                      }
-                      sx={{ alignSelf: { lg: "flex-start" }, bgcolor: blue }}
-                    >
-                      {analyzing
-                        ? "Analyzing…"
-                        : data.run
-                          ? "Analyze again"
-                          : "Analyze PDF"}
-                    </Button>
-                  </Stack>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ gridColumn: "1/-1" }}
-                  >
-                    Analysis starts only when you press the button. Failed
-                    requests are not retried automatically. Leaving this page
-                    stops waiting, but a request already accepted by the model
-                    provider may finish and use credits.
-                  </Typography>
-                  {strategy === "focused_passes" && (
+                      {requiresUsageAcknowledgment && (
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={freeTierConfirmed}
+                              disabled={analyzing}
+                              onChange={(event) =>
+                                setFreeTierConfirmed(event.target.checked)
+                              }
+                            />
+                          }
+                          label={
+                            <Typography variant="body2">
+                              {provider === "gemini"
+                                ? "I understand this uses my Google project's API quota and may incur charges"
+                                : `I understand this uses my ${selectedProvider?.label ?? "provider"} API quota or credits and may incur charges`}
+                            </Typography>
+                          }
+                        />
+                      )}
+                      <Button
+                        variant="contained"
+                        onClick={() => void analyze()}
+                        disabled={
+                          analyzing ||
+                          !permission ||
+                          (requiresUsageAcknowledgment && !freeTierConfirmed) ||
+                          !model.trim() ||
+                          !selectedProvider?.available ||
+                          (strategy === "focused_passes" &&
+                            Math.ceil(data.document.page_count / 3) > 8)
+                        }
+                        sx={{ alignSelf: { lg: "flex-start" }, bgcolor: blue }}
+                      >
+                        {analyzing
+                          ? "Analyzing…"
+                          : data.run
+                            ? "Analyze again"
+                            : "Analyze PDF"}
+                      </Button>
+                    </Stack>
                     <Typography
                       variant="caption"
-                      color={
-                        Math.ceil(data.document.page_count / 3) > 8
-                          ? "error.main"
-                          : "text.secondary"
-                      }
+                      color="text.secondary"
                       sx={{ gridColumn: "1/-1" }}
                     >
-                      Focused passes would make{" "}
-                      {Math.ceil(data.document.page_count / 3)} provider
-                      requests (one for each 3-page focus). Each pass still
-                      receives full document context; the limit is 8 passes per
-                      analysis.
+                      Analysis starts only when you press the button. Failed
+                      requests are not retried automatically. Leaving this page
+                      stops waiting, but a request already accepted by the model
+                      provider may finish and use credits.
                     </Typography>
-                  )}
-                  {analysisError && (
-                    <Alert severity="error" sx={{ gridColumn: "1/-1" }}>
-                      {analysisError}
-                    </Alert>
-                  )}
-                  {data.failure &&
-                    (!data.run ||
-                      Date.parse(data.failure.occurred_at) >
-                        Date.parse(data.run.started_at)) && (
-                      <Alert severity="warning" sx={{ gridColumn: "1/-1" }}>
-                        The latest analysis attempt failed. Showing the saved
-                        result from{" "}
-                        {data.failure.previous_run_id
-                          ? "the previous successful run"
-                          : "before analysis"}
-                        : {data.failure.message}
+                    {strategy === "focused_passes" && (
+                      <Typography
+                        variant="caption"
+                        color={
+                          Math.ceil(data.document.page_count / 3) > 8
+                            ? "error.main"
+                            : "text.secondary"
+                        }
+                        sx={{ gridColumn: "1/-1" }}
+                      >
+                        Focused passes would make{" "}
+                        {Math.ceil(data.document.page_count / 3)} provider
+                        requests (one for each 3-page focus). Each pass still
+                        receives full document context; the limit is 8 passes
+                        per analysis.
+                      </Typography>
+                    )}
+                    {analysisError && (
+                      <Alert severity="error" sx={{ gridColumn: "1/-1" }}>
+                        {analysisError}
                       </Alert>
                     )}
-                  {data.failure?.attempt_id && (
-                    <Accordion
-                      disableGutters
-                      elevation={0}
-                      sx={{
-                        gridColumn: "1/-1",
-                        bgcolor: "transparent",
-                        "&:before": { display: "none" },
-                      }}
-                    >
-                      <AccordionSummary
-                        expandIcon={<ExpandMoreIcon />}
-                        sx={{ px: 0 }}
+                    {data.failure &&
+                      (!data.run ||
+                        Date.parse(data.failure.occurred_at) >
+                          Date.parse(data.run.started_at)) && (
+                        <Alert severity="warning" sx={{ gridColumn: "1/-1" }}>
+                          The latest analysis attempt failed. Showing the saved
+                          result from{" "}
+                          {data.failure.previous_run_id
+                            ? "the previous successful run"
+                            : "before analysis"}
+                          : {data.failure.message}
+                        </Alert>
+                      )}
+                    {data.failure?.attempt_id && (
+                      <Accordion
+                        disableGutters
+                        elevation={0}
+                        sx={{
+                          gridColumn: "1/-1",
+                          bgcolor: "transparent",
+                          "&:before": { display: "none" },
+                        }}
                       >
-                        <Typography variant="caption" color="text.secondary">
-                          Developer details · failed analysis
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ px: 0 }}>
-                        <Button
-                          size="small"
-                          component="a"
-                          href={`/api/specifications/${encodeURIComponent(documentId)}/analysis-failures/${encodeURIComponent(data.failure.attempt_id)}/artifacts`}
-                          download
+                        <AccordionSummary
+                          expandIcon={<ExpandMoreIcon />}
+                          sx={{ px: 0 }}
                         >
-                          Download failed attempt
-                        </Button>
-                        <Typography
-                          variant="caption"
-                          display="block"
-                          color="text.secondary"
-                        >
-                          Includes source prompts, original model output and
-                          reported usage. Review before explicitly starting
-                          another analysis.
-                        </Typography>
-                      </AccordionDetails>
-                    </Accordion>
+                          <Typography variant="caption" color="text.secondary">
+                            Developer details · failed analysis
+                          </Typography>
+                        </AccordionSummary>
+                        <AccordionDetails sx={{ px: 0 }}>
+                          <Button
+                            size="small"
+                            component="a"
+                            href={`/api/specifications/${encodeURIComponent(documentId)}/analysis-failures/${encodeURIComponent(data.failure.attempt_id)}/artifacts`}
+                            download
+                          >
+                            Download failed attempt
+                          </Button>
+                          <Typography
+                            variant="caption"
+                            display="block"
+                            color="text.secondary"
+                          >
+                            Includes source prompts, original model output and
+                            reported usage. Review before explicitly starting
+                            another analysis.
+                          </Typography>
+                        </AccordionDetails>
+                      </Accordion>
+                    )}
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+            ) : (
+              <Paper variant="outlined" sx={{ ...panelSx, p: 2 }}>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  gap={2}
+                  alignItems={{ sm: "center" }}
+                  justifyContent="space-between"
+                >
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      {data.run
+                        ? "Extracted requirements"
+                        : "Analyze customer specification"}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {data.run
+                        ? "Review the extracted test items below, or run a fresh analysis."
+                        : "Extract the test items, conditions and acceptance criteria from this PDF."}
+                    </Typography>
+                  </Box>
+                  <Button
+                    variant="contained"
+                    onClick={() => void analyze()}
+                    disabled={
+                      analyzing || !selectedProvider?.available || !model.trim()
+                    }
+                    sx={{ flexShrink: 0 }}
+                  >
+                    {analyzing
+                      ? "Analyzing…"
+                      : data.run
+                        ? "Analyze again"
+                        : "Analyze PDF"}
+                  </Button>
+                </Stack>
+                {!selectedProvider?.available && (
+                  <Alert severity="info" sx={{ mt: 1.5 }}>
+                    Document analysis is currently unavailable. Please contact
+                    your administrator.
+                  </Alert>
+                )}
+                {analysisError && (
+                  <Alert severity="error" sx={{ mt: 1.5 }}>
+                    {analysisError}
+                  </Alert>
+                )}
+                {data.failure &&
+                  (!data.run ||
+                    Date.parse(data.failure.occurred_at) >
+                      Date.parse(data.run.started_at)) && (
+                    <Alert severity="warning" sx={{ mt: 1.5 }}>
+                      The latest analysis did not finish. Your saved document
+                      and earlier results are available.
+                    </Alert>
                   )}
-                </Box>
-              </AccordionDetails>
-            </Accordion>
+              </Paper>
+            )}
 
             {analyzing && (
               <InferenceProgress
@@ -1993,8 +2054,8 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                       No extraction yet
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Your PDF is saved. No model request has been made. Open
-                      Analysis settings above when you are ready to analyze it.
+                      Your PDF is saved. Choose Analyze PDF above to extract its
+                      test requirements.
                     </Typography>
                   </Box>
                 )}

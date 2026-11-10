@@ -466,7 +466,7 @@ export default function SourceFactsEditor({
                 ? "Sample plan / instruction"
                 : activeAtom.kind === "condition"
                   ? "Condition"
-                  : "Criterion / reporting"
+                  : "Acceptance criteria / reporting"
             }
           />
         </Stack>
@@ -794,7 +794,7 @@ export default function SourceFactsEditor({
         {row && (
           <Stack
             component="fieldset"
-            aria-label={`${section === "condition" ? "Conditions" : "Criteria / reporting"} ${selectedRawIndex + 1}`}
+            aria-label={`${section === "condition" ? "Conditions" : "Acceptance criteria / reporting"} ${selectedRawIndex + 1}`}
             gap={1.5}
             sx={{ m: 0, p: 0, minWidth: 0, border: 0 }}
           >
@@ -948,7 +948,7 @@ export default function SourceFactsEditor({
         >
           <Tab value="overview" label="Test & method" />
           <Tab value="condition" label="Conditions" />
-          <Tab value="criterion" label="Criteria" />
+          <Tab value="criterion" label="Acceptance criteria" />
           {sourceAtoms.some(isSamplePlanClaim) && (
             <Tab value="planning" label="Sample plan" />
           )}
@@ -1118,9 +1118,8 @@ export default function SourceFactsEditor({
                         color="text.secondary"
                         display="block"
                       >
-                        Optional: discard the previous detailed interpretation
-                        and reparse the text without another AI call. Original
-                        model output is kept.
+                        Rebuild the detailed requirements from the corrected
+                        wording. The original extraction stays available.
                       </Typography>
                     </AccordionDetails>
                   </Accordion>

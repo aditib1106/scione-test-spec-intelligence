@@ -37,7 +37,8 @@ import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
-import { useResource } from "../api";
+import { apiFetch, useResource } from "../api";
+import { useAuth } from "../auth";
 import PdfPageViewer from "../components/PdfPageViewer";
 import ReportGenerationControls from "../components/ReportGenerationControls";
 import ReportDimensions, {
@@ -230,6 +231,7 @@ function nextActions(documentId: string, requirement: ComparisonRequirement) {
 }
 
 export default function Comparison({ workspace }: PageProps) {
+  const { canDevelop } = useAuth();
   const [params, setParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -378,7 +380,7 @@ export default function Comparison({ workspace }: PageProps) {
     setPageLoading(true);
     setPageError("");
     setPageImage("");
-    fetch(`${reportBase}/pages/${page}`, { signal: controller.signal })
+    apiFetch(`${reportBase}/pages/${page}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok)
           throw new Error(
@@ -550,7 +552,7 @@ export default function Comparison({ workspace }: PageProps) {
                 </IconButton>
               </span>
             </Tooltip>
-            {documentId && (
+            {documentId && canDevelop && (
               <IconButton
                 aria-label="Report options"
                 onClick={(event) => setToolsAnchor(event.currentTarget)}
@@ -581,19 +583,21 @@ export default function Comparison({ workspace }: PageProps) {
           sourceReviewUrl={`/specifications?${new URLSearchParams({ document: documentId })}`}
         />
       )}
-      <Menu
-        anchorEl={toolsAnchor}
-        open={Boolean(toolsAnchor)}
-        onClose={() => setToolsAnchor(null)}
-      >
-        <MenuItem
-          component={RouterLink}
-          to={`/reports/advanced?${new URLSearchParams({ document: documentId })}`}
-          onClick={() => setToolsAnchor(null)}
+      {canDevelop && (
+        <Menu
+          anchorEl={toolsAnchor}
+          open={Boolean(toolsAnchor)}
+          onClose={() => setToolsAnchor(null)}
         >
-          Review test matching
-        </MenuItem>
-      </Menu>
+          <MenuItem
+            component={RouterLink}
+            to={`/reports/advanced?${new URLSearchParams({ document: documentId })}`}
+            onClick={() => setToolsAnchor(null)}
+          >
+            Review test matching
+          </MenuItem>
+        </Menu>
+      )}
       {!documentId ? (
         <Paper variant="outlined" sx={{ p: 5, textAlign: "center" }}>
           <Typography variant="h6">

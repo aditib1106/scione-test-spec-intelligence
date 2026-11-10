@@ -17,6 +17,7 @@ import {
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import CodeRoundedIcon from "@mui/icons-material/CodeRounded";
 import { ApiError, request } from "../api";
+import { useAuth } from "../auth";
 import type { ProviderOption } from "../types";
 import { claimReportGenerationIntent } from "../reportGeneration";
 import InferenceProgress, {
@@ -71,6 +72,7 @@ export default function ReportGenerationControls({
   generationIntentId?: string | null;
   onComplete: () => void;
 }) {
+  const { canDevelop } = useAuth();
   const configured = providers.find((provider) => provider.available);
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<"preparing" | "comparing">("preparing");
@@ -195,7 +197,7 @@ export default function ReportGenerationControls({
           sx={{ height: 25, fontSize: 12 }}
         />
       </Tooltip>
-      <Tooltip title="Uses AI to compare the saved specification and lab information. Current results are reused.">
+      <Tooltip title="Compare customer requirements with your lab’s declared capabilities.">
         <span>
           <Button
             variant={aiApplied ? "outlined" : "contained"}
@@ -221,18 +223,20 @@ export default function ReportGenerationControls({
           </Button>
         </span>
       </Tooltip>
-      <Tooltip title="Developer report tools">
-        <span>
-          <IconButton
-            aria-label="Developer report tools"
-            size="small"
-            disabled={busy}
-            onClick={() => setDeveloperOpen(true)}
-          >
-            <CodeRoundedIcon fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
+      {canDevelop && (
+        <Tooltip title="Developer report tools">
+          <span>
+            <IconButton
+              aria-label="Developer report tools"
+              size="small"
+              disabled={busy}
+              onClick={() => setDeveloperOpen(true)}
+            >
+              <CodeRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
 
       <Dialog
         open={progressOpen}
@@ -282,34 +286,37 @@ export default function ReportGenerationControls({
         </DialogActions>
       </Dialog>
 
-      <Dialog
-        open={developerOpen}
-        onClose={() => setDeveloperOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Developer report tools</DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Model settings, matching history and original evaluation artifacts.
-          </Typography>
-          {developerOpen && (
-            <MatchingControls
-              compact
-              documentId={documentId}
-              comparisonId={comparisonId}
-              aiApplied={aiApplied}
-              providers={providers}
-              onComplete={onComplete}
-            />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeveloperOpen(false)}>
-            Close developer tools
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {canDevelop && (
+        <Dialog
+          open={developerOpen}
+          onClose={() => setDeveloperOpen(false)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>Developer report tools</DialogTitle>
+          <DialogContent dividers>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Model settings, matching history and original evaluation
+              artifacts.
+            </Typography>
+            {developerOpen && (
+              <MatchingControls
+                compact
+                documentId={documentId}
+                comparisonId={comparisonId}
+                aiApplied={aiApplied}
+                providers={providers}
+                onComplete={onComplete}
+              />
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeveloperOpen(false)}>
+              Close developer tools
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
       <Snackbar
         open={Boolean(notice)}
         autoHideDuration={5000}

@@ -13,6 +13,7 @@ import {
   Route,
   Routes,
   useLocation,
+  useNavigate,
 } from "react-router-dom";
 import {
   Alert,
@@ -37,11 +38,15 @@ import GridViewOutlined from "@mui/icons-material/GridViewOutlined";
 import DescriptionOutlined from "@mui/icons-material/DescriptionOutlined";
 import AssessmentOutlined from "@mui/icons-material/AssessmentOutlined";
 import CodeRounded from "@mui/icons-material/CodeRounded";
+import MonitorHeartOutlined from "@mui/icons-material/MonitorHeartOutlined";
 import MenuRounded from "@mui/icons-material/MenuRounded";
 import MenuOpenRounded from "@mui/icons-material/MenuOpenRounded";
 import CloseRounded from "@mui/icons-material/CloseRounded";
 import ArrowForwardRounded from "@mui/icons-material/ArrowForwardRounded";
 import { useResource } from "./api";
+import { useAuth } from "./auth";
+import Login from "./pages/Login";
+import SessionControls from "./components/SessionControls";
 import type { Workspace } from "./types";
 const MyLab = lazy(() => import("./pages/MyLab"));
 const TestCatalog = lazy(() => import("./pages/TestCatalog"));
@@ -50,6 +55,7 @@ const SpecificationLibrary = lazy(() => import("./pages/SpecificationLibrary"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Comparison = lazy(() => import("./pages/Comparison"));
 const Developer = lazy(() => import("./pages/Developer"));
+const Monitoring = lazy(() => import("./pages/Monitoring"));
 
 const navigation = [
   {
@@ -57,9 +63,9 @@ const navigation = [
     label: "Specifications",
     icon: DescriptionOutlined,
   },
-  { path: "/reports", label: "Reports", icon: AssessmentOutlined },
-  { path: "/my-lab", label: "My Lab", icon: ScienceOutlined },
-  { path: "/catalog", label: "Test Catalog", icon: GridViewOutlined },
+  { path: "/reports", label: "Gap report", icon: AssessmentOutlined },
+  { path: "/my-lab", label: "Lab capability", icon: ScienceOutlined },
+  { path: "/catalog", label: "Test catalog", icon: GridViewOutlined },
 ];
 
 const SIDEBAR_PREFERENCE = "scione.sidebar.collapsed";
@@ -73,11 +79,72 @@ function savedSidebarPreference() {
 }
 
 export default function App() {
+  const auth = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  useEffect(() => {
+    if (auth.loading || auth.error) return;
+    if (!auth.session?.authenticated && location.pathname !== "/login")
+      navigate("/login", { replace: true });
+    if (auth.session?.authenticated && location.pathname === "/login")
+      navigate("/specifications/library", { replace: true });
+  }, [
+    auth.loading,
+    auth.error,
+    auth.session?.authenticated,
+    location.pathname,
+    navigate,
+  ]);
+  if (auth.loading)
+    return (
+      <Stack
+        alignItems="center"
+        justifyContent="center"
+        sx={{ minHeight: "100dvh", bgcolor: "#f5f7fb" }}
+      >
+        <CircularProgress size={28} />
+        <Typography color="text.secondary" sx={{ mt: 2 }}>
+          Opening your workspace…
+        </Typography>
+      </Stack>
+    );
+  if (auth.error)
+    return (
+      <Stack
+        alignItems="center"
+        justifyContent="center"
+        gap={2}
+        sx={{ minHeight: "100dvh", p: 3 }}
+      >
+        <Alert severity="error">{auth.error}</Alert>
+        <Button variant="outlined" onClick={() => void auth.refresh()}>
+          Try again
+        </Button>
+      </Stack>
+    );
+  if (!auth.session?.authenticated || !auth.session.user) return <Login />;
+  return (
+    <WorkspaceApp
+      key={`${auth.session.user.id}:${auth.session.user.lab_id ?? "local"}`}
+    />
+  );
+}
+
+function WorkspaceApp() {
+  const auth = useAuth();
+  const location = useLocation();
+  const isMonitoring = location.pathname === "/monitoring";
+  const needsLabSelection =
+    auth.canDevelop &&
+    auth.session?.enabled !== false &&
+    !auth.session?.user?.lab_id;
   const {
     data: workspace,
     error,
     refresh,
-  } = useResource<Workspace>("/api/workspace");
+  } = useResource<Workspace>(
+    needsLabSelection || isMonitoring ? null : "/api/workspace",
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     savedSidebarPreference,
@@ -105,7 +172,6 @@ export default function App() {
     pendingScroll.current = { x: window.scrollX, y: window.scrollY };
     setSidebarCollapsed((value) => !value);
   };
-  const location = useLocation();
   const isReportWorkspace = location.pathname === "/reports";
   const active =
     navigation.find((item) =>
@@ -115,7 +181,11 @@ export default function App() {
           ? location.pathname.startsWith("/reports")
           : location.pathname === item.path,
     )?.label ??
-    (location.pathname === "/developer" ? "Developer Tools" : "My Lab");
+    (isMonitoring
+      ? "Monitoring"
+      : location.pathname === "/developer"
+        ? "Developer Tools"
+        : "Lab capability");
   const sidebar = (compact = false, mobile = false) => (
     <Stack sx={{ height: "100%", px: compact ? 1 : 2, py: 2.5 }}>
       <Stack
@@ -252,38 +322,63 @@ export default function App() {
         ))}
       </List>
       <Box sx={{ flex: 1 }} />
-      <Tooltip
-        title={compact ? "Developer Tools" : ""}
-        placement="right"
-        disableInteractive
-      >
-        <ListItemButton
-          component={NavLink}
-          to="/developer"
-          aria-label="Developer Tools"
-          onClick={() => setMobileOpen(false)}
-          sx={{
-            borderRadius: 1,
-            minHeight: 42,
-            px: compact ? 0 : 1.5,
-            justifyContent: compact ? "center" : undefined,
-            color: "text.secondary",
-            "&.active": { bgcolor: "#edf3ff", color: "primary.main" },
-          }}
-        >
-          <ListItemIcon sx={{ minWidth: compact ? 0 : 32, color: "inherit" }}>
-            <CodeRounded fontSize="small" />
-          </ListItemIcon>
-          {!compact && (
-            <ListItemText
-              primary="Developer Tools"
-              primaryTypographyProps={{ fontSize: 12 }}
-            />
-          )}
-        </ListItemButton>
-      </Tooltip>
+      {auth.canDevelop && (
+        <List disablePadding aria-label="Administration">
+          {[
+            {
+              path: "/monitoring",
+              label: "Monitoring",
+              icon: MonitorHeartOutlined,
+            },
+            { path: "/developer", label: "Developer Tools", icon: CodeRounded },
+          ].map(({ path, label, icon: Icon }) => (
+            <Tooltip
+              key={path}
+              title={compact ? label : ""}
+              placement="right"
+              disableInteractive
+            >
+              <ListItemButton
+                component={NavLink}
+                to={path}
+                aria-label={label}
+                onClick={() => setMobileOpen(false)}
+                sx={{
+                  borderRadius: 1,
+                  minHeight: 42,
+                  px: compact ? 0 : 1.5,
+                  justifyContent: compact ? "center" : undefined,
+                  color: "text.secondary",
+                  "&.active": { bgcolor: "#edf3ff", color: "primary.main" },
+                }}
+              >
+                <ListItemIcon
+                  sx={{ minWidth: compact ? 0 : 32, color: "inherit" }}
+                >
+                  <Icon fontSize="small" />
+                </ListItemIcon>
+                {!compact && (
+                  <ListItemText
+                    primary={label}
+                    primaryTypographyProps={{ fontSize: 12 }}
+                  />
+                )}
+              </ListItemButton>
+            </Tooltip>
+          ))}
+        </List>
+      )}
       <Divider sx={{ my: 2 }} />
-      <Tooltip title={compact ? "Local workspace" : ""} placement="right">
+      <Tooltip
+        title={
+          compact
+            ? auth.canDevelop
+              ? "Platform administrator"
+              : auth.session?.user?.lab_name || "Lab workspace"
+            : ""
+        }
+        placement="right"
+      >
         <Box sx={{ px: compact ? 0 : 1.5 }}>
           <Stack
             direction="row"
@@ -301,19 +396,27 @@ export default function App() {
             />
             {!compact && (
               <Typography variant="caption" fontWeight={600}>
-                Local workspace
+                {auth.canDevelop
+                  ? "Platform administrator"
+                  : auth.session?.user?.lab_name || "Lab workspace"}
               </Typography>
             )}
           </Stack>
-          {!compact && (
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: "block", mt: 0.5 }}
-            >
-              Your lab data stays on this device.
-            </Typography>
-          )}
+          {!compact &&
+            (auth.canDevelop ||
+              auth.session?.user?.display_name !==
+                auth.session?.user?.lab_name) && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mt: 0.5 }}
+              >
+                {auth.canDevelop
+                  ? `Viewing lab: ${auth.session?.user?.lab_name || "not selected"}`
+                  : auth.session?.user?.display_name ||
+                    auth.session?.user?.username}
+              </Typography>
+            )}
         </Box>
       </Tooltip>
     </Stack>
@@ -429,6 +532,7 @@ export default function App() {
               {active}
             </Typography>
           </Stack>
+          <SessionControls />
         </Stack>
         <Box component="main" id="main" tabIndex={-1} sx={{ outline: "none" }}>
           {location.pathname.startsWith("/specifications") && (
@@ -463,7 +567,7 @@ export default function App() {
               </Tabs>
             </Box>
           )}
-          {error && (
+          {error && !isMonitoring && (
             <Alert
               severity="error"
               action={
@@ -476,7 +580,37 @@ export default function App() {
               {error}
             </Alert>
           )}
-          {!workspace && !error ? (
+          {isMonitoring ? (
+            <Suspense
+              fallback={
+                <Box sx={{ p: 4 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              }
+            >
+              {auth.canDevelop ? (
+                <Monitoring />
+              ) : (
+                <Navigate to="/specifications/library" replace />
+              )}
+            </Suspense>
+          ) : needsLabSelection ? (
+            <Stack
+              alignItems="center"
+              justifyContent="center"
+              spacing={1.5}
+              sx={{ minHeight: "65vh", p: 4, textAlign: "center" }}
+            >
+              <ScienceOutlined sx={{ color: "primary.main", fontSize: 42 }} />
+              <Typography variant="h5" fontWeight={700}>
+                Choose a lab workspace
+              </Typography>
+              <Typography color="text.secondary" maxWidth={420}>
+                Select a lab from the workspace menu above to review its
+                specifications and capabilities.
+              </Typography>
+            </Stack>
+          ) : !workspace && !error ? (
             <Stack
               alignItems="center"
               justifyContent="center"
@@ -540,13 +674,21 @@ export default function App() {
                   <Route
                     path="/reports/advanced"
                     element={
-                      <Reports workspace={workspace} onRefresh={refresh} />
+                      auth.canDevelop ? (
+                        <Reports workspace={workspace} onRefresh={refresh} />
+                      ) : (
+                        <Navigate to="/reports" replace />
+                      )
                     }
                   />
                   <Route
                     path="/developer"
                     element={
-                      <Developer workspace={workspace} onRefresh={refresh} />
+                      auth.canDevelop ? (
+                        <Developer workspace={workspace} onRefresh={refresh} />
+                      ) : (
+                        <Navigate to="/specifications/library" replace />
+                      )
                     }
                   />
                   <Route
@@ -559,7 +701,7 @@ export default function App() {
                           to="/my-lab"
                           endIcon={<ArrowForwardRounded />}
                         >
-                          Return to My Lab
+                          Return to lab capability
                         </Button>
                       </Stack>
                     }

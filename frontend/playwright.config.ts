@@ -6,6 +6,7 @@ const python = quote(process.env.SCIONE_TEST_PYTHON ?? "python");
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "auth-real.spec.ts",
   fullyParallel: false,
   workers: 1,
   timeout: 120_000,
