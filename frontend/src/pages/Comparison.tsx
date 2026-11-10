@@ -801,15 +801,19 @@ export default function Comparison({ workspace }: PageProps) {
                                         display="block"
                                         sx={{ mt: 1 }}
                                       >
-                                        <RouterLink
-                                          to={sourceUrl(
-                                            documentId,
-                                            selected.requirement_id,
-                                          )}
-                                        >
-                                          Source PDF · pages{" "}
-                                          {check.source_pages.join(", ")}
-                                        </RouterLink>
+                                        Source PDF ·{" "}
+                                        {check.source_pages.map(
+                                          (sourcePage, index) => (
+                                            <span key={sourcePage}>
+                                              {index > 0 && ", "}
+                                              <RouterLink
+                                                to={`${sourceUrl(documentId, selected.requirement_id)}&page=${sourcePage}`}
+                                              >
+                                                Page {sourcePage}
+                                              </RouterLink>
+                                            </span>
+                                          ),
+                                        )}
                                       </Typography>
                                     )}
                                   </TableCell>

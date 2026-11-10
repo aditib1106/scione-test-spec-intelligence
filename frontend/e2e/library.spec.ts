@@ -184,7 +184,7 @@ for (const scenario of [
   test(`comparison directs ${scenario.name} to the relevant action`, async ({
     page,
   }) => {
-    const document = record({});
+    const document = record({ page_count: 3 });
     await page.route("**/api/workspace", (route) =>
       route.fulfill({
         json: {
@@ -214,7 +214,7 @@ for (const scenario of [
       declared: null,
       status: scenario.status,
       reason: "Fixture review reason",
-      source_pages: [2],
+      source_pages: [2, 3],
     };
     const comparison: ComparisonData = {
       comparison_id: "comparison",
@@ -257,6 +257,14 @@ for (const scenario of [
     await expect(
       page.getByRole("table", { name: "Specular gloss requirement details" }),
     ).toBeVisible();
+    for (const sourcePage of [2, 3]) {
+      await expect(
+        page.getByRole("link", { name: `Page ${sourcePage}`, exact: true }),
+      ).toHaveAttribute(
+        "href",
+        `/specifications?document=source-b&requirement=req_gloss&page=${sourcePage}`,
+      );
+    }
     await expect(
       page.getByRole("link", { name: scenario.label, exact: true }),
     ).toHaveAttribute("href", scenario.destination);
