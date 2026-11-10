@@ -164,7 +164,9 @@ Use the generated HTTPS URL, not a direct container HTTP endpoint.
 5. Restart the Web deployment and verify files, lab changes and logins persist.
 
 Production cookies are Secure/HttpOnly/SameSite, unsafe API requests require a
-session CSRF token and an allowed origin, and API responses are not cached.
+session CSRF token and an allowed origin, and API responses use `Cache-Control:
+no-store`. The application's bounded in-memory navigation views are scoped to the
+current session, revalidated on visits and cleared on writes or session changes.
 Login attempts are rate limited. Password changes and disabled accounts revoke
 existing sessions. Production API documentation is disabled.
 
@@ -173,6 +175,11 @@ existing sessions. Production API documentation is disabled.
 Update source normally, run the relevant tests and redeploy `scione-web`. Model
 changes use private server variables and a Web restart. Never deploy a model key
 to the frontend. Application updates do not erase the database or mounted files.
+Check that no analyses are active before restarting or deploying during a trial.
+Page navigation and browser disconnection do not cancel admitted operations, but
+the single-worker server does not resume interrupted work after a restart. Its
+activity endpoints report an unfinished saved operation as completion unknown;
+users must inspect saved results before choosing an explicit retry.
 
 The local preview and hosted service have independent accounts, SQL records and
 file storage. Local uploads and password changes do not appear in the cloud;
@@ -211,6 +218,27 @@ for operations. Logs deliberately omit passwords, database URLs and provider key
 developer model artifacts remain tenant-scoped private data. Set an email alert
 and a chosen hard spending limit in Railway. Reaching that limit may stop the
 trial; it does not cap spending at Sail, Fireworks or another inference provider.
+
+### Railway's native dashboard
+
+The environment's native Observability dashboard can combine hosting usage and
+monthly forecasts, Web latency/status/request counts, Web/MySQL CPU and memory,
+volume disk usage, egress, application errors and slow HTTP requests. Use a one-hour
+or 24-hour window when demonstrating a service with little recent traffic.
+Hosting forecasts are estimates; remaining trial credit is displayed separately
+by Railway. Model-provider credit and inference latency are not Railway hosting
+metrics: use the provider's console for its balance and application Monitoring
+for extraction/matching durations. Creating dashboard cards does not create a new
+application service or call a model, but existing hosting and log retention still
+follow Railway's plan.
+
+### Reviewed report exports
+
+Saving a human review updates the current web assessment without replacing the
+machine findings. The current PDF/JSON export uses a separately versioned snapshot
+that includes those saved decisions and specification-date metadata. Earlier
+export links remain immutable. After saving, open **PDF & download** to view the
+current export; a previously downloaded PDF is a fixed copy and does not update.
 
 Back up **both** the MySQL volume and the Web `/data` volume. Enable scheduled
 [volume backups](https://docs.railway.com/volumes/backups), take a manual snapshot

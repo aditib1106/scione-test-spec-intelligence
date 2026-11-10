@@ -47,8 +47,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--setup-only", action="store_true")
+    parser.add_argument("--workspace-dir", type=Path, help="Use a separate local demo workspace.")
     args = parser.parse_args()
-    root = ROOT / "local_data" / "trial-preview"
+    root = (args.workspace_dir or ROOT / "local_data" / "trial-preview").expanduser().absolute()
+    if root.is_relative_to(ROOT) and not root.is_relative_to(ROOT / "local_data"):
+        parser.error(
+            "Keep private demo workspaces under ignored local_data or outside the checkout."
+        )
     credentials = root / "private" / "account-credentials.json"
     settings = Settings().model_copy(update={
         "scione_environment": "development", "scione_auth_enabled": True,

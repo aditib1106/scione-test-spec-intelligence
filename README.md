@@ -40,6 +40,13 @@ It requires no Docker. Stop with Ctrl+C; restart the same command to
 keep saved data. Use `--port 8001` if port 8000 is occupied. This command does not
 publish a link for external users.
 
+For an independent rehearsal, use `--workspace-dir local_data/my-rehearsal --port 8001`.
+This creates separate accounts and records; it does not clear an existing preview.
+Keep private preview workspaces under ignored `local_data` or outside the checkout.
+
+Specification versions are labeled by their printed specification date, separately
+from upload time. See [specification date storage and migration](docs/deployment/specification-dates.md).
+
 For AI analysis, create `.env` from `.env.example` only if `.env` does not already
 exist, then fill a provider key locally. Preserve existing keys/database settings.
 Lab users choose **Analyze PDF** or **Generate report**; the server selects the
@@ -159,6 +166,19 @@ waves of at most two concurrent Sail/Fireworks calls. Other providers are sequen
 There is no automatic repair call, retry loop, provider fallback or durable job queue.
 Failed analysis preserves the previous accepted result; maintainer artifacts retain
 the failed attempt. A retry is a new explicit action.
+
+Accepted analysis and matching continue while navigating between pages. The workspace
+banner tracks active work; returning to the document or reloading reconnects to the
+server's status rather than starting another model request. Closing a browser does
+not cancel work already admitted by the server. This is still a single-worker pilot,
+not a durable queue: a server restart can interrupt work. An unfinished saved status
+then asks the user to check retained results before explicitly trying again.
+
+Repeated library reads reuse bounded, per-lab source derivations. Source, review,
+facts and policy changes invalidate them; SQL metadata and edit versions remain live.
+The browser also keeps a small, session-only navigation cache while revalidating
+against the server. Writes invalidate it, and login, logout or lab switching clear
+it. Customer contents are not added to persistent browser storage.
 
 Input guards are 60,000 characters for extraction and 120,000 for matching, including
 prompts/context/schema. Oversized inputs fail before inference without silent truncation.
