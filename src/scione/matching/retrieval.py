@@ -18,7 +18,7 @@ from scione.catalogs.normalization import normalized_name
 from scione.reports.matching import _method_resolution, _parse_method
 from scione.specifications.models import CustomerRequirement
 
-RETRIEVAL_POLICY_VERSION = "bounded_identity_candidates_v1"
+RETRIEVAL_POLICY_VERSION = "bounded_identity_candidates_v2"
 DEFAULT_TEST_LIMIT = 8
 DEFAULT_METHOD_LIMIT = 48
 DEFAULT_REQUEST_METHOD_LIMIT = 256

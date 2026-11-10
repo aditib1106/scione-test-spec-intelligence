@@ -119,7 +119,9 @@ def test_count_reclassification_cannot_repair_wrong_count_unit_page_or_operating
     assert not normalized.normalization_actions
 
 
-@pytest.mark.parametrize("basis", ["per lot", "From each lot", "For each lot"])
+@pytest.mark.parametrize(
+    "basis", ["per lot", "From each lot", "For each lot", "per lot, assigned to"]
+)
 def test_owned_allocation_basis_alias_does_not_turn_a_sample_plan_into_a_capability(basis):
     raw = (
         "Assign three to baseline checks, three to thermal cycling and three to dispute retention."

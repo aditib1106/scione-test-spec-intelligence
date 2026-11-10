@@ -166,7 +166,7 @@ def test_explicit_reset_preserves_exact_backup_and_restarts_empty_journey(saved_
     assert app.session_state["workspace_page"] == "My Lab"
     assert "_test_unsaved_editor" not in app.session_state
     assert not app.dataframe
-    assert app.button(key="load_example_lab")
+    assert not any(button.key == "load_example_lab" for button in app.button)
     assert any("Recovery backup:" in item.value for item in app.success)
     empty_lab = FileLabStore(root, seed_demo=False).load_or_create()
     assert empty_lab.name == "My Lab"

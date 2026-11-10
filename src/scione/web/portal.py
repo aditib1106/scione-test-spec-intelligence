@@ -13,7 +13,6 @@ from scione.catalogs import (
     LabProfile,
     LabStoreError,
     ReferenceCatalog,
-    default_demo_lab,
 )
 from scione.catalogs.models import LabOperatingLimit
 
@@ -444,21 +443,6 @@ def render_my_lab(store: FileLabStore, catalog: ReferenceCatalog) -> None:
         st.dataframe(rows, width="stretch", hide_index=True)
     else:
         st.info("Your list is empty. Choose Add a test to record your first capability.")
-        st.caption("For a demonstration, you can explicitly load invented examples instead.")
-        if st.button("Load example lab", key="load_example_lab"):
-            example = default_demo_lab()
-            try:
-                store.save(lab.model_copy(update={"capabilities": example.capabilities}))
-                if st.session_state.get("_lab_details_version") == lab.version:
-                    st.session_state["_lab_details_version"] = lab.version + 1
-                st.session_state.pop("_capability_editor_signature", None)
-                st.session_state["_capability_editor_open"] = False
-                st.session_state["_workspace_notice"] = (
-                    "Synthetic example capabilities loaded. Review or edit them before using them."
-                )
-                st.rerun()
-            except (ValidationError, LabStoreError) as exc:
-                st.error(f"Example lab was not loaded: {exc}")
     if lab.capabilities:
         by_id = {item.id: item for item in lab.capabilities}
         with st.expander("Edit a saved test"):

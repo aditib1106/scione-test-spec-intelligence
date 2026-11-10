@@ -31,6 +31,8 @@ has have is are was were be been no not yet stated specified defined available
 acceptance class classes criterion criteria limit limits threshold thresholds
 customer buyer team will shall issue provide define assign supply set only after
 before testing once until if when so therefore can recorded record
+document whose dependent states two procedures procedure explicitly declaring declared
+interchangeable
 for of on in by to from and or based pending separately
 """.split())
 
@@ -99,7 +101,10 @@ def _role_proofs(
     return {code: next(iter(roles)) for code, roles in proposed.items() if len(roles) == 1}
 
 
-def _future_class_warning(issue: str, row_id: str, allowed_codes: set[str]) -> set[str]:
+def _future_class_warning(
+    issue: str, row_id: str, allowed_codes: set[str], *,
+    owner_labels: tuple[str, ...] = (), non_equivalence_proved: bool = False,
+) -> set[str]:
     named = set(_ROW_ID.findall(issue))
     if named and named != {row_id}:
         return set()
@@ -114,6 +119,16 @@ def _future_class_warning(issue: str, row_id: str, allowed_codes: set[str]) -> s
         family = re.match(r"[A-Za-z]+", code)
         if family:
             families.add(family.group().casefold())
+    # The owner label is already carried by this proved route, not a new
+    # material/condition claim. Only an explicit "for <owner>" caption is used.
+    for label in owner_labels:
+        text = re.sub(r"\bfor\s+" + re.escape(label), " for ", text, flags=re.I)
+    if non_equivalence_proved:
+        text = re.sub(
+            r"\b(?:the\s+)?(?:two\s+)?(?:procedures?|methods?)\s+"
+            r"(?:are\s+)?(?:explicitly\s+)?not\s+(?:declared\s+)?interchangeable\b",
+            " procedures are ", text, flags=re.I,
+        )
     # The allowed family reference describes the already-mentioned optional
     # route. No other numbers, units or comparison symbols may be hidden here.
     if re.search(r"\d|[°%±≤≥<>=]|\bclass\s+[A-Za-z]\b", text):
@@ -123,12 +138,15 @@ def _future_class_warning(issue: str, row_id: str, allowed_codes: set[str]) -> s
         return set()
     if not re.search(r"\bacceptance\s+(?:class|classes|criterion|criteria|limit)", text, re.I):
         return set()
-    if not re.search(r"\b(?:no\s+(?:stated|specified|defined)|not\s+(?:yet\s+)?stated|pending)",
-                     text, re.I):
+    if not re.search(
+        r"\b(?:no\s+(?:stated|specified|defined)|not\s+(?:yet\s+)?"
+        r"(?:stated|specified|defined)|pending)", text, re.I,
+    ):
         return set()
     if not re.search(
         r"\b(?:will|shall)\s+(?:issue|provide|define|assign|supply|set)\b"
-        r"[^.;]{0,160}\bafter\s+(?:customer\s+)?approval\b", text, re.I,
+        r"[^.;]{0,160}(?:\bafter\s+(?:customer\s+)?approval\b|\bbefore\s+testing\b)",
+        text, re.I,
     ):
         return set()
     remaining = re.sub(
@@ -259,7 +277,17 @@ def conditional_source_notices(
         allowed = {_key(code) for code in proofs[row.id]["optional_method_codes"]}
         notes = []
         for issue in run.extraction.review_issues:
-            codes = _future_class_warning(issue, row.id, allowed)
+            quotes = _owned_quotes(row, document)
+            codes = _future_class_warning(
+                issue, row.id, allowed,
+                owner_labels=(row.original_test_name, row.original_test_name.split("(")[0].strip()),
+                non_equivalence_proved=any(re.search(
+                    r"\bnot\s+(?:declaring\s+)?(?:those\s+)?(?:two\s+)?"
+                    r"(?:procedures?\s+)?interchangeable\b|"
+                    r"\bnot\s+declaring\s+those\s+two\s+procedures\s+interchangeable\b",
+                    quote, re.I,
+                ) for quote in quotes),
+            )
             if codes:
                 notes.append(issue)
         if notes:

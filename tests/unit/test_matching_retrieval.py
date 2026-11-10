@@ -136,6 +136,24 @@ def test_exact_method_candidates_are_retained_ahead_of_many_rule_distractors():
     assert row.model_dump(mode="json") == before
 
 
+def test_exact_method_capabilities_exclude_other_method_distractors_without_merging_setups():
+    bank = catalog()
+    row = requirement(methods=["ISO 77300:2025"])
+    caps = [capability("exact_one"), capability("exact_two"),
+            capability("other_method", methods=("method_73_1",))]
+    snapshot, _ = workspace()._snapshot_and_retrieval(report_for(bank, row, capabilities=caps))
+    assert {c.capability.id for c in snapshot.capabilities} == {"exact_one", "exact_two"}
+    assert set(snapshot.requirements[0].capability_ids) == {"exact_one", "exact_two"}
+
+
+def test_other_method_capability_stays_when_requested_method_is_not_declared():
+    bank = catalog()
+    row = requirement(methods=["ISO 77300:2025"])
+    caps = [capability("other_method", methods=("method_73_1",))]
+    snapshot, _ = workspace()._snapshot_and_retrieval(report_for(bank, row, capabilities=caps))
+    assert [c.capability.id for c in snapshot.capabilities] == ["other_method"]
+
+
 def test_curated_multilingual_alias_and_typo_retrieval_do_not_create_catalog_aliases():
     bank = catalog()
     target = bank.tests[73]

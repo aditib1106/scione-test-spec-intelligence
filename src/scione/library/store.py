@@ -94,6 +94,15 @@ runs = Table(
     Column("created_at", String(40), nullable=False),
     Column("source", JSON, nullable=False),
 )
+document_archives = Table(
+    "specification_archives",
+    metadata,
+    Column(
+        "document_id", String(16),
+        ForeignKey("specification_versions.document_id"), primary_key=True
+    ),
+    Column("archived_at", String(40), nullable=False),
+)
 requirements = Table(
     "requirements",
     metadata,
@@ -378,6 +387,39 @@ class LibraryStore:
             raise LibraryStoreError("This specification has not been saved to the library.")
         return dict(row)
 
+    def archived_document_ids(self) -> set[str]:
+        """Hide archived versions without removing their source or report history."""
+        with self._db().connect() as connection:
+            return set(connection.execute(select(document_archives.c.document_id)).scalars())
+
+    def set_document_archived(
+        self, document_id: str, *, archived: bool, expected_version: int
+    ) -> dict:
+        with self._lock, self._db().begin() as connection:
+            current = connection.execute(
+                select(documents.c.version).where(documents.c.document_id == document_id)
+            ).scalar_one_or_none()
+            if current is None:
+                raise LibraryStoreError("This specification has not been saved to the library.")
+            if current != expected_version:
+                raise LibraryConflict("The specification changed. Reload before removing it.")
+            changed = connection.execute(
+                update(documents).where(
+                    documents.c.document_id == document_id,
+                    documents.c.version == expected_version,
+                ).values(version=expected_version + 1, updated_at=now())
+            )
+            if changed.rowcount != 1:
+                raise LibraryConflict("The specification changed. Reload before removing it.")
+            connection.execute(delete(document_archives).where(
+                document_archives.c.document_id == document_id
+            ))
+            if archived:
+                connection.execute(insert(document_archives).values(
+                    document_id=document_id, archived_at=now()
+                ))
+        return {"document_id": document_id, "archived": archived, "version": expected_version + 1}
+
     def edit_metadata(self, document_id: str, values: dict, expected_version: int) -> None:
         with self._lock, self._db().begin() as connection:
             current = (
@@ -477,11 +519,20 @@ class LibraryStore:
         normalized_by_id = {item.requirement_id: item for item in normalized}
         if len(normalized_by_id) != len(normalized) or set(normalized_by_id) != set(raw_ids):
             raise LibraryConflict("Structured requirements do not match this extraction run.")
+        versions = {item.normalizer_version for item in normalized}
         normalizer_version = normalized[0].normalizer_version if normalized else "none"
-        if any(item.normalizer_version != normalizer_version for item in normalized):
-            raise LibraryConflict(
-                "Structured requirements must use the same normalization version."
-            )
+        if len(versions) > 1:
+            # One document can contain native atoms alongside an older raw-only
+            # requirement. Native-first deliberately leaves that older row's
+            # parsing unchanged; both rows still use this one software policy.
+            # This is not permission to combine unrelated normalizer versions.
+            ordered = sorted(versions, key=len)
+            if len(ordered) == 2 and ordered[1] == ordered[0] + "_native_first":
+                normalizer_version = ordered[1]
+            else:
+                raise LibraryConflict(
+                    "Structured requirements must use the same normalization version."
+                )
         source = run.extraction.model_dump(mode="json")
         with self._lock, self._db().begin() as connection:
             previous = (

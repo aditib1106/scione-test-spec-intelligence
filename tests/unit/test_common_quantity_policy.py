@@ -62,7 +62,7 @@ def custom_status(request, declaration):
 
 
 def test_registry_version_and_narrow_aliases_do_not_erase_statistics():
-    assert REGISTRY_VERSION == "pilot_parameters_v6"
+    assert REGISTRY_VERSION == "pilot_parameters_v7"
     assert resolve_definition("ultimate tensile strength").id == "tensile_strength"
     assert resolve_definition("抗压强度").id == "compressive_strength"
     assert resolve_definition("elongation at fracture").id == "elongation_at_break"

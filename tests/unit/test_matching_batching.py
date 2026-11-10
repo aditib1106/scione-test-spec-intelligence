@@ -89,7 +89,7 @@ class RecordingProvider(ModelProvider):
 
 
 @pytest.mark.parametrize("tokens,expected", [
-    (None, 40), (True, 40), (12288, 60), (8192, 48), (4096, 16), (1024, 1), (50000, 60),
+    (None, 40), (True, 40), (12288, 80), (8192, 48), (4096, 16), (1024, 1), (50000, 80),
 ])
 def test_output_aware_claim_budget_is_bounded_and_keeps_reasoning_reserve(tokens, expected):
     class BudgetProvider(RecordingProvider):

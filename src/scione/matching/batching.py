@@ -27,7 +27,7 @@ from scione.matching.service import (
 )
 from scione.providers.base import ModelProvider, StructuredGenerationRequest, TokenUsage
 
-MATCHING_BATCH_POLICY_VERSION = "whole_requirement_batches_v6"
+MATCHING_BATCH_POLICY_VERSION = "whole_requirement_batches_v7"
 MAX_MATCHING_BATCH_CALLS = 8
 MATCHING_BATCH_SOFT_CLAIM_LIMIT = 40
 
@@ -43,8 +43,8 @@ def provider_claim_budget(provider: ModelProvider) -> int:
     if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
         return MATCHING_BATCH_SOFT_CLAIM_LIMIT
     # Reserve global JSON and reasoning; short per-field reasons/IDs still
-    # receive 128 tokens apiece. Do not scale beyond sixty claims per batch.
-    return min(60, max(1, (limit - 2048) // 128))
+    # receive 128 tokens apiece. Do not scale beyond eighty claims per batch.
+    return min(80, max(1, (limit - 2048) // 128))
 
 
 def request_character_count(request: StructuredGenerationRequest) -> int:

@@ -10,13 +10,20 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Literal
 
+from scione.matching.compound import compound_dimensions_check
+from scione.matching.coverage import coverage_pair
 from scione.matching.literal_text import literal_comparison_claim
 from scione.matching.metadata import canonical_alignment_pair
 from scione.matching.models import SemanticMatchingRun
 from scione.matching.optional_routes import optional_route_check
 from scione.matching.parameter_policy import comparison_pair
 from scione.matching.semantics import semantic_pair
-from scione.matching.service import _compatible_context, validate_matching_output
+from scione.matching.service import (
+    _compatible_context,
+    source_note_problem,
+    validate_matching_output,
+)
+from scione.matching.workflow_roles import compound_plan_review_issues, compound_sample_plan_proofs
 from scione.parameters import normalize_claim, resolve_definition
 from scione.structured.comparison import compare_requirement
 from scione.structured.models import AtomicClaim, ClaimCheck, StructuredComparison
@@ -41,7 +48,7 @@ def _unknown_check(claim: AtomicClaim, reason: str) -> ClaimCheck:
     )
 
 
-def _exact_field_check(claim, normalized, source, declared, method_status):
+def _exact_field_check(claim, normalized, source, declared, method_status, owner_test_labels=()):
     """A single registered field can be decisive without a model correspondence.
 
     This never searches another capability or uses names/custom IDs, and never
@@ -64,7 +71,11 @@ def _exact_field_check(claim, normalized, source, declared, method_status):
         try:
             request, declaration = comparison_pair(claim, lab)
             request, declaration, actions = canonical_alignment_pair(
-                request, declaration, source.requirement, list(declared.values())
+                request,
+                declaration,
+                source.requirement,
+                list(declared.values()),
+                owner_test_labels=owner_test_labels,
             )
         except ValueError:
             continue
@@ -96,7 +107,7 @@ def _exact_field_check(claim, normalized, source, declared, method_status):
 
 
 def _literal_field_check(
-    literal, original, normalized, declared, method_status, source_requirement
+    literal, original, normalized, declared, method_status, source_requirement, owner_test_labels=()
 ):
     """An exact, complete descriptive declaration needs no invented parameter.
 
@@ -120,7 +131,11 @@ def _literal_field_check(
         try:
             request, declaration = comparison_pair(literal, lab)
             request, declaration, actions = canonical_alignment_pair(
-                request, declaration, source_requirement, list(declared.values())
+                request,
+                declaration,
+                source_requirement,
+                list(declared.values()),
+                owner_test_labels=owner_test_labels,
             )
         except ValueError:
             continue
@@ -196,7 +211,16 @@ def compile_matching_run(
             alignment.identity_status != "aligned" or alignment.capability_id is None
         ):
             status = "unknown"
+        owner_test_labels = ()
+        if alignment.identity_status == "aligned" and alignment.canonical_test_id:
+            selected_test = run.input_snapshot.catalog.test_by_id(alignment.canonical_test_id)
+            owner_test_labels = (selected_test.name, *(a.text for a in selected_test.aliases))
         normalized = source.normalized.model_copy(deep=True)
+        sample_plans = compound_sample_plan_proofs(source)
+        resolved_plan_issues = compound_plan_review_issues(source, sample_plans)
+        normalized.review_issues = [
+            issue for issue in normalized.review_issues if issue not in resolved_plan_issues
+        ]
         method_comparison = compare_requirement(
             normalized.model_copy(update={"claims": []}), [], method_status=status
         )
@@ -209,6 +233,18 @@ def compile_matching_run(
             for check in compare_requirement(normalized, [], method_status=status).checks
             if check.status == "informational"
         }
+        for claim in normalized.claims:
+            if proof := sample_plans.get(claim.id):
+                workflow_notes[claim.id] = ClaimCheck(
+                    id=claim.id, parameter_id=claim.parameter_id, label=claim.label,
+                    kind="instruction", stage=claim.stage, requested=claim.display_value,
+                    status="informational",
+                    reason="The complete source-bound specimen allocation is retained for "
+                    "planning and quoting; it does not describe machine operating capacity.",
+                    source_pages=list(claim.source_pages),
+                    requirement_claim=claim.model_copy(deep=True),
+                    comparison_metadata=[proof],
+                )
         declared = (
             {row.id: row for row in capabilities[alignment.capability_id].claims}
             if alignment.capability_id is not None
@@ -217,6 +253,46 @@ def compile_matching_run(
         claim_links = {row.requirement_claim_id: row for row in alignment.claim_alignments}
         for claim in normalized.claims:
             link = claim_links[claim.id]
+            if link.context_role and source_note_problem(claim, link, source) is None:
+                planning = link.context_role == "sample_plan"
+                project = link.context_role == "project_workflow"
+                checks.append(
+                    ClaimCheck(
+                        id=claim.id,
+                        label=claim.label
+                        if planning
+                        else "Project deliverable"
+                        if project
+                        else "Source context",
+                        parameter_id=claim.parameter_id if planning else None,
+                        kind="instruction",
+                        stage=claim.stage,
+                        requested=claim.display_value if planning else claim.raw_text,
+                        status="informational",
+                        reason=(
+                            "Sample submission/allocation retained for scheduling and quoting; "
+                            "it is not a machine operating limit. "
+                            if planning
+                            else "Shared project deliverable retained for project review; "
+                            "it does not establish another test capability. "
+                            if project
+                            else "Retained as source context, not a separate capability demand. "
+                        )
+                        + link.reason,
+                        source_pages=list(claim.source_pages),
+                        requirement_claim=claim.model_copy(deep=True),
+                        comparison_basis="semantic_alignment",
+                        comparison_metadata=[
+                            {
+                                "rule": "guarded_ai_source_context_classification",
+                                "context_role": link.context_role,
+                                "represented_by_source_ids": list(link.represented_by_source_ids),
+                                "establishes_lab_support": False,
+                            }
+                        ],
+                    )
+                )
+                continue
             route_note = optional_route_check(run, source, claim)
             if route_note is not None:
                 checks.append(route_note)
@@ -238,10 +314,24 @@ def compile_matching_run(
                 continue
             if link.relation != "same_parameter":
                 proved = _literal_field_check(
-                    literal, claim, normalized, declared, status, source.requirement
+                    literal,
+                    claim,
+                    normalized,
+                    declared,
+                    status,
+                    source.requirement,
+                    owner_test_labels,
                 )
-                proved = proved or _exact_field_check(claim, normalized, source, declared, status)
+                proved = proved or _exact_field_check(
+                    claim, normalized, source, declared, status, owner_test_labels
+                )
                 checks.append(proved or _unknown_check(claim, link.reason))
+                continue
+            compound = compound_dimensions_check(
+                claim, [declared[i] for i in link.capability_claim_ids], source=source.requirement
+            )
+            if compound is not None:
+                checks.append(compound)
                 continue
             # The accepted link is scoped to one exact input claim. Do not pass
             # the full capability to the comparator, which could silently fall
@@ -257,6 +347,7 @@ def compile_matching_run(
                     source.requirement,
                     list(declared.values()),
                     wording_bridge=bool(link.context_equivalence or link.joint_scope_equivalence),
+                    owner_test_labels=owner_test_labels,
                 )
                 for request, lab in policy_pairs
             ]
@@ -277,11 +368,33 @@ def compile_matching_run(
                 )
                 continue
             comparison_claim = policy_pairs[0][0]
-            pairs = [
-                semantic_pair(request, lab, link, source=source.requirement)
+            coverage_pairs = [
+                coverage_pair(request, lab, link, source=source.requirement)
                 for request, lab in policy_pairs
             ]
+            metadata_actions.extend(
+                {**action, "capability_claim_id": lab_id}
+                for lab_id, (_lab, actions) in zip(
+                    link.capability_claim_ids, coverage_pairs, strict=True
+                )
+                for action in actions
+            )
+            pairs = [
+                semantic_pair(request, lab, link, source=source.requirement)
+                for (request, _), (lab, _actions) in zip(policy_pairs, coverage_pairs, strict=True)
+            ]
             linked_claims = [pair.declaration for pair in pairs]
+            if link.value_relation == "incompatible":
+                check = _unknown_check(claim, link.reason)
+                check.status = "gap"
+                check.declared = "; ".join(
+                    declared[i].display_value for i in link.capability_claim_ids
+                )
+                check.capability_claim_ids = list(link.capability_claim_ids)
+                check.comparison_basis = "semantic_alignment"
+                check.comparison_metadata = metadata_actions
+                checks.append(check)
+                continue
             one = compare_requirement(
                 # Requirement-wide review is already retained once in the
                 # initial method comparison; never duplicate it per claim.
@@ -300,6 +413,11 @@ def compile_matching_run(
                     "literal_descriptive_correspondence" if literal else "semantic_alignment"
                 )
                 check.comparison_metadata = list(metadata_actions)
+                check.capability_claim_ids = list(link.capability_claim_ids)
+                if link.value_relation:
+                    check.declared = "; ".join(
+                        declared[i].display_value for i in link.capability_claim_ids
+                    )
                 if link.joint_scope_equivalence:
                     check.comparison_metadata.append(
                         {

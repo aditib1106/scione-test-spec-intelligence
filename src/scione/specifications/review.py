@@ -30,12 +30,15 @@ from scione.specifications.review_audits import (
     nonblocking_shared_clause_issues,
     scoped_specimen_review_reasons,
 )
-from scione.specifications.review_comments import review_model_comment_audits
+from scione.specifications.review_comments import (
+    method_reference_comment_audits,
+    review_model_comment_audits,
+)
 from scione.specifications.revision_notes import source_revision_notes
 from scione.specifications.store import RequirementReviewSet
 from scione.specifications.summary_reconciliation import source_summary_reconciliation
 
-REVIEW_POLICY_VERSION = "0.13"
+REVIEW_POLICY_VERSION = "0.16"
 
 RequirementState = Literal["needs_attention", "ready", "confirmed", "excluded"]
 _REQUIREMENT_ID = re.compile(
@@ -278,6 +281,9 @@ def assess_requirements(
     shared_diagnostics = nonblocking_shared_clause_issues(run)
     metadata_questions = set(document_review_issues(run, document))
     conditional_notes = conditional_source_notices(run, document)
+    reference_notes: dict[str, list[str]] = {}
+    for audit in method_reference_comment_audits(run, document):
+        reference_notes.setdefault(audit["requirement_id"], []).append(audit["original_comment"])
     revision_projection = source_revision_notes(run, document)
     summary_projection = source_summary_reconciliation(run, document)
     unused_model_comments = {
@@ -325,14 +331,29 @@ def assess_requirements(
         for requirement_id in targets:
             if issue in conditional_notes.get(requirement_id, ()):
                 continue
+            if issue in reference_notes.get(requirement_id, ()):
+                continue
             if issue not in reasons[requirement_id]:
                 reasons[requirement_id].append(issue)
 
     assessed: dict[str, RequirementAssessment] = {}
     source_defined = _proved_source_procedures(run, pdf_bytes)
     scoped_conditions = scoped_specimen_review_reasons(requirements, document)
+    from scione.specifications.parameter_views import physical_normalized_requirements
+
+    coverage_issues = {
+        row.requirement_id: row.review_issues
+        for row in physical_normalized_requirements(requirements, document)
+    }
     for requirement in requirements:
         row_reasons = reasons[requirement.id]
+        # Omission audits are source-review work, not invented lab demands.
+        # Preserve their stable audit IDs and original clauses in the derived
+        # normalization artifact while showing the actionable issue once here.
+        row_reasons.extend(
+            issue for issue in coverage_issues.get(requirement.id, ())
+            if "_source_audit_" in issue and issue not in row_reasons
+        )
         if requirement.id in scoped_conditions:
             row_reasons.append(scoped_conditions[requirement.id])
         if native_problem := native_scientific_review_reason(requirement):
@@ -358,6 +379,7 @@ def assess_requirements(
         assessed[requirement.id] = RequirementAssessment(
             state, tuple(row_reasons), tuple(dict.fromkeys((
                 *conditional_notes.get(requirement.id, ()),
+                *reference_notes.get(requirement.id, ()),
                 *revision_projection.notices.get(requirement.id, ()),
             )))
         )

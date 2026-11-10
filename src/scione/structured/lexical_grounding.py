@@ -124,6 +124,10 @@ _EXTRA_UNITS = {
     "locations": "locations",
     "position": "locations",
     "positions": "locations",
+    "point": "locations",
+    "points": "locations",
+    "station": "locations",
+    "stations": "locations",
     "readings": "locations",
     "Probe": "specimens",
     "Proben": "specimens",
@@ -151,11 +155,17 @@ _EXTRA_UNITS = {
     "éprouvettes": "specimens",
     "échantillon": "specimens",
     "échantillons": "specimens",
+    "prélèvement": "specimens",
+    "prélèvements": "specimens",
     "heures": "h",
     "jours": "days",
     "cycles": "cycles",
     "degrees C": "°C",
     "degree C": "°C",
+    "degrees Celsius": "°C",
+    "degree Celsius": "°C",
+    "degrees Fahrenheit": "°F",
+    "degree Fahrenheit": "°F",
     "mins": "min",
 }
 _SI_UNITS = (
@@ -248,7 +258,7 @@ def _unit_pattern() -> str:
     return (
         "(?:"
         + "|".join(sorted([*literal, *words], key=len, reverse=True))
-        + r")(?![A-Za-z0-9_µμ²³^/·⋅*]|-[A-Za-z0-9])"
+        + r")(?![A-Za-zÀ-ž0-9_µμ²³^/·⋅*]|-[A-Za-zÀ-ž0-9])"
     )
 
 
@@ -279,13 +289,27 @@ _COMPOUND_COUNT = re.compile(
 _MARKED_LOCATIONS = re.compile(
     rf"{_START}(?P<first>{_NUMBER})(?:\s*(?:(?P<pm>±)\s*(?P<tolerance>{_NUMBER})|"
     rf"(?P<separator>{_SEPARATOR})\s*(?P<second>{_NUMBER})))?\s+"
-    r"(?i:marked)\s+(?P<unit>(?i:positions?|locations?))(?![A-Za-z0-9_-])"
+    r"(?i:marked|equally\s+spaced|fixed|repeatable)\s+"
+    r"(?P<unit>(?i:positions?|locations?|points?|stations?))(?![A-Za-z0-9_-])"
+)
+_ADJECTIVE_COUNT = re.compile(
+    rf"{_START}(?P<first>{_NUMBER})\s+"
+    r"(?:(?i:production|paint|coating|test|independent|identical|marked|flat|steel|"
+    r"mild-steel|scribed|unscribed|un-scribed|witness|cumulative|total|elapsed)\s+){1,4}"
+    r"(?P<unit>(?i:batches?|lots?|panels?|specimens?|samples?|points?|stations?|"
+    r"locations?|positions?|hours?|minutes?|seconds?|days?))(?![A-Za-z0-9_-])"
 )
 _PANEL_COUNT = re.compile(
-    rf"{_START}(?P<first>{_NUMBER})\s+flat\s+"
+    rf"{_START}(?P<first>{_NUMBER})\s+(?:flat\s+)?"
     rf"{_DIGIT}\s*[×x]\s*{_DIGIT}\s*(?:mm|cm|in)\s+"
     r"(?:[A-Za-z][A-Za-z-]*\s+){0,3}(?P<unit>panels?|witnesses)(?![A-Za-z0-9_])",
     re.I,
+)
+_COORDINATED_LIST = re.compile(
+    rf"{_START}(?P<first>{_NUMBER})"
+    rf"(?P<tail>(?:\s*,\s+{_NUMBER}){{0,6}}"
+    rf"(?:\s*,?\s+(?i:and|or|und|et|y)|\s*[、及和])\s*{_NUMBER})"
+    rf"\s*(?P<unit>{_UNIT})"
 )
 
 # Explicit range phrases bind an omitted lower endpoint unit only to the
@@ -468,7 +492,7 @@ def _operator(prefix: str, suffix: str) -> tuple[str | None, str | None]:
 def unit_token_is_standalone(text: str, end: int) -> bool:
     """A short unit cannot stand in for a power, quotient or compound unit."""
     suffix = text[end:]
-    if re.match(r"[A-Za-z0-9_µμ²³]", suffix):
+    if re.match(r"[A-Za-zÀ-ž0-9_µμ²³]", suffix):
         return False
     if re.match(r"\s*(?:[/⁄∕^·⋅*]|-\s*[A-Za-z])", suffix):
         return False
@@ -485,12 +509,13 @@ def _additional_patterns(unit: str) -> tuple:
     # The caller's unknown unit is accepted only as an exact source token. It
     # cannot make an absent unit, a shorter unit or a scientific synonym true.
     literal = "(?:" + re.escape(unit).replace(r"\ ", r"\s+") + ")"
-    literal += r"(?![A-Za-z0-9_µμ²³])"
+    literal += r"(?![A-Za-zÀ-ž0-9_µμ²³])"
     return tuple(
         (re.compile(pattern.pattern.replace(_UNIT, literal)), mode)
         for pattern, mode in [
             (_UNSUPPORTED_ARITHMETIC, "unsupported"),
             (_VERBAL_RANGE, "verbal_range"),
+            (_COORDINATED_LIST, "list"),
             (_CHAIN, "chain"),
             (_ATTACHED, "attached"),
         ]
@@ -510,12 +535,14 @@ def source_quantities(
     occupied: list[tuple[int, int]] = []
     patterns = list(_additional_patterns(additional_unit)) if additional_unit else []
     patterns += [
+        (_VERBAL_RANGE, "verbal_range"),
+        (_COORDINATED_LIST, "list"),
         (_PANEL_COUNT, "panel_count"),
         (_UNSUPPORTED_ARITHMETIC, "unsupported"),
-        (_VERBAL_RANGE, "verbal_range"),
         (_CHAIN, "chain"),
         (_COMPOUND_COUNT, "count_classifier"),
         (_MARKED_LOCATIONS, "attached"),
+        (_ADJECTIVE_COUNT, "count_classifier"),
         (_ATTACHED, "attached"),
         (_SCALE_FIRST, "scale"),
         (_ORDINAL_CLASS_FIRST, "ordinal_class"),
@@ -529,6 +556,33 @@ def source_quantities(
             if mode != "ordinal_class" and not unit_token_is_standalone(text, match.end("unit")):
                 continue
             if mode == "chain" and match["left"] != match["right"]:
+                continue
+            if mode == "list":
+                prefix = text[max(0, match.start() - 80):match.start()]
+                operator, boundary_problem = _operator(prefix, "")
+                explicit_boundary = operator is not None or boundary_problem is not None
+                partial_quantity = bool(re.search(r"[±×*^]\s*$", prefix))
+                items = [(match["first"], match.span("first"))]
+                for number in re.finditer(_NUMBER, match["tail"]):
+                    start, end = number.span()
+                    offset = match.start("tail")
+                    items.append((number[0], (offset + start, offset + end)))
+                for token, number_span in items:
+                    value, ambiguity, alternatives = _number(token, language)
+                    if partial_quantity:
+                        value, ambiguity, alternatives = None, "partial_quantity_list", ()
+                    candidates.append(SourceQuantity(
+                        value=value, raw_number=token, number_span=number_span,
+                        raw_unit=match["unit"], unit=_unit_key(match["unit"]),
+                        unit_span=match.span("unit"), expression_span=match.span(),
+                        language=language, role="value",
+                        operator=None if explicit_boundary or partial_quantity else "one_of",
+                        ambiguity=ambiguity, alternatives=alternatives,
+                        operator_ambiguity=(
+                            "mixed_list_boundary" if explicit_boundary else None
+                        ),
+                    ))
+                occupied.append(match.span())
                 continue
             if mode == "panel_count":
                 # This classifier crosses a dimension phrase; it owns only

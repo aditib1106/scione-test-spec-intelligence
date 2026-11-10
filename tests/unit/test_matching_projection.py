@@ -12,7 +12,12 @@ from scione.matching.models import (
     RequirementCandidates,
 )
 from scione.matching.projection import MatchingProjectionError, project_matching_input
-from scione.matching.service import SemanticMatchingError, SemanticMatchingRunner, input_fingerprint
+from scione.matching.service import (
+    SemanticMatchingError,
+    SemanticMatchingRunner,
+    input_fingerprint,
+    prepare_matching_request,
+)
 from scione.providers.static import StaticModelProvider
 from scione.specifications.models import CustomerRequirement, RequirementEvidence, RequirementValue
 from scione.structured.models import AtomicClaim, NormalizedRequirement
@@ -102,6 +107,16 @@ def test_projection_removes_only_duplicate_fact_rows_and_retains_authoritative_i
     assert original.requirements[0].normalized.claims[0].value == 60
 
 
+def test_projection_omits_software_audit_logs_but_keeps_all_facts_and_original_proofs():
+    original = snapshot()
+    action = {"rule": "native_source_fact_coverage", "source_note": "Long parser audit " * 100}
+    original.requirements[0].normalized.normalization_actions = [action]
+    projected = project_matching_input(original)
+    assert projected.requirements[0].normalized.normalization_actions == []
+    assert projected.requirements[0].normalized.claims == original.requirements[0].normalized.claims
+    assert original.requirements[0].normalized.normalization_actions == [action]
+
+
 def test_projection_retains_all_distinct_facts_in_the_authoritative_view():
     original = snapshot()
     atom = original.requirements[0].requirement.atomic_claims[0]
@@ -172,6 +187,41 @@ def test_projection_roundtrips_matching_input_and_is_idempotent():
     assert project_matching_input(projected) == projected
 
 
+@pytest.mark.parametrize("keyed", [False, True])
+def test_compact_wire_roundtrips_all_facts_without_changing_joint_scope_strings(keyed):
+    original = snapshot()
+    original.catalog.synthetic = False
+    original.requirements[0].requirement.atomic_claims[0].value = Decimal(0)
+    original.requirements[0].normalized.claims[0].value = Decimal(0)
+    scope = AtomicClaim(
+        id="scope_atom", parameter_id="specimen_material", label="Specimen material",
+        kind="scope", operator="text", text_value="steel  panel\nwith coating",
+        source_context="Painted  substrate", raw_text="Use a steel  panel\nwith coating.",
+    )
+    original.requirements[0].requirement.atomic_claims.append(scope.model_copy(deep=True))
+    original.requirements[0].normalized.claims.append(scope.model_copy(deep=True))
+    before = original.model_dump(mode="json")
+    projected = project_matching_input(original)
+    request = prepare_matching_request(original, keyed=keyed)
+    payload = json.loads(request.user_prompt)
+    native_ids = payload.pop("native_source_claim_ids")
+    payload.pop("project_obligation_ids")
+    assert set(native_ids["req_one"]) == {
+        claim.id for claim in original.requirements[0].requirement.atomic_claims
+    }
+    assert "joint_scope_texts" not in payload
+    assert MatchingInput.model_validate(payload) == projected
+    assert payload["catalog"]["synthetic"] is False
+    atom = payload["requirements"][0]["normalized"]["claims"][0]
+    assert atom["value"] == "0"
+    assert atom["values"] == []
+    assert "minimum" not in atom
+    assert original.model_dump(mode="json") == before
+    ordinary = json.dumps(projected.model_dump(mode="json"), ensure_ascii=False)
+    compact = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    assert len(compact) < len(ordinary)
+
+
 def test_projection_preflight_failure_is_retained_without_calling_a_provider():
     class NoCallProvider(StaticModelProvider):
         def generate_structured(self, request):
@@ -216,7 +266,10 @@ def test_runner_transmits_projection_and_saves_exact_full_snapshot_and_fingerpri
         }
     )
     attempt = SemanticMatchingRunner(provider).run(original)
-    wire = MatchingInput.model_validate(json.loads(attempt.request.user_prompt))
+    wire_payload = json.loads(attempt.request.user_prompt)
+    wire_payload.pop("native_source_claim_ids")
+    wire_payload.pop("project_obligation_ids")
+    wire = MatchingInput.model_validate(wire_payload)
     assert not wire.requirements[0].requirement.atomic_claims
     assert not wire.capabilities[0].capability.atomic_claims
     assert attempt.input_snapshot.model_dump(mode="json") == untouched

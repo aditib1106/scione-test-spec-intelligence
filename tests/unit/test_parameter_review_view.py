@@ -61,6 +61,42 @@ def test_native_provenance_survives_bad_identity_and_merged_identical_atoms():
     assert linked[0]["parameter_id"] is None
 
 
+def test_grounded_local_quantity_keeps_its_original_source_atom_for_editing():
+    raw = "Core diameter shall be 100 mm."
+    native = AtomicClaim(
+        id="native_unknown_quantity", parameter_id=None, label="Unstructured Requirement",
+        operator="=", value=100, unit="mm", raw_text=raw, source_pages=[1],
+        normalization_state="unresolved",
+    )
+    source = CustomerRequirement(
+        id="req_r", original_test_name="Source test", atomic_claims=[native],
+        evidence=[RequirementEvidence(page=1, quote=raw)],
+    )
+    view = parameter_review_view(source, LibraryWorkspace.present_claim)
+    assert len(view["claims"]) == 1
+    assert view["claims"][0]["parameter_id"].startswith("source_quantity_")
+    assert view["claims"][0]["source_atom_ids"] == [native.id]
+    assert native.parameter_id is None
+
+
+def test_grounded_local_prose_keeps_its_original_source_atom_for_editing():
+    raw = "Record each specimen result separately."
+    native = AtomicClaim(
+        id="native_unknown_service", parameter_id=None, label="Unstructured Requirement",
+        kind="reporting", operator="required", text_value=raw, raw_text=raw,
+        source_pages=[1], normalization_state="unresolved",
+    )
+    source = CustomerRequirement(
+        id="req_r", original_test_name="Source test", atomic_claims=[native],
+        evidence=[RequirementEvidence(page=1, quote=raw)],
+    )
+    view = parameter_review_view(source, LibraryWorkspace.present_claim)
+    assert len(view["claims"]) == 1
+    assert view["claims"][0]["parameter_id"].startswith("source_fact_")
+    assert view["claims"][0]["source_atom_ids"] == [native.id]
+    assert native.parameter_id is None
+
+
 def test_shared_quotation_does_not_link_distinct_phases_to_one_edit():
     raw = "ISO class 0 or 1 is required before and after thermal cycling."
     native = AtomicClaim(

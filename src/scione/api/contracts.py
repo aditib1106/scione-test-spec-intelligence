@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from scione.specifications.models import CustomerRequirement
 
@@ -15,9 +15,9 @@ class WriteModel(BaseModel):
 
 class LabExample(WriteModel):
     version: int = Field(ge=1)
-    example: Literal[
-        "legacy", "csp301", "csp301_typed", "csp301_detailed", "csp301_demo"
-    ] = "legacy"
+    example: Literal["legacy", "csp301", "csp301_typed", "csp301_detailed", "csp301_demo"] = (
+        "legacy"
+    )
     replace_existing: bool = False
     acknowledged: bool = False
 
@@ -29,6 +29,10 @@ class LibraryMetadata(WriteModel):
     revision: str | None = Field(default=None, max_length=300)
     family_id: str | None = Field(default=None, max_length=32)
     expected_version: int = Field(default=0, ge=0)
+
+
+class LibraryRemoval(WriteModel):
+    version: int = Field(ge=0)
 
 
 class SourceReview(WriteModel):
@@ -72,6 +76,22 @@ class AnalysisRequest(WriteModel):
 class ReportInput(WriteModel):
     run_id: str
     input_fingerprint: str
+
+
+class AssessmentReview(WriteModel):
+    comparison_id: str = Field(min_length=1, max_length=32)
+    input_fingerprint: str = Field(min_length=1, max_length=64)
+    requirement_id: str = Field(min_length=1, max_length=100)
+    expected_version: int = Field(ge=0)
+    review_status: Literal["accepted", "pending"] = "accepted"
+    decision: Literal["keep", "clarify_customer", "outsource", "decline"] = "keep"
+    note: str = Field(default="", max_length=4000)
+
+    @model_validator(mode="after")
+    def explain_followup(self):
+        if self.decision != "keep" and not self.note:
+            raise ValueError("Add a note explaining the selected follow-up decision.")
+        return self
 
 
 class MatchingRequest(ReportInput):

@@ -55,6 +55,19 @@ _AFFIRMATIVE_ERROR = (
 _CONTENT_ERROR = "Provenance notice contains other content that still requires review."
 _SOFTWARE_NOTICE_ERRORS = (_SOURCE_ERROR, _AFFIRMATIVE_ERROR, _CONTENT_ERROR)
 
+# Match whole metadata sentences, not words that could also occur in a real
+# requirement. In particular, "no standard procedure text is reproduced" is a
+# publication disclaimer, whereas "no standard procedure is required" is not.
+_DEMONSTRATION_METADATA_SENTENCE = re.compile(
+    r"(?:^|(?<=[.;]))\s*(?:"
+    r"demonstration data only|"
+    r"(?:the\s+)?customer requirements below are original fictional examples|"
+    r"method identifiers are references only|"
+    r"no standard procedure text is reproduced"
+    r")\s*(?=[.;]|$)",
+    re.I,
+)
+
 
 def metadata_only_synthetic_quote(quote: str, file_name: str = "") -> bool:
     """Recognize provenance/ownership concepts, never quantitative requirements.
@@ -77,6 +90,9 @@ def metadata_only_synthetic_quote(quote: str, file_name: str = "") -> bool:
     affirmative = bool(re.search(
         r"\b(?:synthetic|fictional|fictitious|fictifs?|fiktiv)\b|模拟方法编号|合成方法", text
     ))
+    # Determine the affirmative disclosure before masking known metadata
+    # sentences. All other text still passes the unchanged strict checks below.
+    text = _DEMONSTRATION_METADATA_SENTENCE.sub(" document ", text)
     # A number mentioned only as the subject of an explicit data-ownership
     # statement is not a requested threshold or a contradiction. Other numeric
     # clauses remain disallowed, including must/unknown/comparison predicates.

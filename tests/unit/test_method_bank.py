@@ -32,7 +32,7 @@ def test_packaged_bank_retains_all_source_rows_but_runtime_catalog_is_bounded() 
     catalog = load_reference_catalog()
     assert len(bank) == manifest["bank_record_count"] == 32_000
     assert len(bank.family_names) == 71
-    assert len(catalog.methods) == 113  # Original 40 plus 77 selected rows, four shared IDs.
+    assert len(catalog.methods) == 153  # Audit, explicit lab methods and family representatives.
     assert len(catalog.tests) == 99  # Original 39 plus 71 bank families, eleven shared IDs.
     assert bank.source_sha256 == manifest["source_csv_sha256"]
     assert "method equivalence" in catalog.source_note

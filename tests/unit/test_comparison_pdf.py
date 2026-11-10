@@ -146,6 +146,72 @@ def test_structured_pdf_rejects_invalid_saved_comparison() -> None:
         render_comparison_pdf(payload)
 
 
+def test_saved_web_candidate_hints_do_not_break_or_change_the_printed_assessment():
+    payload = _payload()
+    check = payload["requirements"][2]["comparison"]["checks"][0]
+    check["candidate_lab_entries"] = [{
+        "claim_id": "UNCONFIRMED_CANDIDATE_ID",
+        "label": "Unconfirmed nearby lab field",
+        "value": "UNCONFIRMED_CANDIDATE_VALUE",
+        "stage": "general",
+        "context": None,
+        "confirmed": False,
+    }]
+    before = copy.deepcopy(payload)
+    text, _pages = _compact(render_comparison_pdf(payload))
+    assert "Needs information" in text
+    assert "Not recorded by the lab" in text
+    assert "UNCONFIRMED_CANDIDATE" not in text
+    assert payload == before
+
+
+def test_pdf_adapter_still_rejects_unrecognized_machine_check_fields():
+    payload = _payload()
+    payload["requirements"][0]["comparison"]["checks"][0]["invented_machine_verdict"] = True
+    with pytest.raises(ComparisonPDFError):
+        render_comparison_pdf(payload)
+
+
+def test_long_report_keeps_shared_preparation_and_every_test_on_complete_pages():
+    payload = _payload()
+    for index, row in enumerate(payload["requirements"]):
+        checks = []
+        for number in range(24):
+            checks.append({
+                "id": f"own_{index}_{number}",
+                "parameter_id": f"measurement_{index}_{number}",
+                "label": f"Specific measurement {number + 1}",
+                "kind": "criterion", "stage": "measurement",
+                "requested": f"OWN_{index}_{number} Customer threshold and reporting context.",
+                "declared": "Recorded laboratory operating and reporting range.",
+                "status": "supported",
+                "reason": "The requested result is within this method's declared capability.",
+                "source_pages": [2],
+            })
+        for number in range(25):
+            checks.append({
+                "id": f"shared_{index}_{number}",
+                "parameter_id": f"preparation_{number}",
+                "label": f"Shared preparation setting {number + 1}",
+                "kind": "condition", "stage": "conditioning",
+                "requested": f"SHARED_{number}_VALUE Customer preparation and handling details.",
+                "declared": "Recorded laboratory preparation setting.",
+                "status": "supported",
+                "reason": "The preparation is included in the saved declaration.",
+                "source_pages": [1],
+            })
+        row["comparison"]["checks"] = checks
+    before = copy.deepcopy(payload)
+    text, pages = _compact(render_comparison_pdf(payload))
+    assert 4 < pages < 64
+    for index in range(4):
+        assert f"OWN_{index}_0" in text and f"OWN_{index}_23" in text
+    assert text.count("SHARED_0_VALUE") == 1
+    assert text.count("SHARED_24_VALUE") == 1
+    assert "Shared requirements" in text
+    assert payload == before
+
+
 def test_manual_reference_pdf_is_labelled_without_printing_provider_identifiers() -> None:
     payload = _payload()
     payload["document"]["provider"] = "manual_reference"

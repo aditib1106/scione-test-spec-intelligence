@@ -3,7 +3,12 @@
 from scione.parameters.units import canonical_unit_name
 from scione.schemas import IngestedDocument
 from scione.source_text import citation_contains
-from scione.specifications.models import CustomerRequirement, RequirementEvidence
+from scione.specifications.models import (
+    CustomerDocumentMetadata,
+    CustomerExtraction,
+    CustomerRequirement,
+    RequirementEvidence,
+)
 from scione.specifications.named_scale_units import physical_named_scale_unit_evidence
 from scione.structured import normalize_requirement
 
@@ -35,9 +40,17 @@ def physical_parameter_views(
     requirements: list[CustomerRequirement], document: IngestedDocument
 ) -> tuple[dict[str, CustomerRequirement], dict[str, dict[str, dict]]]:
     """Attach only rechecked physical evidence to detached runtime requirements."""
+    from scione.specifications.atom_citations import enrich_atom_citations
+
+    # Replay citation-only recovery on detached views as well as new runs.
+    # Older artifacts keep their original evidence lists and provider output.
+    source_view = CustomerExtraction(
+        schema_version="0.1", document=CustomerDocumentMetadata(), requirements=requirements
+    )
+    cited, _actions = enrich_atom_citations(source_view, document)
     views, proofs = {}, {}
-    for requirement in requirements:
-        row_proofs = physical_unit_proofs(requirement, document, requirements)
+    for requirement in cited.requirements:
+        row_proofs = physical_unit_proofs(requirement, document, cited.requirements)
         view = requirement.model_copy(deep=True)
         for proof in row_proofs.values():
             # The physical helper can prove adjacent original evidence pieces
@@ -61,6 +74,8 @@ def physical_normalized_requirements(
 ):
     views, proofs = physical_parameter_views(requirements, document)
     return [
-        normalize_requirement(views[row.id], source_unit_proofs=proofs[row.id])
+        normalize_requirement(
+            views[row.id], source_unit_proofs=proofs[row.id], native_first=True
+        )
         for row in requirements
     ]

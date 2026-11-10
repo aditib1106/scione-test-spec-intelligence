@@ -6,6 +6,7 @@ from collections import Counter
 
 from fastapi import HTTPException
 
+from scione.library.assessment_reviews import SQLAssessmentReviews
 from scione.library.candidate_display import candidate_lab_entries
 from scione.library.store import LibraryStore, digest
 from scione.parameters import REGISTRY_VERSION
@@ -19,7 +20,7 @@ from scione.specifications.review import (
 from scione.structured import compare_requirement, normalize_capability
 from scione.structured.models import NORMALIZER_VERSION, AtomicClaim
 
-COMPARISON_POLICY_VERSION = "decisive_rules_first_v5"
+COMPARISON_POLICY_VERSION = "native_atoms_first_v6"
 
 
 class LibraryWorkspace:
@@ -77,7 +78,7 @@ class LibraryWorkspace:
     def listing(self) -> dict:
         return {
             "documents": [
-                self.document(item.document_id) for item in self.workspace.specs.list_documents()
+                self.document(item.document_id) for item in self.workspace.active_documents()
             ]
         }
 
@@ -159,7 +160,8 @@ class LibraryWorkspace:
             machine, self.workspace.comparison_source(document_id, machine)[1]
         )
         rule_normalized = {
-            row.requirement_id: row for row in self.workspace.comparison_source(document_id, run)[1]
+            row.requirement_id: row
+            for row in self.workspace.comparison_source(document_id, run, native_first=True)[1]
         }
         fingerprint = lab_fingerprint(report.lab)
         self.store.save_capability_revision(report.lab, fingerprint)
@@ -389,7 +391,39 @@ class LibraryWorkspace:
         identity = digest(payload)
         saved = self.store.save_comparison(identity, payload)
         # Pagination is presentation metadata; the persisted comparison remains immutable.
-        return saved
+        reviews = SQLAssessmentReviews(self.store, self.workspace.labs.workspace_id).latest(
+            saved["comparison_id"]
+        )
+        return {**saved, **({"assessment_reviews": reviews} if reviews else {})}
+
+    def review_assessment(self, document_id: str, body) -> dict:
+        current = self.comparison(document_id)
+        if (
+            current["comparison_id"] != body.comparison_id
+            or current["report_input_fingerprint"] != body.input_fingerprint
+        ):
+            raise HTTPException(409, "The assessment changed. Refresh before reviewing it.")
+        requirement = next(
+            (
+                row
+                for row in current["requirements"]
+                if row["requirement_id"] == body.requirement_id
+            ),
+            None,
+        )
+        if requirement is None:
+            raise HTTPException(400, "Select a test from this assessment.")
+        if requirement["comparison"]["status"] == "excluded":
+            raise HTTPException(400, "Restore this test before reviewing its assessment.")
+        SQLAssessmentReviews(self.store, self.workspace.labs.workspace_id).save(
+            current, requirement, body
+        )
+        updated = self.comparison(document_id)
+        if updated["comparison_id"] != current["comparison_id"]:
+            raise HTTPException(
+                409, "The assessment changed while saving. Review the current result."
+            )
+        return updated
 
     def _assert_comparison_inputs_current(self, report, document: dict) -> None:
         """Reject a stale analysis/review/lab/metadata race before publishing it.

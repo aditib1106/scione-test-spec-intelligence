@@ -11,7 +11,7 @@ from scione.specifications.models import CustomerRequirement
 from scione.structured.models import AtomicClaim
 from scione.structured.source_clauses import ordered_thermal_cycle_proof
 
-MATCHING_PROJECTION_VERSION = "authoritative_atoms_v0_3"
+MATCHING_PROJECTION_VERSION = "authoritative_atoms_compact_v0_6"
 
 
 class MatchingProjectionError(ValueError):
@@ -117,6 +117,11 @@ def project_matching_input(snapshot: MatchingInput) -> MatchingInput:
     data = snapshot.model_dump(mode="json")
     for row in data["requirements"]:
         row["requirement"]["atomic_claims"] = []
+        # These are software proof/audit records, often containing entire
+        # duplicate clause payloads. Retention has just been verified using
+        # them; the model needs the resulting facts, not our parser logs.
+        # The immutable input snapshot and artifact retain every action.
+        row["normalized"]["normalization_actions"] = []
     for row in data["capabilities"]:
         row["capability"]["atomic_claims"] = []
     return MatchingInput.model_validate(data)

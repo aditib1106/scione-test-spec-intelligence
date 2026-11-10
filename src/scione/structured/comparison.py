@@ -39,6 +39,28 @@ _UNIT_FACTORS = {
 }
 
 
+def _explicit_absence_of_acceptance_limit(claim: AtomicClaim) -> bool:
+    """A source declaring no acceptance limit creates no lab demand.
+
+    This is a complete, closed statement about missing customer criteria. It
+    does not apply to prohibitions, an unstated lab capability, or a clause
+    containing any additional constraint. The source note remains inspectable.
+    """
+    return not any(
+        value is not None for value in (claim.value, claim.minimum, claim.maximum)
+    ) and bool(
+        re.fullmatch(
+            r"\s*no\s+(?:(?:specimen|customer|test)\s+)?"
+            r"(?:acceptance\s+(?:limit|criterion|criteria)|acceptance\s+requirement)"
+            r"\s+(?:is|are)\s+(?:specified|stated|provided)"
+            r"(?:\s+in\s+(?:this|the)\s+"
+            r"(?:specification|document|request|section|example|demonstration))?\s*[.;]?\s*",
+            claim.raw_text,
+            re.I,
+        )
+    )
+
+
 def _context_matches(request: AtomicClaim, declaration: AtomicClaim) -> bool:
     return contexts_match(request, declaration)
 
@@ -238,8 +260,9 @@ def compare_requirement(
                     "Some source quantities need their stage, context or applicability checked. "
                     "Review the source before confirming lab support."
                 ),
-                source_pages=sorted({page for claim in normalized.claims
-                                     for page in claim.source_pages}),
+                source_pages=sorted(
+                    {page for claim in normalized.claims for page in claim.source_pages}
+                ),
             )
         )
     # Work on canonical copies. Exported requirement/source claims retain their
@@ -267,31 +290,43 @@ def compare_requirement(
             source_pages=claim.source_pages,
             requirement_claim=source_claim,
         )
-        workflow = is_planning_instruction(claim) or (
-            claim.kind == "instruction"
-            and not any(
-                value is not None
-                for value in (claim.value, claim.minimum, claim.maximum, claim.tolerance)
-            )
-            and not claim.values
-            and claim.raw_text not in operating_clauses
-            and re.search(
-                r"written approval|customer.*sign.off|deviations? before testing|"
-                r"retain.*raw observations|report panel.level|photos? of the grids|"
-                r"conceal.*failed panel|submit.*topcoat lots|from each lot.*coat|"
-                r"repeatable.*position map|"
-                r"assign.*baseline checks|dispute retention|may request.*ASTM|"
-                r"not declaring.*interchangeable|ASTM route.*approved|"
-                r"corresponding acceptance class",
-                claim.raw_text,
-                re.I,
+        no_acceptance_limit = _explicit_absence_of_acceptance_limit(claim)
+        workflow = (
+            no_acceptance_limit
+            or is_planning_instruction(claim)
+            or (
+                claim.kind == "instruction"
+                and not any(
+                    value is not None
+                    for value in (claim.value, claim.minimum, claim.maximum, claim.tolerance)
+                )
+                and not claim.values
+                and claim.raw_text not in operating_clauses
+                and re.search(
+                    r"written approval|customer.*sign.off|deviations? before testing|"
+                    r"retain.*raw observations|report panel.level|photos? of the grids|"
+                    r"conceal.*failed panel|submit.*topcoat lots|from each lot.*coat|"
+                    r"repeatable.*position map|"
+                    r"assign.*baseline checks|dispute retention|may request.*ASTM|"
+                    r"not declaring.*interchangeable|ASTM route.*approved|"
+                    r"corresponding acceptance class",
+                    claim.raw_text,
+                    re.I,
+                )
             )
         )
         if workflow:
             check.status = "informational"
             check.reason = (
-                "Preparation, evidence or approval task retained for the lab's workflow; "
-                "this is not an automatic capability judgement."
+                (
+                    "The customer states that no acceptance limit is specified; "
+                    "this note does not require a separate lab capability."
+                )
+                if no_acceptance_limit
+                else (
+                    "Preparation, evidence or approval task retained for the lab's workflow; "
+                    "this is not an automatic capability judgement."
+                )
             )
             checks.append(check)
             continue

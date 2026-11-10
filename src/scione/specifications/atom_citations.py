@@ -114,7 +114,17 @@ def _matches(text: str, fragment: str) -> list[tuple[int, int]]:
     expression = re.compile(
         r"(?=(" + first + r"\s+".join(re.escape(word) for word in words) + last + r"))"
     )
-    return [(match.start(1), match.end(1)) for match in expression.finditer(text)]
+    matches = [(match.start(1), match.end(1)) for match in expression.finditer(text)]
+    if matches or not re.search(r"[\u3400-\u9fff]", fragment):
+        return matches
+    # A Chinese PDF may wrap inside one word while the extracted atom joins
+    # those characters, or vice versa. Reuse the citation contract's exact
+    # canonical character mapping; only a unique located span is recoverable.
+    # No fuzzy word replacement, scientific normalization or guessed join.
+    from scione.structured.source_occurrences import _unique_quote_span
+
+    span = _unique_quote_span(text, fragment)
+    return [span] if span is not None else []
 
 
 def _document_matches(pages: dict[int, str], fragment: str) -> list[_Span]:

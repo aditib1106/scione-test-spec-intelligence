@@ -55,7 +55,7 @@ _METHOD = re.compile(
     re.IGNORECASE,
 )
 _REVISION = re.compile(r"^\s*:\s*(\d{4})\s*$")
-MATCHING_POLICY_VERSION = "0.7"
+MATCHING_POLICY_VERSION = "0.8"
 
 
 @dataclass(frozen=True)
@@ -278,9 +278,9 @@ def _selected_methods(
         roles = [
             (_name(method.role) if method.role else "") for method in requirement.requested_methods
         ]
-        # A clearly required primary route can be evaluated while a separately
-        # approval-dependent optional route remains visible in original source.
-        # Unknown roles or merely calling something an alternative never suffice.
+        # Evaluate an explicitly primary/required route while retaining its
+        # separately labelled alternatives. Choosing the primary does not
+        # establish equivalence or permission to use an alternative.
         primary_indices = [
             index for index, role in enumerate(roles) if role in {"required", "primary"}
         ]
@@ -293,7 +293,8 @@ def _selected_methods(
                 and re.search(r"\brequired\b", role)
                 for role in optional_roles
             )
-            if explicit_conditional:
+            explicit_alternatives = all(role == "alternative" for role in optional_roles)
+            if explicit_conditional or explicit_alternatives:
                 return [requirement.requested_methods[primary_index]], []
         # Explicit source roles can establish that references are cumulative
         # (for example exposure + measurement). Merely seeing several known
@@ -336,6 +337,64 @@ def _selected_methods(
             "Saved method selection is empty, duplicated, or no longer an original method code."
         ]
     return [method for method in requirement.requested_methods if method.code in selected], []
+
+
+def _source_permitted_alternative_method(
+    requirement: CustomerRequirement,
+    capability: LabCapability,
+    catalog: ReferenceCatalog,
+    choice: MappingChoice | None = None,
+) -> RequestedMethod | None:
+    """Accept one explicitly permitted source route, never infer equivalence.
+
+    All references must be labelled alternatives for the same test, exactly one
+    must be registered in the selected lab service, and a located source quote
+    must itself permit choosing either reference. Approval-dependent proposals,
+    ambiguous roles and explicit human method selections remain authoritative.
+    """
+    methods = requirement.requested_methods
+    if (
+        len(methods) < 2
+        or any(_name(method.role or "") != "alternative" for method in methods)
+        or (choice is not None and choice.selected_method_codes is not None)
+    ):
+        return None
+    resolved = [_method_resolution(method, catalog) for method in methods]
+    test = catalog.test_by_id(capability.canonical_test_id)
+    if any(identifier is None or issue for identifier, issue in resolved):
+        return None
+    if any(identifier not in test.method_ids for identifier, _ in resolved):
+        return None
+    offered = [
+        method for method, (identifier, _issue) in zip(methods, resolved, strict=True)
+        if identifier in capability.method_ids
+    ]
+    if len(offered) != 1:
+        return None
+    codes = [" ".join(_text(method.code).casefold().split()) for method in methods]
+    for evidence in requirement.evidence:
+        quote = " ".join(_text(evidence.quote).casefold().split())
+        sentences = re.split(r"(?<=[.!?。])\s+", quote)
+        for index, sentence in enumerate(sentences):
+            if not all(code in sentence for code in codes):
+                continue
+            if not re.search(r"\b(?:may|can)\s+(?:reference|use|choose|select|apply)\b", sentence):
+                continue
+            if not re.search(r"\bor\b", sentence):
+                continue
+            if re.search(r"\b(?:approv\w*|consent|subject to|prior agreement)\b", sentence):
+                continue
+            # A following approval sentence can qualify the preceding choice.
+            # A separate approval of deviations/conditioning is not permission
+            # to substitute methods and remains a separate source obligation.
+            following = sentences[index + 1] if index + 1 < len(sentences) else ""
+            if (
+                re.search(r"\b(?:approv\w*|consent)\b", following)
+                and not re.search(r"\b(?:deviation|departure|conditioning)\b", following)
+            ):
+                continue
+            return offered[0]
+    return None
 
 
 def _choose_capability(

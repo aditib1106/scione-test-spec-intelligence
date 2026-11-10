@@ -207,9 +207,7 @@ def test_paid_wire_exposes_only_derived_bounded_joint_views_and_retains_all_orig
     import json
 
     payload = json.loads(request.user_prompt)
-    assert payload["joint_scope_texts"]["requirements"]["req_001"][
-        "req_claim_1"
-    ] == joint_scope_text(source.requirements[0].normalized.claims[0])
+    assert "joint_scope_texts" not in payload
     assert payload["requirements"][0]["normalized"]["claims"][0]["source_context"] == (
         source.requirements[0].normalized.claims[0].source_context
     )

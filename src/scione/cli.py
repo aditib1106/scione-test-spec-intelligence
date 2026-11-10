@@ -72,6 +72,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         from scione.catalogs.sql_lab_store import upgrade_lab_schema
         from scione.config import Settings
+        from scione.library.assessment_reviews import upgrade_assessment_reviews_schema
         from scione.library.store import LibraryStore, LibraryStoreError
         from scione.matching.store import upgrade_matching_schema
         from scione.specifications.corrections import upgrade_corrections_schema
@@ -87,6 +88,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             upgrade_lab_schema(store)
             upgrade_matching_schema(store)
             upgrade_corrections_schema(store)
+            upgrade_assessment_reviews_schema(store)
         except (LibraryStoreError, SQLAlchemyError):
             print("Database upgrade failed. Check connection settings; saved data is preserved.")
             return 1

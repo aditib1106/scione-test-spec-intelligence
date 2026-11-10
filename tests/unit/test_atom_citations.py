@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 
 from scione.schemas import DocumentPage, IngestedDocument, TextExtractionStatus, TextReadingOrder
-from scione.specifications.atom_citations import MAX_ANCHOR_GAP, enrich_atom_citations
+from scione.specifications.atom_citations import MAX_ANCHOR_GAP, _matches, enrich_atom_citations
 from scione.specifications.models import (
     CustomerDocumentMetadata,
     CustomerExtraction,
@@ -277,3 +277,14 @@ def test_shared_or_repeated_method_reference_does_not_supply_unique_parent_ident
     )
     source = document(f"Method SYN-AB-108.\n{RAW}.", "Appendix: SYN-AB-108")
     assert enrich_atom_citations(given, source) == (given, [])
+
+
+def test_cjk_wrapping_only_recovery_preserves_exact_unique_physical_offsets():
+    physical = "试验室必须写明实际采用的方法和加载速率。"
+    fragment = "试验室必须\n 写明实际采用的方法和加载速率。"
+    assert _matches(physical, fragment) == [(0, len(physical))]
+    assert _matches(physical + physical, fragment) == []
+    assert _matches(physical, fragment.replace("加载速率", "试样尺寸")) == []
+    numeric = "芯样直径目标为100 mm。"
+    assert _matches(numeric, "芯样直径目标为\n100 mm。") == [(0, len(numeric))]
+    assert _matches(numeric, "芯样直径目标为\n101 mm。") == []

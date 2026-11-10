@@ -53,9 +53,9 @@ class PaidProvider(RecordingProvider):
                     "capability_claim_ids": [],
                     "relation": "unknown",
                     "reason": "The controlled provider defers this correspondence.",
-                    "context_equivalence": None,
-                    "value_equivalence": None,
-                    "joint_scope_equivalence": None,
+                    "context_role": None,
+                    "scope_relation": None,
+                    "value_relation": None,
                 }
                 for claim in row["normalized"]["claims"]
             }
@@ -92,7 +92,7 @@ def test_schema_requires_every_fixed_source_key_and_lossless_adapter_preserves_r
     canonical = decode_keyed_output(wire, source)
     assert canonical == run.proposal.model_dump(mode="json")
     assert wire == untouched == run.parsed_response
-    assert run.wire_format == "matching_keyed_v3"
+    assert run.wire_format == "matching_keyed_v5"
     assert [item.requirement_id for item in run.proposal.items] == [
         row.requirement.id for row in source.requirements
     ]

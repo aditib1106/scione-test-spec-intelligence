@@ -16,6 +16,11 @@ from scione.specifications.provenance import (
 from scione.specifications.review import assess_requirements
 
 TEST = "Gloss per ASTM D1627-16; acceptance 82-92 GU."
+DEMONSTRATION_NOTICE = (
+    "Demonstration data only. The customer requirements below are original fictional "
+    "examples. Method identifiers are references only; no standard procedure text is "
+    "reproduced."
+)
 
 
 def document(text):
@@ -53,6 +58,7 @@ def payload(quote):
     "Prepared for synthetic extraction and normalization benchmarking. All customer "
     "entities, acceptance limits and cited test-method designations in this document are "
     "fictional; no method is asserted to be a published or officially equivalent standard.",
+    DEMONSTRATION_NOTICE,
 ])
 def test_literal_provenance_is_separate_from_row_review_and_original_output_survives(quote):
     source = document(quote)
@@ -181,3 +187,41 @@ def test_quantities_or_real_concerns_cannot_hide_inside_provenance(quote):
     assert run.notice_audits[0].status == "needs_review"
     assert nonblocking_notice_issues(run, source) == set()
     assert assess_requirements(run, source)["req_001"].state == "needs_attention"
+
+
+@pytest.mark.parametrize("restriction", [
+    "Test at 30 °C.",
+    "The acceptance criterion is at least 4B.",
+    "Only the published edition may be used.",
+    "No other method edition is permitted.",
+    "The test temperature is not stated.",
+    "No standard procedure is required.",
+])
+def test_demonstration_disclaimer_does_not_hide_appended_scientific_restrictions(restriction):
+    quote = DEMONSTRATION_NOTICE + " " + restriction
+    assert not metadata_only_synthetic_quote(quote)
+    source = document(quote)
+    run = CustomerRequirementRunner(StaticModelProvider(payload(quote))).run(
+        source, strategy="compact_document"
+    )
+    assert run.notice_audits[0].status == "needs_review"
+    assert run.extraction.document_notices == []
+    assert nonblocking_notice_issues(run, source) == set()
+    assert assess_requirements(run, source)["req_001"].state == "needs_attention"
+
+
+def test_historical_demo_notice_error_is_reprojected_without_changing_raw_output():
+    source = document(DEMONSTRATION_NOTICE)
+    raw = payload(DEMONSTRATION_NOTICE)
+    run = CustomerRequirementRunner(StaticModelProvider(raw)).run(
+        source, strategy="compact_document"
+    )
+    issue = (
+        "Document notice needs review: Provenance notice contains other content that "
+        "still requires review. " + DEMONSTRATION_NOTICE
+    )
+    run.extraction.review_issues.append(issue)
+    assert nonblocking_notice_issues(run, source) == {issue}
+    assert assess_requirements(run, source)["req_001"].state == "ready"
+    assert run.extraction.review_issues == [issue]
+    assert json.loads(run.raw_response) == raw

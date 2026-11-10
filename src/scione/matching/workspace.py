@@ -15,7 +15,12 @@ from scione.matching.retrieval import (
 from scione.matching.service import SemanticMatchingError, input_fingerprint
 from scione.matching.store import SQLMatchingStore
 from scione.parameters import REGISTRY_VERSION, normalization_evidence
-from scione.reports.matching import _method_resolution, lab_fingerprint
+from scione.reports.matching import (
+    _method_resolution,
+    _selected_methods,
+    _source_permitted_alternative_method,
+    lab_fingerprint,
+)
 from scione.specifications.conditional_notes import conditional_route_proofs
 
 
@@ -60,6 +65,58 @@ class MatchingWorkspace:
             }
             if line.mapping_choice is not None:
                 allowed &= {line.mapping_choice.capability_id}
+            else:
+                considered = getattr(line, "considered_method_codes", None)
+                methods = [
+                    method
+                    for method in line.requirement.requested_methods
+                    if considered is None or method.code in considered
+                ]
+                resolved = [_method_resolution(method, report.catalog) for method in methods]
+                if resolved and all(identifier and not issue for identifier, issue in resolved):
+                    requested_ids = {identifier for identifier, _ in resolved}
+                    exact = {
+                        cap.id
+                        for cap in report.lab.capabilities
+                        if cap.id in allowed and requested_ids <= set(cap.method_ids)
+                    }
+                    # Retain every configuration for the exact method. Only
+                    # when none exists do other-method entries remain useful
+                    # diagnostics; they never establish equivalence.
+                    if exact:
+                        allowed = exact
+                    else:
+                        primary_ids = {
+                            identifier
+                            for method, (identifier, issue) in zip(methods, resolved, strict=True)
+                            if identifier and not issue and method.role in {"primary", "required"}
+                        }
+                        primary = {
+                            cap.id
+                            for cap in report.lab.capabilities
+                            if cap.id in allowed
+                            and primary_ids
+                            and primary_ids <= set(cap.method_ids)
+                        }
+                        relevant = {
+                            cap.id
+                            for cap in report.lab.capabilities
+                            if cap.id in allowed and requested_ids.intersection(cap.method_ids)
+                        }
+                        # Retrieval does not decide which alternative applies.
+                        # The method gate still preserves all original refs and
+                        # review issues; unrelated family services add no useful
+                        # evidence to a known primary/composite request.
+                        if primary or relevant:
+                            allowed = primary or relevant
+                elif not methods:
+                    from scione.catalogs.normalization import is_source_defined_procedure
+
+                    if not is_source_defined_procedure(line.requirement, report.catalog):
+                        # An uncoded standard-like request cannot certify method
+                        # coverage. Keep a bounded pair of explicit services for
+                        # diagnostic comparisons until the user chooses a method.
+                        allowed = set(sorted(allowed)[:2])
             capability_choices[line.requirement.id] = allowed
         allowed_capabilities = set().union(*capability_choices.values())
         scoped_lab = report.lab.model_copy(
@@ -81,6 +138,7 @@ class MatchingWorkspace:
             )
         retrieval = {
             "policy_version": RETRIEVAL_POLICY_VERSION,
+            "capability_policy": "primary_composite_and_uncoded_candidates_v2",
             "catalog_test_count": len(report.catalog.tests),
             "catalog_method_count": len(report.catalog.methods),
             "transmitted_method_count": len(method_ids),
@@ -95,7 +153,7 @@ class MatchingWorkspace:
             source_view, normalized_source = report.source_run, None
         else:
             source_view, normalized_source = workspace.comparison_source(
-                report.document_id, report.source_run
+                report.document_id, report.source_run, native_first=True
             )
         snapshot = build_matching_input(
             source_view,
@@ -238,11 +296,30 @@ class MatchingWorkspace:
         proposals = {item.requirement_id: item for item in attempt.output.items}
         statuses = {}
         selected = {}
+        method_decisions = {}
         for line in report.lines:
             proposal = proposals[line.requirement.id]
             capability = capabilities.get(proposal.capability_id)
             selected[line.requirement.id] = capability
             status = "unknown"
+            if (
+                proposal.identity_status == "unknown"
+                and proposal.canonical_test_id is None
+                and capability is None
+                and line.status == "test_gap"
+                and line.match_basis == "Exact curated name / alias"
+                and line.canonical_test_id is not None
+                and line.considered_method_codes
+                and not line.unknown_methods
+                and not any(
+                    cap.canonical_test_id == line.canonical_test_id
+                    for cap in report.lab.capabilities
+                )
+            ):
+                # An optional semantic abstention cannot erase an exact,
+                # unambiguous method/test absence in this lab's declaration.
+                # This means "not listed", never "physically impossible".
+                status = "gap"
             if (
                 capability is None
                 and proposal.identity_status == "aligned"
@@ -253,13 +330,40 @@ class MatchingWorkspace:
                 # method/test declaration for this same confirmed identity.
                 status = "gap"
             if proposal.identity_status == "aligned" and capability:
+                _source_methods, method_issues = _selected_methods(
+                    line.requirement, line.mapping_choice
+                )
                 methods = [
                     method
                     for method in line.requirement.requested_methods
                     if method.code in line.considered_method_codes
                 ]
+                route = _source_permitted_alternative_method(
+                    line.requirement, capability, report.catalog, line.mapping_choice
+                )
+                if route is not None:
+                    methods, method_issues = [route], []
+                    method_decisions[line.requirement.id] = {
+                        "rule": "source_permitted_registered_alternative",
+                        "selected_method": route.code,
+                        "retained_original_references": [
+                            method.code for method in line.requirement.requested_methods
+                        ],
+                        "establishes_method_equivalence": False,
+                    }
                 resolved = [_method_resolution(method, report.catalog) for method in methods]
-                if methods and not any(reason for _, reason in resolved):
+                if method_issues:
+                    # An unresolved OR/composite relationship is not evidence
+                    # that this lab lacks every named method. It must not turn
+                    # a selected single-service declaration into a false gap.
+                    status = "unknown"
+                    method_decisions[line.requirement.id] = {
+                        "rule": "unresolved_source_method_relationship",
+                        "source_issues": method_issues,
+                        "retained_original_references": [method.code for method in methods],
+                        "establishes_method_equivalence": False,
+                    }
+                elif methods and not any(reason for _, reason in resolved):
                     identifiers = {identifier for identifier, _ in resolved}
                     status = "supported" if identifiers <= set(capability.method_ids) else "gap"
                 elif (
@@ -270,6 +374,20 @@ class MatchingWorkspace:
                     status = "supported" if line.status != "needs_review" else "unknown"
             statuses[line.requirement.id] = status
         comparisons = compile_matching_run(attempt, statuses)
+        for comparison in comparisons:
+            decision = method_decisions.get(comparison.requirement_id)
+            if decision is None:
+                continue
+            method_check = comparison.checks[0]
+            method_check.comparison_metadata.append(decision)
+            method_check.reason = (
+                "The source explicitly permits either reference; the selected lab service "
+                f"registers {decision['selected_method']}. Original alternatives remain "
+                "recorded and have not been declared equivalent."
+                if decision["rule"] == "source_permitted_registered_alternative"
+                else "The source contains alternative or combined method references whose "
+                "relationship still needs review; a missing method has not been established."
+            )
         return comparisons, selected
 
     def artifacts(self, document_id: str, run_id: str) -> dict:

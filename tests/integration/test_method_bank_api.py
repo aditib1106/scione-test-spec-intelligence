@@ -140,8 +140,8 @@ def test_startup_and_existing_runtime_endpoints_do_not_open_or_emit_the_full_ban
     )
     active = request(app, "/api/catalog").json()
     workspace = request(app, "/api/workspace").json()
-    assert len(active["tests"]) == 99 and len(active["methods"]) == 113
-    assert len(workspace["catalog"]["methods"]) == 113
+    assert len(active["tests"]) == 99 and len(active["methods"]) == 153
+    assert len(workspace["catalog"]["methods"]) == 153
 
 
 def test_bank_is_read_only_and_corrupt_package_metadata_has_a_safe_error(app, monkeypatch):

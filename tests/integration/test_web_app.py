@@ -9,7 +9,7 @@ import pytest
 from pytest import MonkeyPatch
 from streamlit.testing.v1 import AppTest
 
-from scione.catalogs import FileLabStore, LabProfile
+from scione.catalogs import FileLabStore, LabProfile, default_demo_lab
 from scione.config import Settings
 from scione.providers import TokenUsage
 from scione.providers.gemini import GeminiModelProvider
@@ -58,7 +58,10 @@ def open_capability_editor(app: AppTest, capability_id: str | None = None) -> Ap
     if capability_id is None:
         return app.button(key="add_capability").click().run()
     if not any(widget.key == "capability_to_edit" for widget in app.selectbox):
-        app = app.button(key="load_example_lab").click().run()
+        store = FileLabStore(Settings().scione_workspace_dir)
+        profile = store.load_or_create()
+        store.save(profile.model_copy(update={"capabilities": default_demo_lab().capabilities}))
+        app = AppTest.from_file(str(APP), default_timeout=10).run()
     app = app.selectbox(key="capability_to_edit").set_value(capability_id).run()
     return app.button(key="edit_capability").click().run()
 
@@ -76,7 +79,7 @@ def test_web_app_starts_with_my_lab_without_credentials() -> None:
     assert not any(field.key == "capability_test_id" for field in app.selectbox)
     assert not any(button.label == "Save test" for button in app.button)
     assert not app.dataframe
-    assert app.button(key="load_example_lab")
+    assert not any(button.key == "load_example_lab" for button in app.button)
 
 
 def test_capability_editor_only_opens_on_request_and_cancel_does_not_save(
@@ -97,20 +100,21 @@ def test_capability_editor_only_opens_on_request_and_cancel_does_not_save(
     assert app.text_area(key="capability_notes").value == ""
 
 
-def test_example_lab_is_explicit_and_preserves_profile_details(tmp_path: Path) -> None:
+def test_prepopulated_lab_preserves_profile_details(tmp_path: Path) -> None:
     app = AppTest.from_file(str(APP), default_timeout=10).run()
     store = FileLabStore(tmp_path / "workspace")
     assert store.load_or_create().capabilities == []
     app.text_input(key="lab_name").set_value("My demonstration lab")
     app = click_button(app, "Save lab details")
-    app = app.button(key="load_example_lab").click().run()
+    profile = store.load_or_create()
+    store.save(profile.model_copy(update={"capabilities": default_demo_lab().capabilities}))
+    app = AppTest.from_file(str(APP), default_timeout=10).run()
 
     assert not app.exception
     assert not app.error
     assert not any("Reload before saving" in item.value for item in app.warning)
     assert store.load_or_create().name == "My demonstration lab"
     assert len(store.load_or_create().capabilities) == 5
-    assert "Synthetic example" in app.success[0].value
     assert not any(button.key == "load_example_lab" for button in app.button)
 
 

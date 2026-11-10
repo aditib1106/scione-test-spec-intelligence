@@ -553,10 +553,30 @@ def _numeric(
             definition.rule,
         )
     if request.operator in {"<=", ">="} and request.kind in {"condition", "scope"}:
+        if definition.rule != "operating_range" or request.value is None or request.tolerance:
+            return _result(
+                "unknown", "The operating bound needs a reviewed setting policy.", definition.rule
+            )
+        low, high = _bounds(declaration, second)
+        if declaration.operator not in {"range", "one_of", "="} or low is None or high is None:
+            return _result("unknown", "A complete selectable lab range is needed.", definition.rule)
+        boundary = convert_value(request.value, first)
+        if declaration.operator == "one_of":
+            candidates = [convert_value(v, second) for v in declaration.values]
+        else:
+            candidates = [max(low, boundary) if request.operator == ">=" else min(high, boundary)]
+        feasible = any(
+            low <= point <= high
+            and (point >= boundary if request.operator == ">=" else point <= boundary)
+            for point in candidates
+        )
         return _result(
-            "unknown",
-            "An operating inequality needs the complete requested operating range.",
-            definition.rule,
+            "supported" if feasible else "gap",
+            "A selectable lab setting satisfies the customer's minimum/maximum operating bound; "
+            "this does not claim coverage of an unbounded range."
+            if feasible
+            else "No declared selectable setting satisfies the customer's operating bound.",
+            "feasible_operating_bound",
         )
     if declaration.operator in {"<=", "<", ">=", ">", "required", "text"}:
         return _result(

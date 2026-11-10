@@ -248,4 +248,4 @@ def test_exact_scientific_precision_is_unchanged_and_policy_version_is_explicit(
     value = "0.001234567890123456789"
     claim = normalize("Temperature 1.234567890123456789e-3 °C", value=value)[0]
     assert claim.value == Decimal(value) and claim.normalization_state == "parsed"
-    assert NORMALIZER_VERSION == "atomic_requirements_v0_32"
+    assert NORMALIZER_VERSION == "atomic_requirements_v0_38"

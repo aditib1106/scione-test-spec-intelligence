@@ -63,6 +63,7 @@ td, th { padding: 5pt 4pt; border-bottom: 0.5pt solid #dce3ee; vertical-align: t
 .unknown { color: #8a641c; }
 .informational { color: #64748b; }
 .long-check { border-bottom: 0.5pt solid #dce3ee; padding-bottom: 6pt; }
+.shared-start { page-break-before: always; }
 """
 
 
@@ -133,7 +134,22 @@ def _checked_rows(payload: dict) -> list[tuple[dict, StructuredComparison]]:
             raise ValueError("Every test requires a comparison record.")
         if _excluded(row):
             continue
-        comparison = StructuredComparison.model_validate(row.get("comparison", {}))
+        data = row.get("comparison", {})
+        if isinstance(data, dict) and isinstance(data.get("checks"), list):
+            # Saved web assessments can include unconfirmed candidate display
+            # hints alongside strict machine checks. They are not declarations
+            # or verdicts and must never be promoted into the printed result.
+            # Drop only this known presentation field on detached copies; all
+            # other unknown fields still fail the strict saved-report contract.
+            data = {
+                **data,
+                "checks": [
+                    {key: value for key, value in check.items() if key != "candidate_lab_entries"}
+                    if isinstance(check, dict) else check
+                    for check in data["checks"]
+                ],
+            }
+        comparison = StructuredComparison.model_validate(data)
         result.append((row, comparison))
     return result
 
@@ -370,7 +386,7 @@ def _html(payload: dict) -> str:
     if shared:
         parts.extend(
             [
-                "<h2>Shared requirements</h2>",
+                "<h2 class='shared-start'>Shared requirements</h2>",
                 "<p class='meta'>Identical requirements, declarations and outcomes are shown "
                 "once here. The named tests retain these checks in their assessments above.</p>",
                 _check_rows(

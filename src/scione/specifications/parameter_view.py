@@ -43,6 +43,10 @@ def _review_origin_shape(native, requirement, normalized, unit_proof=None):
             }
         )
     )
+    if normalized.parameter_id and normalized.parameter_id.startswith("source_quantity_"):
+        candidate = candidate.model_copy(update={"label": "Source quantity"})
+    if normalized.parameter_id and normalized.parameter_id.startswith("source_fact_"):
+        candidate = candidate.model_copy(update={"label": "Source detail"})
     if ordered_thermal_cycle_proof(candidate, requirement):
         candidate = candidate.model_copy(update={"stage": "thermal_cycle"})
     return candidate
@@ -83,7 +87,9 @@ def concise_catalog_name(requirement: CustomerRequirement, catalog) -> str | Non
 def parameter_review_view(
     requirement: CustomerRequirement, presenter, catalog=None, *, source_unit_proofs=None
 ) -> dict:
-    normalized = normalize_requirement(requirement, source_unit_proofs=source_unit_proofs)
+    normalized = normalize_requirement(
+        requirement, source_unit_proofs=source_unit_proofs, native_first=True
+    )
     rows = []
     shape = (
         "label",

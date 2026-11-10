@@ -57,7 +57,7 @@ def test_legacy_atomic_source_default_does_not_block_library_or_comparison(clien
                 select(runs.c.source, runs.c.normalizer_version).where(runs.c.run_id == run.run_id)
             ).one()
         assert stored.source == legacy
-        assert stored.normalizer_version == NORMALIZER_VERSION
+        assert stored.normalizer_version == f"{NORMALIZER_VERSION}_native_first"
         assert specs.load_extraction(document.document_id, run.run_id) == run
         assert specs.load_extraction(document.document_id, run.run_id).raw_response == (
             "Untouched model-response fixture\n"

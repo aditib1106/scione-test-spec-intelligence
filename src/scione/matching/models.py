@@ -18,8 +18,8 @@ from scione.specifications.models import CustomerRequirement
 from scione.structured.models import AtomicClaim, NormalizedRequirement, StructuredComparison
 
 MATCHING_SCHEMA_VERSION = "0.1"
-MATCHING_PROMPT_VERSION = "semantic_matching_v0_8"
-MATCHING_VALIDATION_VERSION = "semantic_alignment_guards_v0_17"
+MATCHING_PROMPT_VERSION = "semantic_matching_v0_11"
+MATCHING_VALIDATION_VERSION = "semantic_alignment_guards_v0_24"
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
@@ -132,9 +132,31 @@ class ClaimAlignment(MatchingModel):
     context_equivalence: ProposedEquivalence | None = None
     value_equivalence: ProposedEquivalence | None = None
     joint_scope_equivalence: ProposedEquivalence | None = None
+    context_role: (
+        Literal[
+            "method_context",
+            "administrative",
+            "already_represented",
+            "sample_plan",
+            "project_workflow",
+        ]
+        | None
+    ) = None
+    represented_by_source_ids: list[Identifier] = Field(default_factory=list)
+    scope_relation: Literal["equivalent", "covered"] | None = None
+    value_relation: Literal["equivalent", "covered", "incompatible"] | None = None
 
     @model_validator(mode="after")
     def consistent_relation(self) -> Self:
+        if self.context_role is not None and self.relation != "unknown":
+            raise ValueError("Source context notes cannot assert parameter correspondence.")
+        if self.context_role is None and self.represented_by_source_ids:
+            raise ValueError("Source context reference IDs need an explicit context role.")
+        if (
+            self.context_role in {"method_context", "already_represented"}
+            and not self.represented_by_source_ids
+        ):
+            raise ValueError("Represented source notes need existing native source IDs.")
         if len(self.capability_claim_ids) != len(set(self.capability_claim_ids)):
             raise ValueError("Aligned claim IDs must not be repeated.")
         if self.relation == "same_parameter" and not self.capability_claim_ids:
@@ -147,6 +169,16 @@ class ClaimAlignment(MatchingModel):
             raise ValueError("Wording equivalence requires one explicitly selected lab claim.")
         if self.joint_scope_equivalence and (self.context_equivalence or self.value_equivalence):
             raise ValueError("Joint scope wording cannot be combined with field-wise bridges.")
+        if self.scope_relation and self.relation != "same_parameter":
+            raise ValueError("Semantic scope needs an existing aligned lab claim.")
+        if self.value_relation and (
+            self.relation != "same_parameter" or len(self.capability_claim_ids) != 1
+        ):
+            raise ValueError("Semantic coverage needs one existing, explicitly selected lab claim.")
+        if (self.scope_relation or self.value_relation) and (
+            self.context_equivalence or self.value_equivalence or self.joint_scope_equivalence
+        ):
+            raise ValueError("Use semantic coverage or legacy wording bridges, not both.")
         return self
 
 
@@ -220,6 +252,8 @@ class SemanticMatchingRun(MatchingModel):
         "matching_keyed_v1",
         "matching_keyed_v2",
         "matching_keyed_v3",
+        "matching_keyed_v4",
+        "matching_keyed_v5",
         "matching_batch_manifest_v1",
     ] = "matching_array_v1"
     execution_mode: Literal["single_call", "planned_batches"] = "single_call"

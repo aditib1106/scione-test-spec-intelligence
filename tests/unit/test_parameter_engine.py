@@ -217,7 +217,7 @@ def test_curated_context_and_stage_translation_matches():
         (envelope(low=20, high=60), claim(operator="one_of", value=None, values=[20, 60]), "gap"),
         (claim(value=60), envelope(low=None, high=80), "unknown"),
         (claim(value=90), envelope(low=None, high=80), "gap"),
-        (claim(operator="<=", value=60), envelope(), "unknown"),
+        (claim(operator="<=", value=60), envelope(), "supported"),
         (claim(operator="<", value=60), envelope(), "unknown"),
         (claim(), claim(operator=">=", value=20), "unknown"),
     ],

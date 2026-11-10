@@ -110,11 +110,13 @@ def enrich_reference_catalog(pilot: ReferenceCatalog) -> ReferenceCatalog:
     return ReferenceCatalog(
         id=pilot.id,
         name="Capstone synthetic test identity catalog",
-        version=4,
+        version=5,
         synthetic=True,
         source_note=(
             pilot.source_note + " The data team's synthetic bank adds all 71 family names and "
-            "77 explicitly selected method identities; full 32,000-row metadata is separately "
+            f"{len(data['methods'])} exact method identities selected from source audits, lab "
+            "declarations and a representative method for otherwise unlinked families; "
+            "full 32,000-row metadata is separately "
             "queryable and is not sent wholesale to a model. Exact pilot IDs are retained. "
             "Bank metadata does not populate any lab declaration or establish method "
             "equivalence. Source CSV SHA-256: " + data["source_csv_sha256"] + "."

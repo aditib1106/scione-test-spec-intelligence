@@ -15,6 +15,7 @@ from scione.matching.metadata_rules import (
     measurement_map_pair,
     report_directive_pair,
 )
+from scione.matching.owner_context import owner_context_pair
 from scione.matching.parameter_policy import source_proved_humidity_unit
 from scione.parameters import normalize_claim, resolve_definition
 from scione.parameters.engine import _temperature_subjects
@@ -136,10 +137,10 @@ def canonical_alignment_pair(
     declarations: list[AtomicClaim],
     *,
     wording_bridge: bool = False,
+    owner_test_labels: tuple[str, ...] = (),
 ) -> tuple[AtomicClaim, AtomicClaim, list[dict]]:
     """Project only explicit existing axes, with evidence for every change."""
-    first, second = requested.model_copy(deep=True), declared.model_copy(deep=True)
-    actions = []
+    first, second, actions = owner_context_pair(requested, declared, source, owner_test_labels)
     first, humidity_proof = source_proved_humidity_unit(first, source)
     if humidity_proof:
         actions.append(humidity_proof)

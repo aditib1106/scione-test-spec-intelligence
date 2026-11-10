@@ -195,3 +195,35 @@ def test_the_original_strict_source_number_grammar_is_unchanged():
 
     assert source_numbers("D65 AX17; 1.2e-3 mm") == {Decimal("0.0012")}
     assert source_numbers("1.2.3 mm") == set()
+
+
+@pytest.mark.parametrize(
+    "text,unit,expected",
+    [
+        ("nine marked points", "locations", {9}),
+        ("six equally spaced stations", "locations", {6}),
+        ("two production paint batches", "batches", {2}),
+        ("six 100 × 150 mm panels", "panels", {6}),
+        ("720 cumulative hours", "h", {720}),
+        ("240, 480 and 720 hours", "h", {240, 480, 720}),
+    ],
+)
+def test_source_owned_count_modifiers_and_shared_unit_lists(text, unit, expected):
+    assert grounded_source_numbers(text, unit=unit) == {Decimal(v) for v in expected}
+    for quantity in source_quantities(text):
+        assert text[slice(*quantity.number_span)] == quantity.raw_number
+        assert text[slice(*quantity.unit_span)] == quantity.raw_unit
+
+
+def test_numeric_lists_do_not_replace_ranges_or_borrow_a_different_unit():
+    assert source_operator_hints("between 42 and 55 µm", unit="µm") == {"range"}
+    assert source_operator_hints("42 and 55 µm", unit="µm") == {"one_of"}
+    assert grounded_source_numbers("240 °C and 480 hours", unit="h") == {Decimal(480)}
+    assert source_operator_hints("at least 240 and 480 hours", unit="h") == set()
+    assert grounded_source_numbers("Step two production batches") == set()
+
+
+def test_accented_words_do_not_expose_a_short_si_unit_prefix():
+    text = "Une série n’est acceptable que si tous les résultats sont conformes."
+    assert source_quantities(text) == ()
+    assert source_quantities("Une seule lecture est nécessaire.") == ()

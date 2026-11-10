@@ -1,5 +1,6 @@
 """Local HTTP and static frontend entry point for the MUI lab workspace."""
 
+import json
 import logging
 from dataclasses import asdict
 from decimal import InvalidOperation
@@ -18,9 +19,11 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from scione.api.contracts import (
     AnalysisRequest,
+    AssessmentReview,
     ExclusionReview,
     LabExample,
     LibraryMetadata,
+    LibraryRemoval,
     MappingReset,
     MappingReview,
     MatchingRequest,
@@ -44,6 +47,7 @@ from scione.catalogs.examples import (
 from scione.catalogs.lab_store import LabVersionConflict
 from scione.catalogs.seed import default_csp301_lab
 from scione.config import ConfigurationError, Settings
+from scione.library.assessment_reviews import SQLAssessmentReviews
 from scione.library.reset import reset_library_workspace
 from scione.library.store import LibraryConflict, LibraryStoreError
 from scione.providers.factory import create_configured_provider
@@ -250,9 +254,51 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
     def library_metadata(document_id: str, body: LibraryMetadata):
         return workspace.library.metadata(document_id, body)
 
+    @app.delete("/api/library/{document_id}")
+    def remove_library_document(document_id: str, body: LibraryRemoval):
+        workspace.library.index(document_id)
+        with workspace.specs.write_guard():
+            return workspace.library.store.set_document_archived(
+                document_id, archived=True, expected_version=body.version
+            )
+
+    @app.post("/api/library/{document_id}/restore")
+    def restore_library_document(document_id: str, body: LibraryRemoval):
+        workspace.library.index(document_id)
+        with workspace.specs.write_guard():
+            return workspace.library.store.set_document_archived(
+                document_id, archived=False, expected_version=body.version
+            )
+
     @app.get("/api/comparisons/{document_id}")
     def comparison(document_id: str):
         return workspace.library.comparison(document_id)
+
+    @app.post("/api/comparisons/{document_id}/reviews")
+    def review_assessment(document_id: str, body: AssessmentReview):
+        return workspace.library.review_assessment(document_id, body)
+
+    @app.get("/api/comparisons/{document_id}/reviews")
+    def assessment_review_history(document_id: str, download: bool = False):
+        current = workspace.library.comparison(document_id)
+        payload = {
+            "document_id": document_id,
+            "comparison_id": current["comparison_id"],
+            "input_fingerprint": current["report_input_fingerprint"],
+            "events": SQLAssessmentReviews(
+                workspace.library.store, workspace.labs.workspace_id
+            ).history(current["comparison_id"]),
+            "note": (
+                "Human processing decisions do not replace machine checks or establish lab support."
+            ),
+        }
+        if download:
+            return Response(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                media_type="application/json",
+                headers={"Content-Disposition": 'attachment; filename="assessment-reviews.json"'},
+            )
+        return payload
 
     @app.get("/api/specifications/{document_id}/matching")
     def matching_status(document_id: str):
@@ -348,7 +394,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
 
     @app.get("/api/specifications")
     def documents():
-        return [asdict(item) for item in workspace.specs.list_documents()]
+        return [asdict(item) for item in workspace.active_documents()]
 
     @app.post("/api/specifications")
     async def upload_specification(file: UploadFile):
@@ -357,13 +403,21 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             if len(data) > MAX_PDF_BYTES:
                 raise HTTPException(413, "Choose a PDF smaller than 25 MB.")
             saved = workspace.specs.import_pdf(file.filename or "specification.pdf", data)
+            if saved.document_id in workspace.library.store.archived_document_ids():
+                current = workspace.library.store.document(saved.document_id)
+                workspace.library.store.set_document_archived(
+                    saved.document_id, archived=False, expected_version=current["version"]
+                )
             return {"document_id": saved.document_id}
         finally:
             await file.close()
 
     @app.post("/api/specifications/demo")
     def import_demo(example: str = "legacy"):
-        sample = CSP301_SPEC if example == "csp301" else SAMPLE_SPEC
+        samples = {"legacy": SAMPLE_SPEC, "csp301": CSP301_SPEC}
+        if example not in samples:
+            raise HTTPException(400, "Choose an available example specification.")
+        sample = samples[example]
         saved = workspace.specs.import_pdf(sample.name, sample.read_bytes())
         return {"document_id": saved.document_id}
 

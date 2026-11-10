@@ -13,7 +13,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-REGISTRY_VERSION = "pilot_parameters_v6"
+REGISTRY_VERSION = "pilot_parameters_v7"
 ValueKind = Literal["number", "category", "set", "boolean"]
 ComparisonRule = Literal[
     "operating_range",

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import unicodedata
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -19,13 +20,15 @@ from uuid import uuid4
 from pydantic import ValidationError
 
 from scione.catalogs.models import LabProfile, ReferenceCatalog, validate_lab_references
+from scione.matching.compound import compound_dimensions_check
+from scione.matching.coverage import coverage_pair
 from scione.matching.keyed_wire import (
     KEYED_WIRE_VERSION,
     KeyedWireError,
     decode_keyed_output,
     keyed_output_schema,
 )
-from scione.matching.literal_text import literal_comparison_claim
+from scione.matching.literal_text import _NUMBER_WORDS, literal_comparison_claim
 from scione.matching.metadata import canonical_alignment_pair
 from scione.matching.models import (
     MATCHING_PROMPT_VERSION,
@@ -43,14 +46,24 @@ from scione.matching.projection import (
     project_matching_input,
 )
 from scione.matching.semantics import SemanticEquivalenceError, semantic_pair
+from scione.matching.text_pool import pool_matching_text
+from scione.matching.workflow_roles import mark_project_obligations, planning_role_problem
+from scione.numeric_literals import source_numbers
+from scione.parameters.units import resolve_unit
 from scione.providers.base import (
     ModelProvider,
     ProviderError,
     StructuredGenerationRequest,
 )
+from scione.source_text import citation_contains, citation_text
 from scione.specifications.models import CustomerExtractionRun
+from scione.structured.lexical_grounding import _word_value, source_quantities
 from scione.structured.models import AtomicClaim, NormalizedRequirement
-from scione.structured.normalization import normalize_capability, normalize_requirement
+from scione.structured.normalization import (
+    _native_comparison_coverage,
+    normalize_capability,
+    normalize_requirement,
+)
 
 DEFAULT_MATCHING_INPUT_CHARACTER_LIMIT = 120_000
 
@@ -157,6 +170,7 @@ def build_matching_input(
         ],
         requirements=requirements,
     )
+    mark_project_obligations(snapshot.requirements)
     # Deep-copy and revalidate so later editor changes cannot alter the snapshot.
     return MatchingInput.model_validate(snapshot.model_dump(mode="json"))
 
@@ -221,6 +235,195 @@ def _compatible_context(request: AtomicClaim, declaration: AtomicClaim) -> str |
     return None
 
 
+def _semantic_note_coverage_problem(claim, selected, source) -> str | None:
+    """AI owns descriptive equivalence; code retains quantities and critical qualifiers."""
+    text = citation_text(claim.raw_text)
+    for method in source.requirement.requested_methods:
+        text = re.sub(re.escape(method.code), "method", text, flags=re.I)
+    wanted = set(source_numbers(text))
+    for match in _NUMBER_WORDS.finditer(text):
+        value = _word_value(match.group(), None)
+        if value is None:
+            return "An unfamiliar source number remains unresolved."
+        wanted.add(value)
+    owned = {
+        value
+        for row in selected
+        for value in (row.value, row.minimum, row.maximum, row.tolerance, *row.values)
+        if value is not None
+    }
+    if not wanted <= owned:
+        return "Selected native facts do not retain every source quantity."
+    for quantity in source_quantities(text, context=text):
+        unit = resolve_unit(quantity.unit)
+        candidates = [
+            row
+            for row in selected
+            if quantity.value in (row.value, row.minimum, row.maximum, row.tolerance, *row.values)
+            and (
+                row.unit == quantity.unit
+                or (
+                    unit is not None
+                    and (native_unit := resolve_unit(row.unit)) is not None
+                    and unit == native_unit
+                )
+            )
+        ]
+        if quantity.ambiguity or not candidates:
+            return "A source unit or quantity is not retained by the cited native facts."
+        if quantity.operator and not any(
+            row.operator == quantity.operator
+            or (quantity.role == "range_endpoint" and row.operator == "range")
+            for row in candidates
+        ):
+            return "A source comparison operator is not retained by the cited native facts."
+    metadata = " ".join(
+        (row.text_value or "") + " " + (row.source_context or "") for row in selected
+    ).casefold()
+    critical = re.findall(
+        r"\b(?:steel|alumini?um|nitrogen|polymer|plastic|water|air|fuel|solvent|"
+        r"primer|substrate|equipment|fixture|chamber|ruler|material|medium|"
+        r"each|every|individual|mean|maximum|minimum|unless|except|without|"
+        r"mode|field|attribute|property|parameter)\b|[A-Z]{2,}[-_]?\d+[A-Za-z0-9_-]*",
+        text,
+        flags=re.I,
+    )
+    for term in critical:
+        if term.casefold() not in metadata:
+            return "A material, resource, code or reporting qualifier remains uncovered."
+    if re.search(r"\b(?:no|not|none|never)\b|禁止|不得|无", text, re.I) and not re.search(
+        r"\b(?:no|not|none|never)\b|禁止|不得|无",
+        metadata,
+        re.I,
+    ):
+        return "A negative source restriction is absent from the cited native facts."
+    return None
+
+
+def source_note_problem(claim, alignment, source) -> str | None:
+    """Guard an explicit AI proposal to retain parser residue as a source note.
+
+    This never establishes lab support. Native facts, unknown fields, quantities,
+    materials/resources and incomplete source quotations remain requirements.
+    """
+    if alignment.context_role is None:
+        return "No source-context classification was proposed."
+    if alignment.context_role == "sample_plan":
+        return planning_role_problem(claim, source)
+    if alignment.context_role == "project_workflow":
+        return (
+            None
+            if any(
+                action.get("rule") == "shared_project_delivery_instruction"
+                and action.get("claim_id") == claim.id
+                for action in source.normalized.normalization_actions
+            )
+            else "Only a source-proved shared project delivery instruction may use this role."
+        )
+    natives = {row.id: row for row in source.requirement.atomic_claims}
+    if claim.id in natives or claim.parameter_id is not None:
+        return "Native or typed customer requirements cannot become context notes."
+    if claim.kind == "criterion" and alignment.context_role != "already_represented":
+        return "A specimen criterion cannot become administrative or descriptive context."
+    if (
+        claim.unit is not None
+        or claim.values
+        or claim.availability == "unsupported"
+        or any(
+            value is not None
+            for value in (claim.value, claim.minimum, claim.maximum, claim.tolerance)
+        )
+    ):
+        return "A quantitative or explicit negative requirement cannot become a context note."
+    located = {
+        evidence.page
+        for evidence in source.requirement.evidence
+        if citation_contains(evidence.quote, claim.raw_text)
+    }
+    if not claim.source_pages or not set(claim.source_pages) <= located:
+        return "Source-note classification needs the complete located source quotation."
+    selected_ids = alignment.represented_by_source_ids
+    if len(selected_ids) != len(set(selected_ids)):
+        return "Source context references repeat a native fact; the advisory note was not accepted."
+    if set(selected_ids) - natives.keys():
+        return "A source note references an absent native customer fact."
+    normalized_native = {
+        row.id: row
+        for row in source.normalized.claims
+        if row.id in natives and row.normalization_state != "unresolved"
+    }
+    if set(selected_ids) - normalized_native.keys():
+        return "A source note references an unverified native customer fact."
+    selected = [normalized_native[identifier] for identifier in selected_ids]
+    if alignment.context_role == "already_represented":
+        if claim.kind == "criterion" and any(row.kind != "criterion" for row in selected):
+            return "A condition cannot stand in for a specimen acceptance criterion."
+        proof = _native_comparison_coverage(
+            claim.model_copy(update={"text_value": claim.raw_text}),
+            [claim.model_copy(update={"text_value": claim.raw_text})],
+            selected,
+            clause=claim.raw_text,
+            pages=claim.source_pages,
+            requirement=source.requirement,
+        )
+        return None if proof else _semantic_note_coverage_problem(claim, selected, source)
+    text = citation_text(claim.raw_text)
+    for method in source.requirement.requested_methods:
+        text = re.sub(re.escape(method.code), "method", text, flags=re.I)
+    if source_numbers(text) or _NUMBER_WORDS.search(text):
+        return "Unrepresented source numbers cannot become administrative or method context."
+    if re.search(
+        r"[%°±≤≥=<>]|\b(?:material|substrate|medium|equipment|fixture|instrument|tool|"
+        r"chamber|steel|alumini?um|plastic|polymer|nitrogen|water|air|fuel|solvent|"
+        r"temperature|humidity|pressure|hardness|thickness|tolerance|minimum|maximum|"
+        r"threshold|per[- ]panel|per[- ]site|per[- ]location|individual|each|every)\b|"
+        r"材料|设备|夹具|温度|湿度|压力|厚度|每个|逐一",
+        text,
+        re.I,
+    ):
+        return (
+            "A scientific field, resource, material or reporting qualifier must remain comparable."
+        )
+    nonworkflow = re.sub(
+        r"\b(?:(?:customer|buyer)\s+)?(?:sign[- ]off|approval)\s+required\b",
+        "",
+        text,
+        flags=re.I,
+    )
+    if re.search(
+        r"\b(?:use|using|operate|heat|cool|immerse|expose|maintain|apply|coat|prepare|"
+        r"equip|requires?|required|without|except|unless|not|never)\b|禁止|不得|必须使用",
+        nonworkflow,
+        re.I,
+    ):
+        return "An execution obligation, exclusion or conditional limitation remains a requirement."
+    if alignment.context_role == "administrative":
+        if not re.search(
+            r"\b(?:approval|sign[- ]off|release review|retain|retention|submit|deviations?)\b|"
+            r"审批|签字|提交|留档",
+            text,
+            re.I,
+        ):
+            return "Administrative classification needs a workflow or recordkeeping statement."
+        return None
+    if re.search(
+        r"\b(?:mode|setting|attribute|property|field|requirement|condition|parameter|"
+        r"limit|must|shall|needs?)\b",
+        text,
+        re.I,
+    ):
+        return "An unfamiliar property or execution requirement cannot become method context."
+    if not selected or not re.search(
+        r"\b(?:method|procedure|approach|measurement|reference|scale|quantity)\b|方法|测量",
+        text,
+        re.I,
+    ):
+        return (
+            "Method context needs cited native facts and an explicit descriptive method statement."
+        )
+    return None
+
+
 def validate_matching_output(
     snapshot: MatchingInput, proposal: SemanticMatchingOutput
 ) -> tuple[SemanticMatchingOutput, list[AlignmentValidationIssue]]:
@@ -257,6 +460,10 @@ def validate_matching_output(
         if len(aligned) != len(set(aligned)) or set(aligned) != requested.keys():
             raise MatchingReferenceError("Every input claim must appear exactly once.")
         declared = {claim.id: claim for claim in capability.claims} if capability else {}
+        owner_test_labels = ()
+        if row.identity_status == "aligned" and row.canonical_test_id:
+            selected_test = snapshot.catalog.test_by_id(row.canonical_test_id)
+            owner_test_labels = (selected_test.name, *(a.text for a in selected_test.aliases))
         used_configurations: set[str] = set()
         for alignment in row.claim_alignments:
             if set(alignment.capability_claim_ids) - declared.keys():
@@ -270,6 +477,24 @@ def validate_matching_output(
         for alignment in row.claim_alignments:
             reason = None
             metadata_actions = []
+            if alignment.context_role is not None:
+                problem = source_note_problem(
+                    requested[alignment.requirement_claim_id], alignment, source
+                )
+                issues.append(
+                    AlignmentValidationIssue(
+                        requirement_id=row.requirement_id,
+                        requirement_claim_id=alignment.requirement_claim_id,
+                        code="source_context_note_rejected"
+                        if problem
+                        else "source_context_note_accepted",
+                        reason=problem
+                        or f"AI {alignment.context_role} retained as context, not lab support.",
+                    )
+                )
+                if problem:
+                    alignment.context_role = None
+                    alignment.represented_by_source_ids = []
             if alignment.relation == "same_parameter":
                 # Equal recorded values need no semantic value bridge. Ignore
                 # a redundant proposal on this accepted copy only: the raw
@@ -296,6 +521,15 @@ def validate_matching_output(
                         )
                 if len(used_configurations) > 1:
                     reason = "The proposal combines declarations from different configurations."
+                elif (
+                    compound_dimensions_check(
+                        requested[alignment.requirement_claim_id],
+                        [declared[i] for i in alignment.capability_claim_ids],
+                        source=source.requirement,
+                    )
+                    is not None
+                ):
+                    reason = None
                 else:
                     reason = next(
                         (
@@ -309,6 +543,7 @@ def validate_matching_output(
                                     source.requirement,
                                     list(declared.values()),
                                     metadata_actions,
+                                    owner_test_labels=owner_test_labels,
                                 )
                             )
                         ),
@@ -337,12 +572,14 @@ def validate_matching_output(
                 alignment.context_equivalence = None
                 alignment.value_equivalence = None
                 alignment.joint_scope_equivalence = None
+                alignment.scope_relation = None
+                alignment.value_relation = None
                 alignment.reason = reason
     return output, issues
 
 
 def _alignment_problem(
-    request, declaration, alignment, source, declarations, actions
+    request, declaration, alignment, source, declarations, actions, *, owner_test_labels=()
 ) -> str | None:
     try:
         literal = literal_comparison_claim(request, source)
@@ -362,6 +599,7 @@ def _alignment_problem(
             source,
             declarations,
             wording_bridge=bool(alignment.context_equivalence or alignment.joint_scope_equivalence),
+            owner_test_labels=owner_test_labels,
         )
         actions.extend(proved)
         if (
@@ -380,6 +618,10 @@ def _alignment_problem(
                 }
             )
             alignment.value_equivalence = None
+        declaration, coverage_actions = coverage_pair(
+            request, declaration, alignment, source=source
+        )
+        actions.extend(coverage_actions)
         pair = semantic_pair(request, declaration, alignment, source=source)
     except (ParameterPolicyConflict, SemanticEquivalenceError) as exc:
         return str(exc)
@@ -418,13 +660,15 @@ def matching_output_schema() -> dict[str, Any]:
 
     aligned_claim = branch(
         claim,
+        context_role={"type": "null"},
+        represented_by_source_ids={"type": "array", "items": {"type": "string"}, "maxItems": 0},
         relation={"type": "string", "enum": ["same_parameter"]},
         capability_claim_ids={
             **claim["properties"]["capability_claim_ids"],
             "minItems": 1,
         },
     )
-    unresolved_claim = branch(
+    unresolved_base = branch(
         claim,
         relation={"type": "string", "enum": ["unknown", "ambiguous"]},
         capability_claim_ids={
@@ -434,12 +678,54 @@ def matching_output_schema() -> dict[str, Any]:
         context_equivalence={"type": "null"},
         value_equivalence={"type": "null"},
         joint_scope_equivalence={"type": "null"},
+        scope_relation={"type": "null"},
+        value_relation={"type": "null"},
     )
+    unresolved_claim = {
+        "anyOf": [
+            branch(
+                unresolved_base,
+                context_role={"type": "null"},
+                represented_by_source_ids={
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 0,
+                },
+            ),
+            branch(
+                unresolved_base,
+                relation={"type": "string", "enum": ["unknown"]},
+                context_role={"type": "string", "enum": ["administrative"]},
+            ),
+            branch(
+                unresolved_base,
+                relation={"type": "string", "enum": ["unknown"]},
+                context_role={"type": "string", "enum": ["sample_plan", "project_workflow"]},
+                represented_by_source_ids={
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 0,
+                },
+            ),
+            branch(
+                unresolved_base,
+                relation={"type": "string", "enum": ["unknown"]},
+                context_role={"type": "string", "enum": ["method_context", "already_represented"]},
+                represented_by_source_ids={
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                },
+            ),
+        ]
+    }
     no_wording = branch(
         aligned_claim,
         context_equivalence={"type": "null"},
         value_equivalence={"type": "null"},
         joint_scope_equivalence={"type": "null"},
+        scope_relation={"type": "null"},
+        value_relation={"type": "null"},
     )
     one_id = {**claim["properties"]["capability_claim_ids"], "minItems": 1, "maxItems": 1}
     equivalence = {"$ref": "#/$defs/ProposedEquivalence"}
@@ -447,16 +733,26 @@ def matching_output_schema() -> dict[str, Any]:
         "anyOf": [
             no_wording,
             branch(
+                no_wording,
+                capability_claim_ids=one_id,
+                scope_relation=claim["properties"]["scope_relation"],
+                value_relation=claim["properties"]["value_relation"],
+            ),
+            branch(
                 aligned_claim,
                 capability_claim_ids=one_id,
                 context_equivalence=equivalence,
                 joint_scope_equivalence={"type": "null"},
+                scope_relation={"type": "null"},
+                value_relation={"type": "null"},
             ),
             branch(
                 aligned_claim,
                 capability_claim_ids=one_id,
                 value_equivalence=equivalence,
                 joint_scope_equivalence={"type": "null"},
+                scope_relation={"type": "null"},
+                value_relation={"type": "null"},
             ),
             branch(
                 aligned_claim,
@@ -464,6 +760,8 @@ def matching_output_schema() -> dict[str, Any]:
                 context_equivalence={"type": "null"},
                 value_equivalence={"type": "null"},
                 joint_scope_equivalence=equivalence,
+                scope_relation={"type": "null"},
+                value_relation={"type": "null"},
             ),
             unresolved_claim,
         ]
@@ -527,34 +825,32 @@ def prepare_matching_request(
         prompt += (
             "\nWIRE FORMAT: items is an object keyed by every requirement ID. "
             "claim_alignments is an object keyed by every claim ID. "
-            "Return every required key exactly once. Do not repeat IDs inside values."
+            "Return every required key exactly once. Do not repeat IDs inside values. "
+            "Legacy *_equivalence fields are omitted from this compact wire; never emit them. "
+            "Native-only rows omit context_role/represented_by_source_ids too."
         )
     schema = matching_output_schema()
-    payload = project_matching_input(snapshot).model_dump(mode="json")
-    if keyed:
-        from scione.matching.semantics import joint_scope_text
-
-        payload["joint_scope_texts"] = {
-            "requirements": {
-                row.requirement.id: {
-                    claim.id: text
-                    for claim in row.normalized.claims
-                    if (text := joint_scope_text(claim)) is not None
-                }
-                for row in snapshot.requirements
-            },
-            "capabilities": {
-                row.capability.id: {
-                    claim.id: text
-                    for claim in row.claims
-                    if (text := joint_scope_text(claim)) is not None
-                }
-                for row in snapshot.capabilities
-            },
-        }
+    # Null-valued optional fields reconstruct from schema defaults. Keep every
+    # actual value, including zero, False and empty lists; never trim quotations
+    # or the nested JSON strings used by the joint-scope proof.
+    payload = project_matching_input(snapshot).model_dump(mode="json", exclude_none=True)
+    payload["native_source_claim_ids"] = {
+        row.requirement.id: [claim.id for claim in row.requirement.atomic_claims]
+        for row in snapshot.requirements
+    }
+    payload["project_obligation_ids"] = {
+        row.requirement.id: [
+            action["claim_id"]
+            for action in row.normalized.normalization_actions
+            if action.get("rule") == "shared_project_delivery_instruction"
+        ]
+        for row in snapshot.requirements
+    }
     return StructuredGenerationRequest(
         system_prompt=prompt,
-        user_prompt=json.dumps(payload, ensure_ascii=False),
+        user_prompt=json.dumps(
+            pool_matching_text(payload), ensure_ascii=False, separators=(",", ":")
+        ),
         schema_name="semantic_matching_keyed_v0_1" if keyed else "semantic_matching_v0_1",
         json_schema=keyed_output_schema(snapshot, schema) if keyed else schema,
     )

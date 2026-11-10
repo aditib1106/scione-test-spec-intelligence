@@ -51,7 +51,10 @@ from scione.specifications.review import (
     assess_requirements,
     document_review_issues,
 )
-from scione.specifications.review_comments import review_model_comment_audits
+from scione.specifications.review_comments import (
+    method_reference_comment_audits,
+    review_model_comment_audits,
+)
 from scione.specifications.revision_notes import source_revision_notes
 from scione.specifications.store import FileSpecStore, SpecStoreError
 from scione.specifications.summary_reconciliation import source_summary_reconciliation
@@ -88,12 +91,14 @@ class Workspace:
             ) from exc
         return replace(stored, document=document)
 
-    def comparison_source(self, document_id, run):
+    def comparison_source(self, document_id, run, *, native_first=True):
         """A detached, physically checked normalization input, never an archive edit."""
         document = self.current_document(document_id).document
         views, proofs = physical_parameter_views(run.extraction.requirements, document)
         normalized = [
-            normalize_requirement(views[row.id], source_unit_proofs=proofs[row.id])
+            normalize_requirement(
+                views[row.id], source_unit_proofs=proofs[row.id], native_first=native_first
+            )
             for row in run.extraction.requirements
         ]
         extraction = run.extraction.model_copy(update={"requirements": list(views.values())})
@@ -113,6 +118,7 @@ class Workspace:
             "summary_reconciliation": list(source_summary_reconciliation(run, document).proofs),
             "revision_notes": list(source_revision_notes(run, document).proofs),
             "unused_model_comments": review_model_comment_audits(run),
+            "method_reference_notes": method_reference_comment_audits(run, document),
             "context_retention_hints": source_context_coverage_audits(
                 run.extraction, document
             ),
@@ -270,9 +276,13 @@ class Workspace:
         return {
             "lab": self.labs.load_or_create(),
             "catalog": self.catalog,
-            "documents": [asdict(item) for item in self.specs.list_documents()],
+            "documents": [asdict(item) for item in self.active_documents()],
             "providers": providers,
         }
+
+    def active_documents(self):
+        archived = self.library.store.archived_document_ids()
+        return [item for item in self.specs.list_documents() if item.document_id not in archived]
 
     def specification(self, document_id: str, run_id: str | None = None) -> dict:
         stored = self.current_document(document_id)

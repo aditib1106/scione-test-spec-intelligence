@@ -31,7 +31,12 @@ from scione.structured.lexical_grounding import (
     source_unit_name,
     unit_token_is_standalone,
 )
-from scione.structured.models import AtomicClaim, ClaimKind, NormalizedRequirement
+from scione.structured.models import (
+    NORMALIZER_VERSION,
+    AtomicClaim,
+    ClaimKind,
+    NormalizedRequirement,
+)
 from scione.structured.native_fields import represented_custom_scalar_field
 from scione.structured.ordinal_sources import owned_ordinal_enumeration
 from scione.structured.planning import (
@@ -90,6 +95,75 @@ _MEASUREMENT_SETUP = {
     "illuminant",
     "reference_panel",
 }
+
+
+def _native_parameter_name(claim: AtomicClaim) -> str | None:
+    """Name an otherwise usable numeric field without inventing its meaning.
+
+    A meaningful label may supply a local field name. A generic label receives
+    only a neutral source-quantity identifier, leaving scientific identity to
+    semantic alignment. No meaning is inferred from units or raw prose. Ordinary
+    value, unit, operator and physical-source checks still decide usability.
+    """
+    if claim.parameter_id is not None or claim.availability != "supported":
+        return None
+    prose = claim.operator in {"text", "required"}
+    if prose:
+        value, raw = citation_text(claim.text_value or ""), citation_text(claim.raw_text)
+        # A native, explicitly extracted complete service/property statement
+        # can retain its source identity without a registered scientific name.
+        # Never turn a shaved parser word or a model paraphrase into that fact.
+        def complete(text):
+            return (
+                len(re.findall(r"[\u3400-\u9fff]", text)) >= 6
+                or len(re.findall(r"\b[A-Za-zÀ-ž][A-Za-zÀ-ž'-]*\b", text)) >= 3
+            )
+
+        if (
+            _numeric_values(claim)
+            or not value
+            or not citation_contains(raw, value)
+            or not complete(value)
+            or not complete(raw)
+        ):
+            return None
+        payload = json.dumps({
+            "raw_text": raw, "text_value": value, "kind": claim.kind,
+            "stage": claim.stage, "operator": claim.operator,
+        }, sort_keys=True, ensure_ascii=False)
+        return "source_fact_" + sha256(payload.encode()).hexdigest()[:16]
+    if not _numeric_values(claim):
+        return None
+    label = " ".join(claim.label.casefold().split())
+    generic = bool(re.fullmatch(
+        r"(?:unstructured|unknown|unidentified|unspecified|customer|additional|source)?\s*"
+        r"(?:requirement|condition|criterion|criteria|parameter|field|qualification|detail)s?"
+        r"(?:\s+\d+)?|unknown|other|not specified|未知(?:参数|字段)?|客户(?:条件|要求)",
+        label,
+    ))
+    if generic:
+        # This is a local fact identifier, not a guessed scientific parameter.
+        # Matching still has to establish its meaning from the owned quotation.
+        source = json.dumps({
+            "raw_text": citation_text(claim.raw_text),
+            "kind": claim.kind,
+            "stage": claim.stage,
+            "unit": claim.unit,
+            "operator": claim.operator,
+            "values": [str(value) for value in (
+                claim.value, claim.minimum, claim.maximum, claim.tolerance, *claim.values
+            ) if value is not None],
+        }, sort_keys=True, ensure_ascii=False)
+        return "source_quantity_" + sha256(source.encode()).hexdigest()[:16]
+    if definition := resolve_definition(label):
+        return definition.id
+    words = re.findall(r"[^\W\d_]+", label, re.UNICODE)
+    if not words or sum(map(len, words)) < 4:
+        return None
+    slug = "_".join(re.findall(r"\w+", label, re.UNICODE))
+    if len(slug) > 80:
+        slug = slug[:60] + "_" + sha256(label.encode()).hexdigest()[:12]
+    return "custom_" + slug
 
 
 def _intrinsic_stage(claim: AtomicClaim) -> AtomicClaim:
@@ -295,7 +369,13 @@ def _unparsed_qualification(
     for parameter in parameters:
         definition = resolve_definition(parameter)
         if definition:
-            for alias in sorted(definition.aliases, key=len, reverse=True):
+            if definition.subject:
+                removable.append(re.escape(definition.subject))
+            for alias in sorted(
+                {definition.id.replace("_", " "), *definition.aliases},
+                key=len,
+                reverse=True,
+            ):
                 # A Chinese label and its copula are one orthographic word;
                 # Latin word boundaries alone do not separate e.g. 温度为.
                 suffix = r"(?:为|是)?" if re.search(r"[\u3400-\u9fff]", alias) else ""
@@ -416,7 +496,7 @@ def _unparsed_qualification(
     # absent: 'except nitrogen' or 'up to' must not turn into an exact value.
     removable.append(
         r"at|and|for|or|with|the|a|an|is|of|to|as|be|shall|must|test|testing|"
-        r"perform|performed|use|using|measured|measure|report|reported|can|"
+        r"perform|performed|use|using|apply|during|maintain|measured|measure|report|reported|can|"
         r"support|supported|require|required|under|from|in|de"
     )
     for pattern in removable:
@@ -1475,10 +1555,339 @@ def _named_scale_unit_proof(claim, requirement, proofs):
     return dict(proof) if valid else None
 
 
+def _native_comparison_coverage(
+    fallback: AtomicClaim,
+    parsed: list[AtomicClaim],
+    supplied: list[AtomicClaim],
+    *,
+    clause: str,
+    pages: list[int],
+    requirement: CustomerRequirement,
+) -> dict | None:
+    """Prove a legacy parser row adds no independently missing source fact.
+
+    Native text values/context may account for prose across extraction roles.
+    A broad quotation alone never owns its qualifiers. Numeric rows require
+    matching typed payloads and enough grounded native occurrences; a missing
+    quantity, material, negation or unknown qualifier remains a real audit row.
+    This only removes a duplicate demand, never decides lab support.
+    """
+    source = _text(clause).casefold().rstrip(".;")
+    local = [
+        claim
+        for claim in supplied
+        if claim.normalization_state != "unresolved"
+        and set(pages) <= set(claim.source_pages)
+        and (
+            _text(claim.raw_text).casefold().rstrip(".;") in source
+            or source in _text(claim.raw_text).casefold().rstrip(".;")
+        )
+    ]
+    if not local:
+        return None
+    covered = []
+    basis = None
+    if fallback.parameter_id and _numeric_values(fallback):
+
+        def identity(claim):
+            # A numeric text_value is an accompanying label, not another
+            # quantity. Preserve it on the native fact but do not require the
+            # older parser to manufacture the same presentation text.
+            definition = resolve_definition(claim.parameter_id)
+            unit = resolve_unit(claim.unit, dimension=definition.dimension if definition else None)
+            payload = list(_numeric_identity(claim))
+            # The native extractor owns whether a source quantity is an
+            # execution condition or an acceptance criterion. A legacy parser
+            # reading the same quantity from a summary must not manufacture a
+            # second demand merely because its coarse field role differs.
+            payload[1] = None
+            payload[-2] = None
+            if unit:
+                payload[-3] = (unit.dimension, unit.factor, unit.offset)
+            return tuple(payload)
+
+        candidates = [
+            claim
+            for claim in local
+            if identity(claim) == identity(fallback)
+            and (
+                not claim.configuration
+                or context_is_source_grounded(claim.configuration, clause, claim.stage)
+            )
+        ]
+        # Repeated identical values need an equal number of separately retained
+        # native facts. One duration may not erase both legs of a thermal cycle.
+        needed = sum(identity(row) == identity(fallback) for row in parsed)
+        if len(candidates) >= needed and all(
+            normalize_stage(claim.stage) == normalize_stage(fallback.stage)
+            or normalize_stage(fallback.stage) == "general"
+            or ordered_thermal_cycle_proof(claim, requirement)
+            for claim in candidates
+        ):
+            covered, basis = candidates, "grounded_native_quantity_multiset"
+    elif not _numeric_values(fallback):
+        represented_spans = []
+        for claim in local:
+            if _numeric_values(claim):
+                proof = prove_same_numeric_occurrence(
+                    claim, claim, source_text=clause, source_pages=pages
+                )
+                if proof:
+                    represented_spans.extend([*proof.number_spans, proof.unit_span])
+        # The original full clause is used for ownership. Residual parser text
+        # such as a preposition is not promoted into a separate lab capability.
+        # Native categorical values own their exact words, not their quotation.
+        if not _unparsed_qualification(clause, represented_spans, local, source_text=clause):
+            covered, basis = local, "grounded_native_text_and_context"
+        else:
+            for claim in local:
+                if (
+                    claim.operator in {"text", "required"}
+                    and claim.text_value
+                    and not _numeric_values(claim)
+                    and _text(claim.text_value).casefold().rstrip(".;")
+                    == _text(fallback.text_value or "").casefold().rstrip(".;")
+                ):
+                    covered, basis = [claim], "identical_native_text_obligation"
+                    break
+    if not covered:
+        return None
+    return {
+        "rule": "native_source_fact_coverage",
+        "basis": basis,
+        "source_claim_id": fallback.id,
+        "represented_by": [claim.id for claim in covered],
+        "source_note": fallback.model_dump(mode="json"),
+        "source_values_preserved": True,
+    }
+
+
+def _native_clause_audit(
+    parsed: list[AtomicClaim],
+    supplied: list[AtomicClaim],
+    *,
+    clause: str,
+    pages: list[int],
+    requirement: CustomerRequirement,
+) -> tuple[dict, list[str]]:
+    """Keep the legacy parser as an omission audit, not a second extractor.
+
+    Native source-grounded atoms remain the one comparison vocabulary. The
+    old parser's complete output and original clause survive separately, so
+    nothing is silently discarded. Independently uncovered quantities and
+    explicit material/resource restrictions request source review rather than
+    pretend to be lab declarations with guessed scientific identities.
+    """
+    covered = []
+    uncovered = []
+    problems = []
+    def quantity_present(fallback: AtomicClaim) -> list[AtomicClaim]:
+        """A source audit asks whether a quantity survived, not lab coverage.
+
+        A generic parser label such as ``temperature`` may be less specific
+        than the native ``air_temperature``. Summary/body quotations can also
+        differ while repeating the same value. Preserve their native ownership
+        and roles; do not manufacture a second claim to express that difference.
+        """
+        wanted = _numeric_values(fallback)
+        if not wanted:
+            return []
+        candidates = []
+        for claim in supplied:
+            if claim.normalization_state == "unresolved" or not _numeric_values(claim):
+                continue
+            first, second = resolve_unit(fallback.unit), resolve_unit(claim.unit)
+            same_unit = canonical_unit_name(fallback.unit) == canonical_unit_name(claim.unit)
+            if is_planning_instruction(fallback) and is_planning_instruction(claim):
+                same_unit = fallback.unit is None or same_unit
+            # A source summary can omit a named ordinal scale already stated
+            # by its exact property label and native body criterion.
+            if fallback.unit is None and fallback.parameter_id == claim.parameter_id:
+                same_unit = True
+            if not same_unit and first and second:
+                same_unit = (
+                    first.dimension == second.dimension
+                    and first.factor == second.factor
+                    and first.offset == second.offset
+                )
+            if not same_unit or wanted != _numeric_values(claim):
+                continue
+            first_stage = normalize_stage(fallback.stage)
+            second_stage = normalize_stage(claim.stage)
+            if first_stage != "general" and first_stage != second_stage:
+                continue
+            if not set(pages).intersection(claim.source_pages):
+                continue
+            candidates.append(claim)
+        repetitions = sum(
+            _numeric_values(row) == wanted
+            and canonical_unit_name(row.unit) == canonical_unit_name(fallback.unit)
+            for row in parsed
+        )
+        return candidates if len(candidates) >= repetitions else []
+
+    for fallback in parsed:
+        proof = _native_comparison_coverage(
+            fallback, parsed, supplied, clause=clause, pages=pages, requirement=requirement
+        )
+        if proof:
+            covered.append(proof)
+            continue
+        if fallback.parameter_id and _numeric_values(fallback):
+            present = quantity_present(fallback)
+            if present:
+                covered.append({
+                    "represented_by": [claim.id for claim in present],
+                    "basis": "native_quantity_presence_audit",
+                    "source_values_preserved": True,
+                })
+                continue
+        uncovered.append(fallback)
+        if fallback.parameter_id and _numeric_values(fallback):
+            problems.append(f"Unrepresented source quantity: {fallback.display_value}.")
+    local = [
+        claim
+        for claim in supplied
+        if claim.normalization_state != "unresolved"
+        and set(pages) <= set(claim.source_pages)
+        and (
+            citation_contains(clause, claim.raw_text)
+            or citation_contains(claim.raw_text, clause)
+        )
+    ]
+    represented_spans = []
+    for claim in local:
+        if _numeric_values(claim):
+            proof = prove_same_numeric_occurrence(
+                claim, claim, source_text=clause, source_pages=pages
+            )
+            if proof:
+                represented_spans.extend([*proof.number_spans, proof.unit_span])
+    residual = _unparsed_qualification(clause, represented_spans, local, source_text=clause)
+    for quantity in source_quantities(clause):
+        if quantity.value is None or quantity.ambiguity:
+            continue
+        represented = False
+        for claim in supplied:
+            if claim.normalization_state == "unresolved":
+                continue
+            if not set(pages).intersection(claim.source_pages):
+                continue
+            if (
+                quantity.value in _numeric_values(claim)
+                and _source_unit_matches(quantity.unit, claim)
+            ):
+                represented = True
+                break
+            # An explicitly preserved structured categorical/dimensional value
+            # may own its literal quantities; its broad source quote may not.
+            value = _text(claim.text_value or "")
+            if value and citation_contains(clause, value):
+                if any(
+                    item.value == quantity.value and item.unit == quantity.unit
+                    for item in source_quantities(value)
+                ):
+                    represented = True
+                    break
+        if not represented:
+            problems.append(
+                "Unrepresented source quantity: "
+                + clause[slice(*quantity.expression_span)].strip().rstrip(".;")
+                + "."
+            )
+    # These are omission signals only. The audit does not interpret an unseen
+    # material, negate a requirement, or manufacture a capacity comparison.
+    # Full remaining prose is retained even when this narrow signal is absent.
+    if residual and re.search(
+        r"\b(?:nitrogen|argon|oxygen|helium|alumini?um|copper|stainless|"
+        r"fixture|jig|apparatus|reagent|atmosphere|substrate|equipment)\b|"
+        r"氮气|氩气|氧气|夹具|试剂|基材|设备|除外|不得使用",
+        residual,
+        re.I,
+    ):
+        problems.append("Unrepresented source material or resource restriction: " + residual + ".")
+    identifier = sha256((str(pages) + "\n" + clause).encode()).hexdigest()[:16]
+    return (
+        {
+            "rule": "native_source_clause_audit",
+            "audit_id": f"{requirement.id}_source_audit_{identifier}",
+            "source_clause": clause,
+            "source_pages": pages,
+            "represented_by": sorted({
+                identifier for proof in covered for identifier in proof["represented_by"]
+            }),
+            "parser_proposals": [claim.model_dump(mode="json") for claim in parsed],
+            "unrepresented_parser_ids": [claim.id for claim in uncovered],
+            "uninterpreted_source_text": residual or None,
+            "requires_source_review": bool(problems),
+            "issues": list(dict.fromkeys(problems)),
+            "establishes_lab_support": False,
+            "comparison_demand_created": False,
+        },
+        list(dict.fromkeys(problems)),
+    )
+
+
+def _typed_literal_projection(claim: AtomicClaim) -> AtomicClaim | None:
+    """Recover a complete numeric literal put in a native text field.
+
+    This is a lossless representation repair, not semantic interpretation:
+    require one closed quantity, the same registered numeric parameter and
+    compatible explicit units. The original quote, context and text remain.
+    All ordinary source/page/operator grounding still runs on the result.
+    """
+    if (
+        claim.operator not in {"text", "required"}
+        or not claim.text_value
+        or _numeric_values(claim)
+        or claim.availability != "supported"
+    ):
+        return None
+    definition = resolve_definition(claim.parameter_id)
+    literal = _text(claim.text_value)
+    if (
+        definition is None
+        or definition.value_kind != "number"
+        or _QUANTITY.fullmatch(literal) is None
+        or not citation_contains(claim.raw_text, literal)
+    ):
+        return None
+    parsed = _atoms(
+        literal,
+        kind=claim.kind,
+        pages=claim.source_pages,
+        prefix=claim.id,
+        name=claim.label,
+    )
+    if len(parsed) != 1:
+        return None
+    atom = parsed[0]
+    if (
+        atom.parameter_id != definition.id
+        or atom.normalization_state == "unresolved"
+        or not _numeric_values(atom)
+        or (claim.unit and canonical_unit_name(claim.unit) != canonical_unit_name(atom.unit))
+    ):
+        return None
+    return claim.model_copy(update={
+        key: getattr(atom, key)
+        for key in ("operator", "value", "minimum", "maximum", "tolerance", "values", "unit")
+    })
+
+
 def normalize_requirement(
-    requirement: CustomerRequirement, *, source_unit_proofs: dict | None = None
+    requirement: CustomerRequirement,
+    *,
+    source_unit_proofs: dict | None = None,
+    native_first: bool = False,
 ) -> NormalizedRequirement:
-    """Use grounded model atoms when present; safely structure older text runs."""
+    """Use grounded model atoms when present; safely structure older text runs.
+
+    ``native_first`` is an explicit comparison projection, never an archive
+    migration. Native facts stay intact and the text parser audits omissions;
+    its weaker copies of already represented facts are retained as audit notes.
+    Raw-only extractions keep the legacy behavior.
+    """
     pages = sorted({item.page for item in requirement.evidence})
 
     def located_pages(raw: str) -> list[int]:
@@ -1521,6 +1930,24 @@ def normalize_requirement(
         claim = AtomicClaim.model_validate(
             item.model_dump() if isinstance(item, AtomicClaim) else item
         )
+        parameter_name = _native_parameter_name(claim)
+        original_label = claim.label
+        if parameter_name:
+            claim = claim.model_copy(update={
+                "parameter_id": parameter_name, "normalization_state": "parsed"
+            })
+        literal_projection = _typed_literal_projection(claim)
+        if literal_projection is not None:
+            normalization_actions.append({
+                "rule": "source_proved_numeric_text_literal",
+                "source_claim_id": claim.id,
+                "original_operator": claim.operator,
+                "original_text_value": claim.text_value,
+                "original_quote_preserved": True,
+                "canonical_operator": literal_projection.operator,
+                "canonical_unit": literal_projection.unit,
+            })
+            claim = literal_projection
         unit_proof = _named_scale_unit_proof(claim, requirement, source_unit_proofs)
         if unit_proof:
             normalization_actions.append(unit_proof)
@@ -1698,6 +2125,29 @@ def normalize_requirement(
                     "availability": "unknown",
                 }
             )
+        if parameter_name and claim.normalization_state != "unresolved":
+            quantity = parameter_name.startswith("source_quantity_")
+            prose_fact = parameter_name.startswith("source_fact_")
+            neutral = quantity or prose_fact
+            normalization_actions.append({
+                "rule": (
+                    "grounded_native_local_quantity" if quantity
+                    else "grounded_native_local_fact" if prose_fact
+                    else "native_label_parameter_name"
+                ),
+                "source_claim_id": claim.id,
+                "source_label": original_label,
+                "original_parameter_id": None,
+                "canonical_parameter_id": parameter_name,
+                "naming_only": True,
+                "scientific_identity_inferred": False,
+                "semantic_identity_requires_alignment": neutral,
+                "source_values_preserved": True,
+            })
+            if neutral:
+                claim = claim.model_copy(update={
+                    "label": "Source quantity" if quantity else "Source detail"
+                })
         contexts = {
             context
             for kind, raw, _, context, _ in field_values
@@ -1723,6 +2173,16 @@ def normalize_requirement(
         model_identities[identity] = len(atoms)
         atoms.append(claim.model_copy(update={"id": f"{requirement.id}_claim_{len(atoms) + 1}"}))
     model_atoms = list(atoms)
+    native_first = native_first and bool(model_atoms)
+    if native_first:
+        normalization_actions.append(
+            {
+                "rule": "native_first_comparison_view",
+                "mode": "native_first_v2",
+                "native_claim_ids": [claim.id for claim in model_atoms],
+                "source_values_preserved": True,
+            }
+        )
     from scione.structured.summary_coverage import (
         represented_scalar_summary,
         same_named_scalar_row,
@@ -1781,6 +2241,20 @@ def normalize_requirement(
             if parse_clause != clause:
                 parsed = [item.model_copy(update={"raw_text": clause}) for item in parsed]
             parsed = [_intrinsic_stage(_contextualize(item, context)) for item in parsed]
+            if native_first:
+                audit, problems = _native_clause_audit(
+                    parsed,
+                    model_atoms,
+                    clause=clause,
+                    pages=clause_pages or pages,
+                    requirement=requirement,
+                )
+                normalization_actions.append(audit)
+                for problem in problems:
+                    issue = f"{requirement.id} {audit['audit_id']}: {problem}"
+                    if issue not in review_issues:
+                        review_issues.append(issue)
+                continue
             local_model_atoms = [
                 claim
                 for claim in model_atoms
@@ -1975,6 +2449,7 @@ def normalize_requirement(
     return NormalizedRequirement(
         requirement_id=requirement.id,
         test_name=requirement.original_test_name,
+        **({"normalizer_version": f"{NORMALIZER_VERSION}_native_first"} if native_first else {}),
         claims=[
             _intrinsic_stage(claim).model_copy(
                 update={

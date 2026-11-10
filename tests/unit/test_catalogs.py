@@ -21,8 +21,8 @@ from scione.catalogs.seed import default_csp301_lab
 def test_pilot_catalog_retains_aliases_and_explicit_synthetic_editions() -> None:
     catalog = load_reference_catalog()
     assert len(catalog.tests) == 99
-    assert len(catalog.methods) == 113
-    assert catalog.version == 4
+    assert len(catalog.methods) == 153
+    assert catalog.version == 5
     assert catalog.synthetic
     assert "not an authoritative" in catalog.source_note
     assert all(
@@ -32,7 +32,7 @@ def test_pilot_catalog_retains_aliases_and_explicit_synthetic_editions() -> None
     )
     pencil = catalog.test_by_id("pencil_hardness")
     assert Alias(text="铅笔硬度", language="zh") in pencil.aliases
-    assert pencil.method_ids == ["iso_15184"]
+    assert pencil.method_ids[0] == "iso_15184"
     assert catalog.method_by_id("iso_15184").identifier == "ISO 15184"
 
 

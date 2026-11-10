@@ -115,7 +115,10 @@ def _planning_context(scope: str, context: str | None) -> bool:
     if wanted not in text:
         return False
     rest = text.replace(wanted, "", 1)
-    return not re.sub(r"\ballocation\b|\bper lot\b|\b(?:from|for) each lot\b|[,;\s]", "", rest)
+    return not re.sub(
+        r"\ballocation\b|\bassigned to\b|\bper lot\b|\b(?:from|for) each lot\b|[,;\s]",
+        "", rest,
+    )
 
 
 def canonical_planning_parameter(claim: AtomicClaim) -> str | None:

@@ -33,20 +33,24 @@ def _add(name, dimension, aliases=(), factor=1, offset=0):
     value = Unit(name, dimension, Fraction(factor), Fraction(offset))
     for alias in (name, *aliases):
         _UNITS[_key(alias)] = value
-        if len(alias) > 3 and alias.isalpha():
+        if len(alias) > 3 and alias.replace(" ", "").isalpha():
             _WORD_UNITS[_key(alias).casefold()] = value
 
 
-_add("°C", "temperature", ("Celsius", "degC", "摄氏度"))
-_add("°F", "temperature", ("Fahrenheit", "degF", "华氏度"), Fraction(5, 9), Fraction(-160, 9))
+_add("°C", "temperature", ("Celsius", "degC", "degree Celsius", "degrees Celsius", "摄氏度"))
+_add(
+    "°F", "temperature",
+    ("Fahrenheit", "degF", "degree Fahrenheit", "degrees Fahrenheit", "华氏度"),
+    Fraction(5, 9), Fraction(-160, 9),
+)
 _add("K", "temperature", ("kelvin",), 1, Fraction(-27315, 100))
 _add("Δ°C", "temperature_difference", ("delta_degC", "delta °C"))
 _add("Δ°F", "temperature_difference", ("delta_degF", "delta °F"), Fraction(5, 9))
 _add("ΔK", "temperature_difference", ("delta_kelvin",))
-_add("s", "time", ("sec", "second", "seconds", "秒"))
-_add("min", "time", ("minute", "minutes", "分钟"), 60)
-_add("h", "time", ("hr", "hrs", "hour", "hours", "小时"), 3600)
-_add("days", "time", ("day", "天"), 86400)
+_add("s", "time", ("sec", "second", "seconds", "secondes", "segundos", "Sekunden", "秒"))
+_add("min", "time", ("minute", "minutes", "minutos", "Minuten", "分钟"), 60)
+_add("h", "time", ("hr", "hrs", "hour", "hours", "heures", "horas", "Stunden", "小时"), 3600)
+_add("days", "time", ("day", "jours", "días", "Tage", "Tagen", "天"), 86400)
 _add("m", "length", ("meter", "metre", "米"))
 _add("cm", "length", ("厘米",), Fraction(1, 100))
 _add("mm", "length", ("毫米",), Fraction(1, 1000))
@@ -76,14 +80,27 @@ _add("kJ", "energy", (), 1000)
 _add("HRC", "hardness_rockwell_c", ("Rockwell C",))
 _add("HV", "hardness_vickers", ("Vickers HV",))
 _add("°", "angle", ("deg", "degree", "degrees", "度"))
-_add("cycles", "cycles", ("cycle", "次循环"))
-_add("locations", "locations", ("location", "positions", "position", "点"))
+_add("cycles", "cycles", ("cycle", "Zyklen", "ciclos", "次循环"))
+_add(
+    "locations", "locations",
+    (
+        "location", "positions", "position", "point", "points", "station", "stations",
+        "Messstellen", "Messorten", "Positionen", "puntos", "点",
+    ),
+)
 _add(
     "specimens",
     "specimens",
-    ("specimen", "sample", "samples", "test specimen", "test specimens", "试样", "试件"),
+    (
+        "specimen", "sample", "samples", "test specimen", "test specimens",
+        "Proben", "probeta", "probetas", "éprouvette", "éprouvettes", "échantillon",
+        "échantillons", "prélèvement", "prélèvements", "试样", "试件",
+    ),
 )
-_add("panels", "panels", ("panel", "test panel", "test panels", "试板", "块试板"))
+_add(
+    "panels", "panels",
+    ("panel", "test panel", "test panels", "Blech", "Bleche", "Blechen", "试板", "块试板"),
+)
 _add("%", "fraction", ("percent", "百分比"), Fraction(1, 100))
 _add("% RH", "humidity", ("%RH", "RH%"), Fraction(1, 100))
 _add("GU", "gloss", ("glossunit", "glossunits"))
@@ -122,6 +139,24 @@ def canonical_unit_name(value: str | None) -> str | None:
     return unit.name if unit else value
 
 
+def _source_alias_pattern(alias: str, unit: Unit) -> str:
+    pattern = re.escape(alias)
+    for scale in ("Celsius", "Fahrenheit"):
+        if re.fullmatch(rf"degrees?{scale}", alias, re.I):
+            prefix = alias[:-len(scale)]
+            pattern = re.escape(prefix) + r"\s+" + scale
+    if alias.startswith(("°", "Δ°")):
+        pattern = pattern.replace("°", "°\\s*")
+    if alias == "%RH":
+        pattern = "%\\s*RH"
+    if alias.isalpha() and len(alias) > 3:
+        pattern = f"(?i:{pattern})"
+    if unit.dimension == "angle" and alias.casefold() in {"deg", "degree", "degrees"}:
+        # A thermal scale following the word belongs to the same unit token.
+        pattern += r"(?!\s*(?i:Celsius|Fahrenheit|C|F)\b)"
+    return pattern
+
+
 def unit_is_stated(value: str, text: str) -> bool:
     """Find an explicit unit alias without conflating SI prefixes or substrings.
 
@@ -135,8 +170,8 @@ def unit_is_stated(value: str, text: str) -> bool:
     for alias, unit in _UNITS.items():
         if unit.name != wanted.name:
             continue
-        flags = re.I if alias.isalpha() and len(alias) > 3 else 0
-        if re.search(r"(?<![A-Za-zµμΔ°])" + re.escape(alias) + r"(?![A-Za-zµμ])", source, flags):
+        pattern = _source_alias_pattern(alias, unit)
+        if re.search(r"(?<![A-Za-zµμΔ°])" + pattern + r"(?![A-Za-zµμ])", source):
             return True
     return False
 
@@ -154,14 +189,7 @@ def source_numbers_for_unit(value: str, text: str) -> set[Decimal]:
     for alias, unit in _UNITS.items():
         if unit.name != wanted.name:
             continue
-        pattern = re.escape(alias)
-        if alias.startswith(("°", "Δ°")):
-            pattern = pattern.replace("°", "°\\s*")
-        if alias == "%RH":
-            pattern = "%\\s*RH"
-        if alias.isalpha() and len(alias) > 3:
-            pattern = f"(?i:{pattern})"
-        aliases.append(pattern)
+        aliases.append(_source_alias_pattern(alias, unit))
     if not aliases:
         return set()
     expression = (

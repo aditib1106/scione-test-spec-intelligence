@@ -11,7 +11,7 @@ from scione.schemas import IngestedDocument
 
 _DESIGNATOR = re.compile(
     r"(?<![A-Za-z0-9_])(?:DIN\s+EN\s+ISO|DIN\s+EN|DIN\s+ISO|EN\s+ISO|"
-    r"ISO\s*/\s*IEC|GB\s*/\s*T|ISO|ASTM|SAE|VDMA|VDA|DIN|EN|GB)"
+    r"ISO\s*/\s*IEC|GB\s*/\s*T|ISO|ASTM|SAE|VDMA|VDA|DIN|(?-i:EN)(?=\s+\d)|GB)"
     r"\s*[A-Z]?\s*\d+(?:\s*[.-]\s*\d+)*"
     r"(?:\s*:\s*\d{4}(?:-\d{2})?)?(?![A-Za-z0-9_:-]|\.\d)",
     re.I,

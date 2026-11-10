@@ -33,7 +33,10 @@ class MatchingProvider(StaticModelProvider):
 
     def generate_structured(self, request):
         self.calls += 1
-        snapshot = MatchingInput.model_validate_json(request.user_prompt)
+        request_payload = json.loads(request.user_prompt)
+        request_payload.pop("native_source_claim_ids", None)
+        request_payload.pop("project_obligation_ids", None)
+        snapshot = MatchingInput.model_validate(request_payload)
         result = {
             "schema_version": "0.1",
             "review_issues": [],
@@ -476,7 +479,10 @@ def test_report_scope_changes_keep_matching_cache_and_machine_results_unchanged(
     assert artifact["human_actions_at_matching"]["report_workspace"]["scope_actions"] == []
 
 
-def test_ai_null_capability_preserves_a_known_not_listed_test_gap(setup, monkeypatch):
+@pytest.mark.parametrize("identity_status", ["aligned", "unknown"])
+def test_ai_null_capability_preserves_a_known_not_listed_test_gap(
+    setup, monkeypatch, identity_status
+):
     client, workspace, document_id, provider, _settings = setup
     lab = workspace.labs.load_or_create()
     lab.capabilities = []
@@ -488,6 +494,9 @@ def test_ai_null_capability_preserves_a_known_not_listed_test_gap(setup, monkeyp
         payload = result.parsed
         for item in payload["items"]:
             item["capability_id"] = None
+            if identity_status == "unknown":
+                item["identity_status"] = "unknown"
+                item["canonical_test_id"] = None
             for alignment in item["claim_alignments"]:
                 alignment["capability_claim_ids"] = []
                 alignment["relation"] = "unknown"

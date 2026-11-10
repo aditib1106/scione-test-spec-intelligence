@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from scione.catalogs.extraction_context import extraction_catalog_guidance
 from scione.ingestion.context_inventory import source_context_guidance
 from scione.prompts.customer_requirements import (
     CUSTOMER_REQUIREMENTS_COMPACT_PROMPT_VERSION,
@@ -406,7 +407,9 @@ class CustomerRequirementRunner:
             StructuredGenerationRequest(
                 system_prompt=INVENTORY_SYSTEM_PROMPT,
                 user_prompt=(
-                    source_context_guidance(document) + "<SOURCE_DOCUMENT>\n"
+                    source_context_guidance(document)
+                    + extraction_catalog_guidance(document)
+                    + "<SOURCE_DOCUMENT>\n"
                     f"file_name: {document.file_name}\n"
                     f"page_count: {document.page_count}\n"
                     + document.as_prompt_text()

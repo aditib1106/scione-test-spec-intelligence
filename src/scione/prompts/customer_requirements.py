@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from importlib.resources import files
 
+from scione.catalogs.extraction_context import extraction_catalog_guidance
 from scione.ingestion.context_inventory import source_context_guidance
 from scione.ingestion.method_inventory import source_method_inventory
 from scione.parameters import REGISTRY_VERSION, definitions
@@ -60,6 +61,7 @@ def build_customer_requirements_user_prompt(
             ],
             "</SOURCE_METHOD_MENTIONS>",
             source_context_guidance(document),
+            extraction_catalog_guidance(document),
             "<SOURCE_DOCUMENT>",
             f"document_id: {document.document_id}",
             f"file_name: {document.file_name}",

@@ -165,6 +165,10 @@ def proposal(*, requested_ids=None, declared_ids=None):
                         "context_equivalence": None,
                         "value_equivalence": None,
                         "joint_scope_equivalence": None,
+                        "context_role": None,
+                        "represented_by_source_ids": [],
+                        "scope_relation": None,
+                        "value_relation": None,
                     }
                     for identifier in requested_ids
                 ],
@@ -777,8 +781,7 @@ def test_requirement_wide_normalization_review_survives_semantic_compile_once():
     result = SemanticMatchingRunner(RecordingProvider(proposal())).run(source)
     comparison = compile_matching_run(result, {"req_001": "supported"})[0]
     assert comparison.status == "needs_information"
-    notes = [check for check in comparison.checks
-             if check.id == "req_001_normalization_review"]
+    notes = [check for check in comparison.checks if check.id == "req_001_normalization_review"]
     assert len(notes) == 1
     assert notes[0].status == "unknown"
     assert result.input_snapshot.requirements[0].normalized.review_issues

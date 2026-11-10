@@ -132,6 +132,26 @@ def test_two_bounded_calls_preserve_both_raw_outputs_requests_purposes_and_usage
     assert CustomerExtractionRun.model_validate_json(result.model_dump_json()) == result
 
 
+def test_both_source_readers_receive_the_same_bounded_reference_context():
+    source = document()
+    text = SOURCE + "\nMeasure gloss per ASTM D1627-16."
+    source.pages[0] = source.pages[0].model_copy(update={
+        "text": text, "character_count": len(text),
+        "non_whitespace_character_count": len("".join(text.split())),
+    })
+    provider = SequenceProvider([inventory(), extraction()])
+    CustomerRequirementRunner(provider).run(source, strategy="inventory_compact_document")
+    contexts = []
+    for request in provider.requests:
+        assert "<REFERENCE_CATALOG_CONTEXT>" in request.user_prompt
+        assert "catalog_extraction_guidance_v1" in request.user_prompt
+        contexts.append(request.user_prompt.split("<REFERENCE_CATALOG_CONTEXT>")[1].split(
+            "</REFERENCE_CATALOG_CONTEXT>"
+        )[0])
+        assert text in request.user_prompt
+    assert contexts[0] == contexts[1]
+
+
 @pytest.mark.parametrize("mutation,status", [
     ("invented_quote", "unused_invalid_source"),
     ("wrong_page", "unused_invalid_source"),
