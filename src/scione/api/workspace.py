@@ -16,6 +16,7 @@ from scione.api.contracts import (
     SourceFactsEdit,
     SourceRequirementAdd,
 )
+from scione.api.public_views import current_actor
 from scione.catalogs import load_reference_catalog
 from scione.catalogs.sql_lab_store import SQLLabStore
 from scione.config import Settings
@@ -498,7 +499,7 @@ class Workspace:
                     action_id=str(uuid4()),
                     requirement_id=identifier,
                     excluded=body.excluded,
-                    actor="local_reviewer",
+                    actor=current_actor(),
                     occurred_at=utc_now(),
                     note=body.note
                     or (

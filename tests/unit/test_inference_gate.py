@@ -29,6 +29,21 @@ def test_failure_releases_document_without_queuing_or_retry():
         pass
 
 
+def test_hosted_limits_are_per_lab_and_global_without_exposing_other_lab_names():
+    gate = InferenceGate(max_concurrent=2, max_per_workspace=1)
+    with gate.claim("lab_a:one", "analysis", workspace_id="lab_a"):
+        with pytest.raises(InferenceBusyError, match="your lab"):
+            with gate.claim("lab_a:two", "matching", workspace_id="lab_a"):
+                pytest.fail("One lab must not queue another paid operation.")
+        with gate.claim("lab_b:one", "analysis", workspace_id="lab_b"):
+            with pytest.raises(InferenceBusyError, match="service is busy") as caught:
+                with gate.claim("lab_c:one", "matching", workspace_id="lab_c"):
+                    pytest.fail("The global service limit must be enforced.")
+            assert "lab_a" not in str(caught.value) and "lab_b" not in str(caught.value)
+    with gate.claim("lab_a:two", "matching", workspace_id="lab_a"):
+        pass
+
+
 def test_simultaneous_request_is_rejected_instead_of_waiting_for_a_new_call():
     gate = InferenceGate()
     entered, release = Event(), Event()

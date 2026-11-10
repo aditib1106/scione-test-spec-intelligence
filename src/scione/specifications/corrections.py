@@ -25,6 +25,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
+from scione.api.public_views import current_actor
 from scione.library.store import LibraryConflict, LibraryStore, LibraryStoreError, schema_versions
 from scione.specifications.models import CustomerExtractionRun, CustomerRequirement
 from scione.specifications.store import RequirementReviewSet
@@ -164,6 +165,7 @@ class SQLFactsStore:
             version=expected_version + 1,
             parent_revision_id=current.revision_id if current else None,
             created_at=now,
+            actor=current_actor(),
             note=note,
             requirements=requirements,
             changed_requirement_ids=changed,

@@ -17,6 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
+from scione.api.public_views import current_actor
 from scione.library.store import (
     LibraryConflict,
     LibraryStore,
@@ -111,7 +112,7 @@ class SQLAssessmentReviews:
             "requirement_id": identifier,
             "version": body.expected_version + 1,
             "created_at": now(),
-            "actor": "local_reviewer",
+            "actor": current_actor(),
             "input_fingerprint": assessment["report_input_fingerprint"],
             "machine_status": requirement["comparison"]["status"],
             "review_status": body.review_status,

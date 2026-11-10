@@ -47,6 +47,7 @@ class RequirementReview(BaseModel):
     status: Literal["confirmed", "needs_review", "excluded"]
     note: str = Field(default="", max_length=4000)
     updated_at: datetime
+    actor: str = Field(default="local_reviewer", min_length=1, max_length=100)
 
 
 class RequirementReviewSet(BaseModel):
@@ -401,6 +402,7 @@ class FileSpecStore:
         expected_version: int | None = None,
         require_latest: bool = True,
         validate_current: Callable[[], None] | None = None,
+        actor: str = "local_reviewer",
     ) -> RequirementReviewSet:
         """Atomically review original rows and registered source-backed additions.
 
@@ -433,7 +435,8 @@ class FileSpecStore:
                 # Construct all validated decisions before mutating the in-memory set.
                 decisions = {
                     identifier: RequirementReview(
-                        requirement_id=identifier, status=decision, note=note, updated_at=now
+                        requirement_id=identifier, status=decision, note=note,
+                        updated_at=now, actor=actor,
                     )
                     for identifier in selected
                 }
