@@ -63,6 +63,9 @@ test("corrected source facts clear approval and flow into library and reports wi
   const correctedName = `${selected.original_test_name} (reviewed)`;
   await dialog.getByLabel("Test name").fill(correctedName);
   await dialog
+    .getByRole("button", { name: "Add a review note (optional)", exact: true })
+    .click();
+  await dialog
     .getByLabel("Reason for correction")
     .fill(
       "Checked the source wording and clarified the thermal-cycle requirement.",
@@ -81,7 +84,7 @@ test("corrected source facts clear approval and flow into library and reports wi
     .getByRole("button", { name: "Save corrected draft", exact: true })
     .click();
   await expect(dialog.getByRole("alert").last()).toContainText(
-    "Enter a method identifier",
+    "Enter each method identifier",
   );
   await dialog
     .getByRole("button", {
@@ -90,14 +93,25 @@ test("corrected source facts clear approval and flow into library and reports wi
     })
     .click();
 
+  await dialog.getByRole("tab", { name: "Conditions", exact: true }).click();
   await dialog
-    .getByRole("button", { name: "Add condition", exact: true })
+    .getByRole("button", { name: "Edit original wording", exact: true })
     .click();
+  await dialog.getByRole("button", { name: "Add", exact: true }).click();
   await dialog
-    .getByRole("button", { name: "Save corrected draft", exact: true })
+    .getByLabel("Parameter name", { exact: true })
+    .fill("Draft condition");
+  await dialog
+    .getByRole("checkbox", {
+      name: "Rebuild this test’s detailed fields",
+      exact: true,
+    })
+    .check();
+  await dialog
+    .getByRole("button", { name: "Save & rebuild details", exact: true })
     .click();
   await expect(dialog.getByRole("alert").last()).toContainText(
-    "Add the customer requirement",
+    `Enter condition ${selected.conditions.length + 1}`,
   );
   await dialog
     .getByRole("button", {
@@ -106,6 +120,9 @@ test("corrected source facts clear approval and flow into library and reports wi
     })
     .click();
 
+  await dialog
+    .getByRole("tab", { name: "Source evidence", exact: true })
+    .click();
   const evidence = dialog.getByRole("group", {
     name: "Source evidence 1",
     exact: true,
@@ -115,13 +132,17 @@ test("corrected source facts clear approval and flow into library and reports wi
     .getByRole("button", { name: "Save corrected draft", exact: true })
     .click();
   await expect(dialog.getByRole("alert").last()).toContainText(
-    `Enter a whole source page from 1 to ${initial.document.page_count}`,
+    `Select a source page from 1 to ${initial.document.page_count}`,
   );
   await evidence
     .getByLabel("Source page")
     .fill(String(selected.evidence[0].page));
   expect(correctionRequests).toBe(0);
 
+  await dialog.getByRole("tab", { name: "Conditions", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Edit original wording", exact: true })
+    .click();
   const condition = dialog.getByRole("group", {
     name: "Conditions 1",
     exact: true,
@@ -142,7 +163,13 @@ test("corrected source facts clear approval and flow into library and reports wi
     animations: "disabled",
   });
   await dialog
-    .getByRole("button", { name: "Save corrected draft", exact: true })
+    .getByRole("checkbox", {
+      name: "Rebuild this test’s detailed fields",
+      exact: true,
+    })
+    .check();
+  await dialog
+    .getByRole("button", { name: "Save & rebuild details", exact: true })
     .click();
   await expect(dialog).not.toBeVisible();
   await expect(
@@ -219,10 +246,18 @@ test("corrected source facts clear approval and flow into library and reports wi
       ?.requirement.original_test_name,
   ).toBe(correctedName);
   await page.goto(`/reports?document=${documentId}`);
+  await page
+    .getByRole("navigation", { name: "Requested tests" })
+    .getByRole("button", { name: correctedName, exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: correctedName, exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Conditions", exact: true }).click();
   await expect(
-    page.getByRole("table", { name: "Test capability comparison" }),
-  ).toContainText("Thermal cycle");
+    page.getByRole("table", {
+      name: `${correctedName} conditions comparison`,
+      exact: true,
+    }),
+  ).toContainText(/thermal cycle/i);
 });

@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Alert,
   Box,
@@ -26,6 +33,8 @@ interface Props {
   documentUrl?: string;
   navigation?: ReactNode;
   height?: number | string;
+  focusY?: number | null;
+  focusRequest?: number | string;
 }
 
 /** Width-based PDF reading: tall pages scroll rather than shrink to a thumbnail. */
@@ -38,22 +47,73 @@ export default function PdfPageViewer({
   documentUrl,
   navigation,
   height = "70vh",
+  focusY,
+  focusRequest,
 }: Props) {
   const [zoom, setZoom] = useState(100);
   const [expanded, setExpanded] = useState(false);
   const normalViewport = useRef<HTMLDivElement>(null);
   const expandedViewport = useRef<HTMLDivElement>(null);
+  const normalImage = useRef<HTMLImageElement>(null);
+  const expandedImage = useRef<HTMLImageElement>(null);
+  const lastNormalFocus = useRef<number | string | undefined>(undefined);
+  const lastExpandedFocus = useRef<number | string | undefined>(undefined);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     normalViewport.current?.scrollTo({ top: 0, left: 0 });
     expandedViewport.current?.scrollTo({ top: 0, left: 0 });
   }, [imageUrl]);
+
+  const focusSource = useCallback(
+    (fullscreen: boolean) => {
+      const viewport = (fullscreen ? expandedViewport : normalViewport).current;
+      const sourceImage = (fullscreen ? expandedImage : normalImage).current;
+      const lastFocus = fullscreen ? lastExpandedFocus : lastNormalFocus;
+      if (
+        loading ||
+        focusRequest === undefined ||
+        lastFocus.current === focusRequest ||
+        focusY == null ||
+        !Number.isFinite(focusY) ||
+        focusY < 0 ||
+        focusY > 1 ||
+        !viewport ||
+        !sourceImage?.complete ||
+        !sourceImage.naturalHeight ||
+        sourceImage.currentSrc !== sourceImage.src ||
+        !viewport.clientHeight
+      )
+        return;
+      const imageBounds = sourceImage.getBoundingClientRect();
+      const viewportBounds = viewport.getBoundingClientRect();
+      const imageTop =
+        viewport.scrollTop + imageBounds.top - viewportBounds.top;
+      viewport.scrollTo({
+        top: Math.max(
+          0,
+          imageTop + focusY * imageBounds.height - viewport.clientHeight * 0.45,
+        ),
+      });
+      lastFocus.current = focusRequest;
+    },
+    [loading, focusRequest, focusY],
+  );
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      focusSource(false);
+      if (expanded) focusSource(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusSource, imageUrl, expanded]);
 
   const contents = (fullscreen: boolean) => (
     <Stack
       sx={{
         height: fullscreen ? "100dvh" : height,
-        minHeight: fullscreen ? 0 : 320,
+        minHeight: fullscreen || height === "100%" ? 0 : 320,
+        flex: !fullscreen && height === "100%" ? 1 : undefined,
+        overflow: "hidden",
         minWidth: 0,
         p: fullscreen ? { xs: 1.5, sm: 2.5 } : 0,
         bgcolor: "#fff",
@@ -193,7 +253,9 @@ export default function PdfPageViewer({
           >
             <Box
               component="img"
+              ref={fullscreen ? expandedImage : normalImage}
               src={imageUrl}
+              onLoad={() => focusSource(fullscreen)}
               alt={alt}
               draggable={false}
               sx={{

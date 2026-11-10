@@ -186,8 +186,23 @@ export interface SpecificationData {
     changed_requirement_ids: string[];
     note: string;
   } | null;
-  assessments: Record<string, { state: ReviewState; reasons: string[] }>;
+  assessments: Record<
+    string,
+    { state: ReviewState; reasons: string[]; notices?: string[] }
+  >;
+  normalized_requirements?: Record<
+    string,
+    {
+      display_test_name?: string;
+      claims: (AtomicClaim & {
+        display_value?: string;
+        source_page?: number | null;
+        source_atom_ids?: string[];
+      })[];
+    }
+  >;
   coverage_issues: string[];
+  document_review_issues?: string[];
   failure: {
     attempt_id?: string | null;
     message: string;

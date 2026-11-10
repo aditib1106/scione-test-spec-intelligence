@@ -309,9 +309,14 @@ test("seeded source review, lab support, catalog gap, and immutable report histo
     page.getByRole("heading", { name: "Gap report", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("table", { name: "Test capability comparison" }),
+    page.getByRole("button", { name: "Conditions", exact: true }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Advanced review", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Report options", exact: true })
+    .click();
+  await page
+    .getByRole("menuitem", { name: "Review test matching", exact: true })
+    .click();
   await expect(
     page.getByRole("tab", { name: "Review & confirm" }),
   ).toBeVisible();
@@ -633,7 +638,7 @@ test("worked example saves atomic requirements and exports the same honest gap a
 
   await navigateTo(page, "Reports");
   await expect(
-    page.getByRole("table", { name: "Test capability comparison" }),
+    page.getByRole("button", { name: "Conditions", exact: true }),
   ).toBeVisible();
   const comparison = await readJson<{
     comparison_id: string;
@@ -668,8 +673,15 @@ test("worked example saves atomic requirements and exports the same honest gap a
     animations: "disabled",
     fullPage: true,
   });
-  await page.getByRole("button", { name: /View detailed comparison/ }).click();
-  const gap = page.getByText("Capability gap", { exact: true });
+  await page
+    .getByRole("button", { name: "Criteria / reporting", exact: true })
+    .click();
+  const gap = page
+    .getByRole("table", {
+      name: "Specular gloss criteria / reporting comparison",
+      exact: true,
+    })
+    .getByText("Gap", { exact: true });
   await gap.scrollIntoViewIfNeeded();
   await expect(gap).toBeVisible();
   await page.getByRole("tab", { name: "PDF & download", exact: true }).click();

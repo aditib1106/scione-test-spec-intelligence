@@ -125,6 +125,9 @@ test("new providers are selectable, reset consent, and never run on selection", 
 
   await page.goto(`/reports?document=${documentId}`);
   await page
+    .getByRole("button", { name: "Developer report tools", exact: true })
+    .click();
+  await page
     .getByRole("button", { name: "Run AI matching", exact: true })
     .click();
   const dialog = page.getByRole("dialog", { name: "Run AI matching" });

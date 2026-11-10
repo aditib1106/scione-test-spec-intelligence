@@ -157,6 +157,11 @@ test("AI matching requires consent, reuses results and keeps the last success af
     },
   );
   await page.goto(`${base}/reports?document=matching-source`);
+  await expect(page.getByText("Preview", { exact: true })).toBeVisible();
+  expect(submissions).toBe(0);
+  await page
+    .getByRole("button", { name: "Developer report tools", exact: true })
+    .click();
   await expect(
     page.getByText("Rules-based comparison", { exact: true }),
   ).toBeVisible();
@@ -174,6 +179,15 @@ test("AI matching requires consent, reuses results and keeps the last success af
     .click();
   try {
     await expect(
+      dialog.getByRole("status", { name: "Comparing your requirements" }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("progressbar", { name: "AI request in progress" }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("progressbar", { name: "AI request in progress" }),
+    ).not.toHaveAttribute("aria-valuenow");
+    await expect(
       dialog.getByRole("button", { name: "Matching…", exact: true }),
     ).toBeDisabled();
     await expect(
@@ -188,6 +202,10 @@ test("AI matching requires consent, reuses results and keeps the last success af
     page.getByText("AI-assisted comparison", { exact: true }),
   ).toBeVisible();
   await page.reload();
+  await expect(page.getByText("Compared", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Developer report tools", exact: true })
+    .click();
   await expect(
     page.getByText("AI-assisted comparison", { exact: true }),
   ).toBeVisible();
@@ -204,6 +222,9 @@ test("AI matching requires consent, reuses results and keeps the last success af
     "href",
     "/api/specifications/matching-source/matching/saved-match/artifacts",
   );
+  await page
+    .getByRole("button", { name: "Close history", exact: true })
+    .click();
 
   await page
     .getByRole("button", { name: "Run AI matching", exact: true })
@@ -240,9 +261,14 @@ test("AI matching requires consent, reuses results and keeps the last success af
   await expect(
     page.getByText("AI-assisted comparison", { exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: /Developer details · matching history/ })
+    .click();
   await expect(
-    page.getByText(
-      "The latest AI matching attempt failed. The last saved comparison is still available.",
-    ),
-  ).toBeVisible();
+    page
+      .getByRole("dialog", { name: "Developer matching history" })
+      .getByRole("alert"),
+  ).toContainText(
+    "The latest AI matching attempt failed. The last saved comparison is still available.",
+  );
 });

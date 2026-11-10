@@ -102,3 +102,73 @@ test("removing and restoring report scope persists without changing source extra
     )?.comparison.status,
   ).not.toBe("excluded");
 });
+
+test("removing and restoring a filtered test never silently resets the result filter", async ({
+  page,
+  request,
+}) => {
+  expect(
+    (
+      await request.post("/api/workspace/reset", {
+        data: { acknowledged: true },
+      })
+    ).ok(),
+  ).toBeTruthy();
+  const lab = (await (await request.get("/api/lab")).json()) as LabProfile;
+  expect(
+    (
+      await request.post("/api/lab/example", {
+        data: { version: lab.version, example: "csp301" },
+      })
+    ).ok(),
+  ).toBeTruthy();
+  const imported = await request.post("/api/specifications/worked-example");
+  expect(imported.ok()).toBeTruthy();
+  const { document_id: id } = (await imported.json()) as {
+    document_id: string;
+  };
+  await page.goto(`/reports?document=${id}`);
+  const filter = page.getByRole("combobox", { name: "Show", exact: true });
+  await filter.click();
+  await page
+    .getByRole("option", { name: "Partially matched", exact: true })
+    .click();
+  const search = page.getByRole("textbox", { name: "Search requested tests" });
+  await search.fill("gloss");
+  const list = page.getByRole("navigation", { name: "Requested tests" });
+  await expect(
+    list.getByRole("button", { name: "Specular gloss", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Remove from this report", exact: true })
+    .click();
+  let dialog = page.getByRole("dialog");
+  await dialog
+    .getByRole("button", { name: "Remove test", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await expect(filter).toContainText("Partially matched");
+  await expect(search).toHaveValue("gloss");
+  await expect(list.getByRole("button")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Recompare saved information", exact: true })
+    .click();
+  await expect(filter).toContainText("Partially matched");
+  await expect(search).toHaveValue("gloss");
+  await filter.click();
+  await page.getByRole("option", { name: "Excluded", exact: true }).click();
+  await expect(
+    list.getByRole("button", { name: "Specular gloss", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Restore to this report", exact: true })
+    .click();
+  dialog = page.getByRole("dialog");
+  await dialog
+    .getByRole("button", { name: "Restore test", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await expect(filter).toContainText("Excluded");
+  await expect(search).toHaveValue("gloss");
+  await expect(list.getByRole("button")).toHaveCount(0);
+});

@@ -33,7 +33,7 @@ export default function ReportScopeControls({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const trigger = useRef<HTMLButtonElement>(null);
   const submitting = useRef(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -42,6 +42,23 @@ export default function ReportScopeControls({
       mounted.current = false;
     };
   }, []);
+  useEffect(() => {
+    setOpen(false);
+    setNote("");
+    setError("");
+  }, [requirement.requirement_id]);
+
+  const restoreFocus = () =>
+    requestAnimationFrame(() => {
+      const target = trigger.current?.isConnected
+        ? trigger.current
+        : document.querySelector<HTMLElement>("[data-report-focus]");
+      target?.focus({ preventScroll: true });
+    });
+  const close = () => {
+    setOpen(false);
+    restoreFocus();
+  };
 
   if (
     !report.source_run_id ||
@@ -72,13 +89,9 @@ export default function ReportScopeControls({
         },
       );
       if (!mounted.current) return;
-      onSaved(updated);
       setOpen(false);
-      setNotice(
-        excluded
-          ? "Test restored to this report."
-          : "Test removed from this report. You can restore it here.",
-      );
+      onSaved(updated);
+      restoreFocus();
     } catch (reason) {
       if (mounted.current)
         setError(
@@ -119,15 +132,6 @@ export default function ReportScopeControls({
         </Alert>
       ) : (
         <>
-          {notice && (
-            <Alert
-              severity="success"
-              sx={{ mb: 1.5 }}
-              onClose={() => setNotice("")}
-            >
-              {notice}
-            </Alert>
-          )}
           {excluded && (
             <Alert severity="info" sx={{ mb: 1.5 }}>
               Removed from this report's scope. The extracted requirement and
@@ -145,6 +149,7 @@ export default function ReportScopeControls({
             spacing={1.5}
           >
             <Button
+              ref={trigger}
               variant="outlined"
               size="small"
               color={excluded ? "primary" : "inherit"}
@@ -172,8 +177,9 @@ export default function ReportScopeControls({
       )}
       <Dialog
         open={open}
+        disableRestoreFocus
         onClose={() => {
-          if (!busy) setOpen(false);
+          if (!busy) close();
         }}
         maxWidth="sm"
       >
@@ -208,7 +214,7 @@ export default function ReportScopeControls({
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button disabled={busy} onClick={() => setOpen(false)}>
+          <Button disabled={busy} onClick={close}>
             Cancel
           </Button>
           <Button

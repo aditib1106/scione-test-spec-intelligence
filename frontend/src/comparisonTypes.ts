@@ -18,10 +18,19 @@ export interface ComparisonCheck {
   status: "supported" | "gap" | "unknown" | "informational";
   reason: string;
   source_pages: number[];
+  candidate_lab_entries?: {
+    claim_id: string;
+    label: string;
+    value: string;
+    stage: string;
+    context: string | null;
+    confirmed: false;
+  }[];
   requirement_claim?: {
     normalization_state: string;
     sequence?: number | null;
     configuration?: string | null;
+    source_context?: string | null;
   } | null;
 }
 
@@ -50,6 +59,7 @@ export interface ComparisonData {
   matching_run_id?: string | null;
   comparison_engine?: "ai_semantic_matching" | "deterministic_rules";
   source_run_id?: string;
+  source_coverage_issues?: string[];
   report_input_fingerprint?: string;
   report_workspace_version?: number;
   created_at: string;

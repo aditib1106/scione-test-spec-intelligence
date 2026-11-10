@@ -16,17 +16,22 @@ import {
   FormControl,
   FormControlLabel,
   InputLabel,
+  IconButton,
   MenuItem,
   Select,
+  Snackbar,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import { request, useResource } from "../api";
 import type { ProviderOption } from "../types";
+import InferenceProgress from "./InferenceProgress";
 
 interface MatchingAttempt {
   run_id: string;
@@ -51,12 +56,14 @@ export default function MatchingControls({
   aiApplied,
   providers,
   onComplete,
+  compact = false,
 }: {
   documentId: string;
   comparisonId: string;
   aiApplied: boolean;
   providers: ProviderOption[];
   onComplete: () => void;
+  compact?: boolean;
 }) {
   const path = `/api/specifications/${encodeURIComponent(documentId)}/matching`;
   const overview = useResource<MatchingOverview>(path);
@@ -71,6 +78,7 @@ export default function MatchingControls({
   );
   const [permission, setPermission] = useState(false);
   const [open, setOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -94,9 +102,9 @@ export default function MatchingControls({
       previousComparison.current = comparisonId;
       overview.refresh();
       setPermission(false);
-      setNotice("");
+      if (!compact) setNotice("");
     }
-  }, [comparisonId, overview.refresh]);
+  }, [comparisonId, compact, overview.refresh]);
 
   const start = () => {
     setPermission(false);
@@ -192,177 +200,281 @@ export default function MatchingControls({
   const validLimit =
     Number.isInteger(outputLimit) && outputLimit >= 512 && outputLimit <= 65536;
 
-  return (
-    <Box
-      sx={{ borderTop: "1px solid", borderColor: "divider", mt: 2.5, pt: 2 }}
-    >
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        alignItems={{ sm: "center" }}
-        justifyContent="space-between"
-        spacing={1.5}
-      >
-        <Box>
-          <Typography variant="body2" fontWeight={600}>
-            {aiApplied ? "AI-assisted comparison" : "Rules-based comparison"}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {busy
-              ? "Matching the saved requirements with your lab declarations…"
-              : current
-                ? "Saved AI matching is available for the current information."
-                : olderSuccess
-                  ? "The saved AI matching uses earlier information. Run matching for the current requirements and lab."
-                  : "Run AI matching to align requirement wording with your lab declarations."}
-          </Typography>
-        </Box>
-        <Button
-          variant={aiApplied ? "outlined" : "contained"}
-          size="small"
-          onClick={start}
-          disabled={busy || !supportedProviders.some((item) => item.available)}
-          startIcon={
-            busy ? <CircularProgress size={15} /> : <AutoAwesomeOutlinedIcon />
-          }
-          sx={{ flexShrink: 0, alignSelf: { xs: "flex-start", sm: "center" } }}
+  const statusDescription = busy
+    ? "Matching the saved requirements with your lab declarations…"
+    : failedLatest
+      ? "The latest AI matching attempt failed. The last saved comparison is still available."
+      : current
+        ? "Saved AI matching is available for the current information."
+        : olderSuccess
+          ? "The saved AI matching uses earlier information. Run matching for the current requirements and lab."
+          : "Run AI matching to align requirement wording with your lab declarations.";
+  const historyContent = (
+    <>
+      {overview.loading && !overview.data && (
+        <Typography variant="caption">Loading matching history…</Typography>
+      )}
+      {overview.error && (
+        <Alert
+          severity="warning"
+          action={<Button onClick={overview.refresh}>Retry</Button>}
         >
-          {busy ? "Matching…" : "Run AI matching"}
-        </Button>
-      </Stack>
-      {!supportedProviders.some((item) => item.available) && (
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: "block", mt: 0.5 }}
-        >
-          A model API must be configured to run AI matching.
+          {overview.error}
+        </Alert>
+      )}
+      {overview.data?.runs.length === 0 && (
+        <Typography variant="caption" color="text.secondary">
+          No AI matching attempts have been saved for this specification.
         </Typography>
       )}
-      {notice && (
+      <Stack spacing={1}>
+        {overview.data?.runs.map((attempt) => (
+          <Stack
+            key={attempt.run_id}
+            direction={{ xs: "column", sm: "row" }}
+            justifyContent="space-between"
+            spacing={1}
+            sx={{
+              p: 1.5,
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 1,
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Stack
+                direction="row"
+                spacing={0.75}
+                alignItems="center"
+                useFlexGap
+                flexWrap="wrap"
+              >
+                <Chip
+                  size="small"
+                  label={
+                    attempt.status === "completed" ? "Completed" : "Failed"
+                  }
+                  color={attempt.status === "completed" ? "success" : "error"}
+                  variant="outlined"
+                />
+                <Typography variant="caption">
+                  {attempt.run_id === overview.data?.current_run_id
+                    ? "Current result"
+                    : attempt.current_inputs
+                      ? "Current inputs"
+                      : "Earlier inputs"}
+                </Typography>
+              </Stack>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mt: 0.5, overflowWrap: "anywhere" }}
+              >
+                {attempt.provider} · {attempt.model} ·{" "}
+                {new Date(attempt.created_at).toLocaleString()}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", overflowWrap: "anywhere" }}
+              >
+                Run {attempt.run_id}
+              </Typography>
+            </Box>
+            <Button
+              component="a"
+              href={`${path}/${encodeURIComponent(attempt.run_id)}/artifacts`}
+              download
+              size="small"
+              startIcon={<DownloadRoundedIcon />}
+              sx={{ alignSelf: "flex-start", flexShrink: 0 }}
+            >
+              Download eval artifacts
+            </Button>
+          </Stack>
+        ))}
+      </Stack>
+    </>
+  );
+  const matchingButton = (
+    <Button
+      variant={aiApplied ? "outlined" : "contained"}
+      size="small"
+      onClick={start}
+      disabled={busy || !supportedProviders.some((item) => item.available)}
+      startIcon={
+        busy ? <CircularProgress size={15} /> : <AutoAwesomeOutlinedIcon />
+      }
+      sx={{
+        flexShrink: 0,
+        minHeight: 34,
+        alignSelf: compact ? undefined : { xs: "flex-start", sm: "center" },
+      }}
+    >
+      {busy ? "Matching…" : "Run AI matching"}
+    </Button>
+  );
+
+  return (
+    <Box
+      sx={
+        compact
+          ? { minWidth: 0 }
+          : { borderTop: "1px solid", borderColor: "divider", mt: 2.5, pt: 2 }
+      }
+    >
+      {compact ? (
+        <Stack
+          direction="row"
+          spacing={0.75}
+          alignItems="center"
+          useFlexGap
+          flexWrap="wrap"
+          sx={{ minHeight: 34 }}
+        >
+          <Tooltip title={statusDescription}>
+            <Chip
+              size="small"
+              variant="outlined"
+              color={
+                failedLatest ? "warning" : aiApplied ? "success" : "default"
+              }
+              label={
+                aiApplied ? "AI-assisted comparison" : "Rules-based comparison"
+              }
+              sx={{ height: 25, fontSize: 11, maxWidth: "100%" }}
+            />
+          </Tooltip>
+          {matchingButton}
+          <Tooltip title="Developer details · matching history">
+            <IconButton
+              aria-label="Developer details · matching history"
+              size="small"
+              color={failedLatest ? "warning" : "default"}
+              onClick={() => {
+                overview.refresh();
+                setHistoryOpen(true);
+              }}
+            >
+              <HistoryRoundedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      ) : (
+        <>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ sm: "center" }}
+            justifyContent="space-between"
+            spacing={1.5}
+          >
+            <Box>
+              <Typography variant="body2" fontWeight={600}>
+                {aiApplied
+                  ? "AI-assisted comparison"
+                  : "Rules-based comparison"}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {busy
+                  ? "Matching the saved requirements with your lab declarations…"
+                  : current
+                    ? "Saved AI matching is available for the current information."
+                    : olderSuccess
+                      ? "The saved AI matching uses earlier information. Run matching for the current requirements and lab."
+                      : "Run AI matching to align requirement wording with your lab declarations."}
+              </Typography>
+            </Box>
+            {matchingButton}
+          </Stack>
+          {!supportedProviders.some((item) => item.available) && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mt: 0.5 }}
+            >
+              A model API must be configured to run AI matching.
+            </Typography>
+          )}
+          {notice && (
+            <Alert
+              severity="success"
+              sx={{ mt: 1.5 }}
+              onClose={() => setNotice("")}
+            >
+              {notice}
+            </Alert>
+          )}
+          {failedLatest && !busy && (
+            <Alert severity="warning" sx={{ mt: 1.5 }}>
+              The latest AI matching attempt failed. The last saved comparison
+              is still available. No automatic retry was made. Review the saved
+              attempt before choosing to run matching again.
+            </Alert>
+          )}
+          <Accordion
+            disableGutters
+            elevation={0}
+            sx={{
+              bgcolor: "transparent",
+              mt: 0.5,
+              "&:before": { display: "none" },
+            }}
+          >
+            <AccordionSummary
+              expandIcon={<ExpandMoreRoundedIcon />}
+              sx={{
+                minHeight: 36,
+                px: 0,
+                "& .MuiAccordionSummary-content": { my: 0.75 },
+              }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                Developer details · matching history
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 0, pt: 0 }}>
+              {historyContent}
+            </AccordionDetails>
+          </Accordion>
+        </>
+      )}
+      <Dialog
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Developer matching history</DialogTitle>
+        <DialogContent dividers>
+          {failedLatest && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              The latest AI matching attempt failed. The last saved comparison
+              is still available. No automatic retry was made.
+            </Alert>
+          )}
+          {historyContent}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5 }}>
+          <Button onClick={() => setHistoryOpen(false)}>Close history</Button>
+        </DialogActions>
+      </Dialog>
+      <Snackbar
+        open={compact && Boolean(notice)}
+        autoHideDuration={6000}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        onClose={(_event, reason) => {
+          if (reason !== "clickaway") setNotice("");
+        }}
+      >
         <Alert
           severity="success"
-          sx={{ mt: 1.5 }}
+          variant="filled"
           onClose={() => setNotice("")}
+          sx={{ width: "100%" }}
         >
           {notice}
         </Alert>
-      )}
-      {failedLatest && !busy && (
-        <Alert severity="warning" sx={{ mt: 1.5 }}>
-          The latest AI matching attempt failed. The last saved comparison is
-          still available. No automatic retry was made. Review the saved attempt
-          before choosing to run matching again.
-        </Alert>
-      )}
-      <Accordion
-        disableGutters
-        elevation={0}
-        sx={{
-          bgcolor: "transparent",
-          mt: 0.5,
-          "&:before": { display: "none" },
-        }}
-      >
-        <AccordionSummary
-          expandIcon={<ExpandMoreRoundedIcon />}
-          sx={{
-            minHeight: 36,
-            px: 0,
-            "& .MuiAccordionSummary-content": { my: 0.75 },
-          }}
-        >
-          <Typography variant="caption" color="text.secondary">
-            Developer details · matching history
-          </Typography>
-        </AccordionSummary>
-        <AccordionDetails sx={{ px: 0, pt: 0 }}>
-          {overview.loading && !overview.data && (
-            <Typography variant="caption">Loading matching history…</Typography>
-          )}
-          {overview.error && (
-            <Alert
-              severity="warning"
-              action={<Button onClick={overview.refresh}>Retry</Button>}
-            >
-              {overview.error}
-            </Alert>
-          )}
-          {overview.data?.runs.length === 0 && (
-            <Typography variant="caption" color="text.secondary">
-              No AI matching attempts have been saved for this specification.
-            </Typography>
-          )}
-          <Stack spacing={1}>
-            {overview.data?.runs.map((attempt) => (
-              <Stack
-                key={attempt.run_id}
-                direction={{ xs: "column", sm: "row" }}
-                justifyContent="space-between"
-                spacing={1}
-                sx={{
-                  p: 1.5,
-                  border: "1px solid",
-                  borderColor: "divider",
-                  borderRadius: 1,
-                }}
-              >
-                <Box sx={{ minWidth: 0 }}>
-                  <Stack
-                    direction="row"
-                    spacing={0.75}
-                    alignItems="center"
-                    useFlexGap
-                    flexWrap="wrap"
-                  >
-                    <Chip
-                      size="small"
-                      label={
-                        attempt.status === "completed" ? "Completed" : "Failed"
-                      }
-                      color={
-                        attempt.status === "completed" ? "success" : "error"
-                      }
-                      variant="outlined"
-                    />
-                    <Typography variant="caption">
-                      {attempt.run_id === overview.data?.current_run_id
-                        ? "Current result"
-                        : attempt.current_inputs
-                          ? "Current inputs"
-                          : "Earlier inputs"}
-                    </Typography>
-                  </Stack>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: "block", mt: 0.5, overflowWrap: "anywhere" }}
-                  >
-                    {attempt.provider} · {attempt.model} ·{" "}
-                    {new Date(attempt.created_at).toLocaleString()}
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: "block", overflowWrap: "anywhere" }}
-                  >
-                    Run {attempt.run_id}
-                  </Typography>
-                </Box>
-                <Button
-                  component="a"
-                  href={`${path}/${encodeURIComponent(attempt.run_id)}/artifacts`}
-                  download
-                  size="small"
-                  startIcon={<DownloadRoundedIcon />}
-                  sx={{ alignSelf: "flex-start", flexShrink: 0 }}
-                >
-                  Download eval artifacts
-                </Button>
-              </Stack>
-            ))}
-          </Stack>
-        </AccordionDetails>
-      </Accordion>
+      </Snackbar>
 
       <Dialog
         open={open}
@@ -374,11 +486,9 @@ export default function MatchingControls({
         <DialogTitle>Run AI matching</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Align this specification's extracted requirements with your lab's
-            saved declarations. Numeric and scope checks are validated
-            separately. Each click starts at most one model request; failures
-            are not retried automatically. Leaving this page stops waiting, but
-            an already accepted model request may finish and use credits.
+            Compare the saved requirements with your lab capabilities. Longer
+            specifications can take a few minutes. Your saved report stays
+            available while matching runs.
           </Typography>
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -435,6 +545,12 @@ export default function MatchingControls({
             </AccordionSummary>
             <AccordionDetails sx={{ px: 0, pt: 0 }}>
               <Stack spacing={2}>
+                <Typography variant="caption" color="text.secondary">
+                  Complex specifications use up to eight planned model requests,
+                  with no automatic retries. Leaving this page stops waiting; a
+                  started operation may finish its planned requests and use
+                  credits.
+                </Typography>
                 <TextField
                   label="Matching model"
                   fullWidth
@@ -485,17 +601,12 @@ export default function MatchingControls({
             }
           />
           {busy && (
-            <Stack
-              direction="row"
-              spacing={1.25}
-              alignItems="center"
-              sx={{ mt: 2 }}
-            >
-              <CircularProgress size={18} />
-              <Typography variant="body2">
-                Running matching and saving the result…
-              </Typography>
-            </Stack>
+            <Box sx={{ mt: 2 }}>
+              <InferenceProgress
+                title="Comparing your requirements"
+                detail="Checking the saved lab information. The report updates when matching finishes."
+              />
+            </Box>
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>

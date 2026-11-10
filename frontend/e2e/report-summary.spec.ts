@@ -1,12 +1,14 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import type { ComparisonCheck, ComparisonData } from "../src/comparisonTypes";
 import type { LibraryDocument } from "../src/libraryTypes";
 
 const base = "http://127.0.0.1:8011";
 
-test("report keeps parameter details optional while switching and searching tests", async ({
-  page,
-}, testInfo) => {
+async function mockReport(
+  page: Page,
+  extraConditions = 0,
+  showCandidate = false,
+) {
   const source: LibraryDocument = {
     document_id: "summary-source",
     company_name: "Customer A",
@@ -56,6 +58,9 @@ test("report keeps parameter details optional while switching and searching test
   };
   const comparison: ComparisonData = {
     comparison_id: "saved-summary",
+    source_run_id: "run-b",
+    report_input_fingerprint: "summary-inputs",
+    report_workspace_version: 1,
     created_at: source.created_at,
     document: source,
     lab_name: "Example lab",
@@ -129,68 +134,235 @@ test("report keeps parameter details optional while switching and searching test
       },
     ],
   };
+  for (let index = 0; index < extraConditions; index += 1) {
+    comparison.requirements[0].comparison.checks.push({
+      ...temperature,
+      label: `Additional condition ${index + 1}`,
+      parameter_id: `custom_${index + 1}`,
+      requested: `${index + 1} units`,
+      declared: `0–${index + 2} units`,
+      status: "supported",
+      reason: "The requested value is within the recorded lab range.",
+    });
+  }
+  if (showCandidate) {
+    comparison.requirements[0].comparison.checks[2].candidate_lab_entries = [
+      {
+        claim_id: "lab_duration",
+        label: "Conditioning duration",
+        value: "60 s",
+        stage: "conditioning",
+        context: "Dry nitrogen",
+        confirmed: false,
+      },
+    ];
+  }
+  await page.route("**/api/specifications/summary-source/matching", (route) =>
+    route.fulfill({
+      json: {
+        source_run_id: source.run_id,
+        report_input_fingerprint: "summary-inputs",
+        input_fingerprint: "summary-matching-inputs",
+        current_run_id: null,
+        runs: [],
+      },
+    }),
+  );
   await page.route("**/api/comparisons/summary-source", (route) =>
     route.fulfill({ json: comparison }),
   );
+  return comparison;
+}
+
+async function selectFilter(page: Page, label: string) {
+  await page.getByRole("combobox", { name: "Show", exact: true }).click();
+  await page.getByRole("option", { name: label, exact: true }).click();
+}
+
+test("document source coverage stays visible while filtering extracted report items", async ({
+  page,
+}) => {
+  const comparison = await mockReport(page);
+  const issue =
+    'Literal retention was not verified for "mild steel witnesses" and "Release requires Materials Engineering approval"; check existing scope and instructions.';
+  comparison.source_coverage_issues = [issue];
+  let modelCalls = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      /\/(?:analyze|matching)$/.test(request.url())
+    )
+      modelCalls += 1;
+  });
   await page.goto(`${base}/reports?document=summary-source`);
+  const title = page.getByText("Check source coverage before finalizing", {
+    exact: true,
+  });
+  const warning = page.getByRole("alert").filter({ has: title });
+  await expect(title).toHaveCount(1);
+  await expect(
+    warning.getByText("These results cover extracted items only.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    warning.getByRole("link", { name: "Review specification", exact: true }),
+  ).toHaveAttribute("href", "/specifications?document=summary-source");
+  await expect(warning.getByText(issue, { exact: true })).not.toBeVisible();
+  await warning
+    .getByRole("button", { name: "See coverage notes", exact: true })
+    .click();
+  await expect(warning.getByText(issue, { exact: true })).toBeVisible();
+  await selectFilter(page, "Fully matched");
+  await expect(title).toHaveCount(1);
+  await expect(title).toBeVisible();
+  await expect(warning.getByText(issue, { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Requested tests" })
+      .getByRole("button", { name: "Specular gloss", exact: true }),
+  ).toBeVisible();
+  await expect(
+    warning.getByRole("link", { name: "Review specification", exact: true }),
+  ).toHaveAttribute("href", "/specifications?document=summary-source");
+  expect(modelCalls).toBe(0);
+});
+
+test("unconfirmed lab candidates are visible without being reported as matches", async ({
+  page,
+}) => {
+  await mockReport(page, 0, true);
+  await page.goto(`${base}/reports?document=summary-source`);
+  await page.getByRole("button", { name: "Conditions", exact: true }).click();
+  const duration = page
+    .getByRole("table", { name: "Water jet adhesion conditions comparison" })
+    .getByRole("row")
+    .filter({ has: page.getByText("Duration", { exact: true }) });
+  await expect(
+    duration.getByText("Possible lab entry", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    duration.getByText("Dry nitrogen", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    duration.getByText("Needs information", { exact: true }),
+  ).toBeVisible();
+  await expect(duration.getByText("Not recorded", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(duration.getByText("Match", { exact: true })).toHaveCount(0);
+});
+
+test("report expands conditions and criteria in their own groups", async ({
+  page,
+}, testInfo) => {
+  await mockReport(page);
+  await page.goto(`${base}/reports?document=summary-source`);
+  await expect(
+    page.getByText("Check source coverage before finalizing", { exact: true }),
+  ).toHaveCount(0);
   const list = page.getByRole("navigation", { name: "Requested tests" });
+  const conditionsButton = page.getByRole("button", {
+    name: "Conditions",
+    exact: true,
+  });
+  const criteriaButton = page.getByRole("button", {
+    name: "Criteria / reporting",
+    exact: true,
+  });
   await expect(
     list.getByRole("button", { name: "Water jet adhesion", exact: true }),
   ).toHaveAttribute("aria-current", "true");
+  await expect(conditionsButton).toHaveAttribute("aria-expanded", "false");
+  await expect(criteriaButton).toHaveAttribute("aria-expanded", "false");
+  const detail = page.getByRole("region", { name: "Selected test details" });
+  const checks = detail.getByRole("group", { name: "Comparison checks" });
+  await expect(checks.getByText("2 matched", { exact: true })).toBeVisible();
+  await expect(checks.getByText("1 gap", { exact: true })).toBeVisible();
+  await expect(checks.getByText("1 to clarify", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Water jet adhesion", exact: true }),
-  ).toBeVisible();
-  const summary = page.getByRole("table", {
-    name: "Test capability comparison",
+    detail.getByRole("button", { name: "Method", exact: true }),
+  ).toHaveCount(0);
+  await expect(detail.getByText("ISO 16925", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("60 °C", { exact: true })).not.toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /View detailed comparison/ }),
+  ).toHaveCount(0);
+
+  await conditionsButton.click();
+  const conditions = page.getByRole("table", {
+    name: "Water jet adhesion conditions comparison",
     exact: true,
   });
-  await expect(summary.getByRole("row")).toHaveCount(4);
-  await expect(summary.getByText("Conditions", { exact: true })).toBeVisible();
-  await expect(summary.getByText("60 °C", { exact: false })).toBeVisible();
-  const conditions = summary
-    .getByRole("row")
-    .filter({ has: page.getByText("Conditions", { exact: true }) });
+  await expect(conditions).toBeVisible();
+  await expect(conditions.getByText("60 °C", { exact: true })).toBeVisible();
+  await expect(conditions.getByText("Duration", { exact: true })).toBeVisible();
   await expect(
-    conditions
-      .getByRole("cell")
-      .last()
-      .getByText("Duration:", { exact: false }),
+    conditions.getByText("Not recorded", { exact: true }),
   ).toBeVisible();
-  await expect(
-    conditions
-      .getByRole("cell")
-      .last()
-      .getByText("Not recorded", { exact: false }),
-  ).toBeVisible();
-  const details = page.getByRole("table", {
-    name: "Water jet adhesion requirement details",
+  const temperature = conditions.getByRole("row").filter({
+    has: page.getByText("Water temperature", { exact: true }),
   });
-  await expect(details).not.toBeVisible();
-  await page.getByRole("button", { name: /View detailed comparison/ }).click();
+  const duration = conditions.getByRole("row").filter({
+    has: page.getByText("Duration", { exact: true }),
+  });
+  await expect(temperature.getByText("Gap", { exact: true })).toBeVisible();
   await expect(
-    details.getByText("The water temperature is outside the lab range."),
+    duration.getByText("Needs information", { exact: true }),
   ).toBeVisible();
+  await temperature
+    .getByRole("button", { name: "Reason for Water temperature", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("dialog", {
+        name: "Reason for Water temperature",
+        exact: true,
+      })
+      .getByText("The water temperature is outside the lab range.", {
+        exact: true,
+      }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await duration
+    .getByRole("button", { name: "Reason for Duration", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "Reason for Duration", exact: true })
+      .getByText("The lab has not recorded an exposure duration.", {
+        exact: true,
+      }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByText("Rating", { exact: true })).not.toBeVisible();
+  await criteriaButton.click();
+  await expect(page.getByText("Rating", { exact: true })).toBeVisible();
+  await expect(conditionsButton).toHaveAttribute("aria-expanded", "true");
+  await expect(criteriaButton).toHaveAttribute("aria-expanded", "true");
+
   await list
     .getByRole("button", { name: "Specular gloss", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Specular gloss", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /View detailed comparison/ }),
-  ).toHaveAttribute("aria-expanded", "false");
-  await page
-    .getByRole("textbox", { name: "Search requested tests" })
-    .fill("16925");
+  await expect(conditionsButton).toHaveAttribute("aria-expanded", "false");
+  const search = page.getByRole("textbox", { name: "Search requested tests" });
+  await search.fill("16925");
   await expect(
     list.getByRole("button", { name: "Specular gloss", exact: true }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "Water jet adhesion", exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("textbox", { name: "Search requested tests" })
-    .fill("not a recorded method");
+  // Clearing a filter must keep the actual visible selection, not resurrect a
+  // stale test ID from before the filter was applied.
+  await search.fill("");
+  await expect(
+    list.getByRole("button", { name: "Water jet adhesion", exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+  await search.fill("not a recorded method");
   await expect(
     page.getByRole("heading", { name: "Water jet adhesion", exact: true }),
   ).toHaveCount(0);
@@ -198,17 +370,235 @@ test("report keeps parameter details optional while switching and searching test
     .getByRole("button", { name: "Show all tests", exact: true })
     .click();
   await expect(list.getByRole("button")).toHaveCount(2);
-  await list
-    .getByRole("button", { name: "Water jet adhesion", exact: true })
-    .click();
+  await expect(search).toBeFocused();
   const widths = await page.evaluate(() => ({
     content: document.documentElement.scrollWidth,
     viewport: document.documentElement.clientWidth,
   }));
   expect(widths.content).toBeLessThanOrEqual(widths.viewport + 1);
+  // Capture sticky elements from their natural page origin.
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({
     path: testInfo.outputPath("interactive-report-summary.png"),
     animations: "disabled",
     fullPage: true,
   });
+});
+
+for (const height of [900, 760]) {
+  test(`report comparison remains primary at 1440×${height}`, async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name !== "desktop",
+      "These two desktop heights cover the client's laptop layout.",
+    );
+    await page.setViewportSize({ width: 1440, height });
+    await mockReport(page);
+    await page.goto(`${base}/reports?document=summary-source`);
+    const list = page.getByRole("navigation", { name: "Requested tests" });
+    const pane = page.getByTestId("report-detail-pane");
+    const comparison = pane.getByRole("table", {
+      name: "Test capability comparison",
+      exact: true,
+    });
+    await expect(comparison).toBeVisible();
+    for (const column of [
+      "Comparison",
+      "Customer specification",
+      "Lab capability",
+      "Result",
+    ]) {
+      await expect(
+        comparison.getByRole("columnheader", { name: column, exact: true }),
+      ).toBeVisible();
+    }
+    const geometry = {
+      table: await comparison.boundingBox(),
+      pane: await pane.boundingBox(),
+      list: await list.boundingBox(),
+    };
+    expect(geometry.table).not.toBeNull();
+    expect(geometry.pane).not.toBeNull();
+    expect(geometry.list).not.toBeNull();
+    expect(geometry.table!.y).toBeLessThan(height / 2);
+    expect(geometry.pane!.width).toBeGreaterThan(geometry.list!.width * 2);
+    expect(geometry.table!.width).toBeGreaterThan(1440 * 0.55);
+    expect(geometry.pane!.y).toBeLessThan(height * 0.3);
+    await expect(page.getByRole("button", { name: /^Filter:/ })).toHaveCount(0);
+    await expect(
+      page.getByRole("combobox", { name: "Show", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Order", exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath(`report-${height}-collapsed.png`),
+      animations: "disabled",
+    });
+
+    await page.getByRole("button", { name: "Conditions", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Criteria / reporting", exact: true })
+      .click();
+    const criteria = pane.getByRole("table", {
+      name: "Water jet adhesion criteria / reporting comparison",
+      exact: true,
+    });
+    const lastRow = criteria.getByRole("row").last();
+    await lastRow.scrollIntoViewIfNeeded();
+    await expect(lastRow.getByText("Rating", { exact: true })).toBeVisible();
+    await expect(lastRow.getByText("Match", { exact: true })).toBeVisible();
+    // A fixed action footer previously covered expanded comparison rows. The
+    // row must be hit-testable, and the scope action must follow the table.
+    expect(
+      await lastRow.evaluate((row) => {
+        const box = row.getBoundingClientRect();
+        return row.contains(
+          document.elementFromPoint(
+            box.x + box.width / 2,
+            box.y + box.height / 2,
+          ),
+        );
+      }),
+    ).toBe(true);
+    const remove = pane.getByRole("button", {
+      name: "Remove from this report",
+      exact: true,
+    });
+    const bottom = await criteria.boundingBox();
+    const action = await remove.boundingBox();
+    expect(bottom).not.toBeNull();
+    expect(action).not.toBeNull();
+    expect(action!.y).toBeGreaterThanOrEqual(bottom!.y + bottom!.height);
+    const widths = await page.evaluate(() => ({
+      content: document.documentElement.scrollWidth,
+      viewport: document.documentElement.clientWidth,
+    }));
+    expect(widths.content).toBeLessThanOrEqual(widths.viewport + 1);
+    await page.screenshot({
+      path: testInfo.outputPath(`report-${height}-expanded.png`),
+      animations: "disabled",
+    });
+  });
+}
+
+test("result filters preserve the visible selected test when cleared or refreshed", async ({
+  page,
+}) => {
+  await mockReport(page);
+  await page.goto(`${base}/reports?document=summary-source`);
+  const list = page.getByRole("navigation", { name: "Requested tests" });
+  await expect(
+    list.getByRole("button", { name: "Water jet adhesion", exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+  await selectFilter(page, "Fully matched");
+  const gloss = list.getByRole("button", {
+    name: "Specular gloss",
+    exact: true,
+  });
+  await expect(gloss).toHaveAttribute("aria-current", "true");
+  await expect(list.getByRole("button")).toHaveCount(1);
+  await selectFilter(page, "All tests");
+  await expect(gloss).toHaveAttribute("aria-current", "true");
+  await selectFilter(page, "Fully matched");
+  await page
+    .getByRole("button", { name: "Recompare saved information", exact: true })
+    .click();
+  await expect(
+    page.getByRole("combobox", { name: "Show", exact: true }),
+  ).toContainText("Fully matched");
+  await expect(gloss).toHaveAttribute("aria-current", "true");
+  await expect(list.getByRole("button")).toHaveCount(1);
+});
+
+test("desktop navigation collapse preserves the report selection and expanded category", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "The narrow layout uses the mobile navigation drawer.",
+  );
+  await mockReport(page);
+  await page.goto(`${base}/reports?document=summary-source`);
+  const conditions = page.getByRole("button", {
+    name: "Conditions",
+    exact: true,
+  });
+  await conditions.click();
+  await page
+    .getByRole("textbox", { name: "Search requested tests" })
+    .fill("16925");
+  const before = await page.evaluate(() => window.scrollY);
+  await page
+    .getByRole("button", { name: "Collapse navigation", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Expand navigation", exact: true }),
+  ).toBeVisible();
+  await expect(conditions).toHaveAttribute("aria-expanded", "true");
+  await expect(
+    page.getByRole("textbox", { name: "Search requested tests" }),
+  ).toHaveValue("16925");
+  expect(await page.evaluate(() => window.scrollY)).toBe(before);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Expand navigation", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Expand navigation", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Collapse navigation", exact: true }),
+  ).toBeVisible();
+});
+
+test("refresh and result filtering preserve the review pane scroll position", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop",
+    "Desktop review panes scroll independently of the page.",
+  );
+  await mockReport(page, 35);
+  await page.goto(`${base}/reports?document=summary-source`);
+  const conditions = page.getByRole("button", {
+    name: "Conditions",
+    exact: true,
+  });
+  await conditions.click();
+  const pane = page.getByTestId("report-detail-pane");
+  await expect(pane).toBeVisible();
+  await expect
+    .poll(() =>
+      pane.evaluate((element) => element.scrollHeight > element.clientHeight),
+    )
+    .toBe(true);
+  await pane.evaluate((element) => {
+    element.scrollTop = 260;
+  });
+  const before = await pane.evaluate((element) => ({
+    top: element.scrollTop,
+    viewportTop: element.getBoundingClientRect().top,
+    pageY: window.scrollY,
+  }));
+  await page
+    .getByRole("button", { name: "Recompare saved information", exact: true })
+    .click();
+  await expect(conditions).toHaveAttribute("aria-expanded", "true");
+  await expect
+    .poll(() => pane.evaluate((element) => element.scrollTop))
+    .toBe(before.top);
+  await selectFilter(page, "Partially matched");
+  await expect
+    .poll(() => pane.evaluate((element) => element.scrollTop))
+    .toBe(before.top);
+  const after = await pane.evaluate((element) => ({
+    viewportTop: element.getBoundingClientRect().top,
+    pageY: window.scrollY,
+  }));
+  expect(after.pageY).toBe(before.pageY);
+  expect(Math.abs(after.viewportTop - before.viewportTop)).toBeLessThanOrEqual(
+    2,
+  );
 });

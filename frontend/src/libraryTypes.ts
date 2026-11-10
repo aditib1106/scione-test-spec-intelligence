@@ -14,6 +14,7 @@ export interface LibraryDocument {
   run_id: string | null;
   page_count: number;
   provider?: string | null;
+  document_review_issues?: string[];
 }
 
 export interface LibraryClaim {

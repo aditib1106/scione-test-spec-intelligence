@@ -86,6 +86,9 @@ for (const change of ["document", "run"] as const) {
     await expect(confirm).toBeEnabled();
     await expect(exclude).toBeEnabled();
 
+    await page
+      .getByRole("button", { name: "Close batch review", exact: true })
+      .click();
     if (change === "document") {
       await page.getByRole("combobox", { name: "Saved specification" }).click();
       await page.getByRole("option", { name: second.original_name }).click();
@@ -111,6 +114,9 @@ for (const change of ["document", "run"] as const) {
       await expect(
         page.getByRole("button", { name: /Analysis settings/ }),
       ).toHaveAttribute("aria-expanded", "false");
+      await page
+        .getByRole("button", { name: "Batch review", exact: true })
+        .click();
     }
 
     for (const box of boxes) await expect(box).not.toBeChecked();

@@ -439,7 +439,13 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                 onChange={(event) => setExample(event.target.value)}
                 sx={{ minWidth: 185 }}
               >
+                <MenuItem value="csp301_demo">
+                  CSP-EN-301 · updated demonstration lab
+                </MenuItem>
                 <MenuItem value="csp301">CSP-EN-301 · four tests</MenuItem>
+                <MenuItem value="csp301_detailed">
+                  CSP-EN-301 · detailed synthetic capabilities
+                </MenuItem>
                 <MenuItem value="legacy">MS-PNT-410 · pilot lab</MenuItem>
               </TextField>
               <Button

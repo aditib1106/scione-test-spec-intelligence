@@ -34,6 +34,7 @@ import {
   Tabs,
   TextField,
   Typography,
+  Tooltip,
 } from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
@@ -43,8 +44,10 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
+import DocumentScannerOutlinedIcon from "@mui/icons-material/DocumentScannerOutlined";
 import { request, useResource } from "../api";
 import FactSummary from "../components/FactSummary";
+import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
 import type { PageProps } from "../types";
 import type {
   LibraryDetail,
@@ -677,6 +680,10 @@ export default function SpecificationLibrary({
       )}
       {selectedId && current && detail.data && (
         <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+          <DocumentRevisionNotice
+            issues={current.document_review_issues}
+            sourceReviewUrl={reviewUrl(current.document_id)}
+          />
           <Box
             sx={{
               p: 2,
@@ -765,7 +772,7 @@ export default function SpecificationLibrary({
               )}
               <Typography variant="caption" color="text.secondary">
                 {current.original_name} · {current.page_count} pages ·{" "}
-                {current.requirement_count} extracted tests
+                {current.requirement_count} tests
               </Typography>
             </Stack>
           </Box>
@@ -1250,23 +1257,40 @@ export default function SpecificationLibrary({
           <Stack spacing={2.25} sx={{ pt: 0.75 }}>
             {!editing && (
               <Box>
-                <Button
-                  component="label"
-                  variant="outlined"
-                  startIcon={<UploadFileOutlinedIcon />}
-                  disabled={saving || Boolean(uploadedId)}
-                >
-                  {file ? "Change PDF" : "Choose PDF"}
-                  <input
-                    type="file"
-                    hidden
-                    accept="application/pdf,.pdf"
-                    onChange={(event) => {
-                      setFile(event.target.files?.[0] ?? null);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </Button>
+                <Stack direction="row" gap={1} useFlexGap flexWrap="wrap">
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    startIcon={<UploadFileOutlinedIcon />}
+                    disabled={saving || Boolean(uploadedId)}
+                  >
+                    {file ? "Change PDF" : "Choose PDF"}
+                    <input
+                      type="file"
+                      hidden
+                      accept="application/pdf,.pdf"
+                      onChange={(event) => {
+                        setFile(event.target.files?.[0] ?? null);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </Button>
+                  <Tooltip title="Scan and handwriting support is coming soon.">
+                    <span>
+                      <Button
+                        disabled
+                        startIcon={<DocumentScannerOutlinedIcon />}
+                        sx={{
+                          color: "#566476 !important",
+                          bgcolor: "#e6eaf0 !important",
+                          border: "1px solid #d2d9e3",
+                        }}
+                      >
+                        OCR · coming soon
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </Stack>
                 <Typography
                   variant="body2"
                   color="text.secondary"
