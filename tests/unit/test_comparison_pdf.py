@@ -146,6 +146,39 @@ def test_structured_pdf_rejects_invalid_saved_comparison() -> None:
         render_comparison_pdf(payload)
 
 
+def test_pdf_includes_current_review_decisions_without_changing_unknown_findings() -> None:
+    payload = _payload()
+    payload["document"]["specification_date"] = "2026-10-28"
+    payload["assessment_reviews"] = {
+        "INTERNAL_REQUIREMENT_2": {
+            "review_status": "accepted",
+            "decision": "clarify_customer",
+            "note": "Confirm the reporting stage with the customer.",
+        }
+    }
+    before = copy.deepcopy(payload)
+    text, pages = _compact(render_comparison_pdf(payload))
+    assert "Specification date: 2026-10-28" in text
+    assert "Lab review: Reviewed" in text
+    assert "Ask customer to clarify" in text
+    assert "Confirm the reporting stage with the customer." in text
+    assert "Needs information" in text
+    assert "Review decisions do not change the capability findings." in text
+    assert pages <= 4 and payload == before
+
+
+def test_pdf_keeps_source_question_values_without_internal_audit_identifiers() -> None:
+    payload = _payload()
+    payload["requirements"][2]["comparison"]["checks"][0]["reason"] = (
+        "req_003 req_003_source_audit_deadbeef: Unrepresented source quantity: 200 mm."
+    )
+    before = copy.deepcopy(payload)
+    text, _ = _compact(render_comparison_pdf(payload))
+    assert "Confirm this source requirement: 200 mm." in text
+    assert "req_003" not in text and "deadbeef" not in text
+    assert payload == before
+
+
 def test_saved_web_candidate_hints_do_not_break_or_change_the_printed_assessment():
     payload = _payload()
     check = payload["requirements"][2]["comparison"]["checks"][0]

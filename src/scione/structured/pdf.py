@@ -27,9 +27,8 @@ PDF_MAX_PAGES = 64
 PDF_MAX_LAYOUT_CALLBACKS = 256
 _SECTION_BOUNDARY = "<!-- scione-comparison-section -->"
 _CHECK_TABLE_OPEN = (
-    "<table><tr><th width='30%'>Customer requirement</th>"
-    "<th width='25%'>Lab declaration</th><th width='15%'>Result</th>"
-    "<th width='30%'>Reason / action</th></tr>"
+    "<table><tr><th width='43%'>Customer requirement</th>"
+    "<th width='37%'>Lab capability</th><th width='20%'>Result</th></tr>"
 )
 
 
@@ -46,8 +45,8 @@ _STATUS = {
 }
 _CSS = """
 body { font-family: sans-serif; font-size: 9pt; color: #243247; line-height: 1.23; }
-h1 { font-size: 24pt; line-height: 1.05; margin: 0 0 7pt; color: #162944; }
-h2 { font-size: 13pt; margin: 15pt 0 5pt; color: #234b82; }
+h1 { font-size: 21pt; line-height: 1.05; margin: 0 0 7pt; color: #162944; }
+h2 { font-size: 13pt; margin: 11pt 0 4pt; color: #234b82; }
 p { margin: 3pt 0 5pt; }
 .eyebrow { font-size: 8pt; color: #596e8e; margin: 0 0 5pt; }
 .meta { font-size: 8.4pt; color: #5a687d; }
@@ -56,7 +55,7 @@ p { margin: 3pt 0 5pt; }
 .summary b { color: #203f6b; }
 table { width: 100%; border-collapse: collapse; margin: 6pt 0 8pt; font-size: 8pt; }
 th { color: #294b78; text-align: left; font-size: 7.6pt; border-bottom: 1pt solid #becde2; }
-td, th { padding: 5pt 4pt; border-bottom: 0.5pt solid #dce3ee; vertical-align: top; }
+td, th { padding: 4pt 4pt; border-bottom: 0.5pt solid #dce3ee; vertical-align: top; }
 .test-head { page-break-inside: avoid; }
 .stage, .source { font-size: 7.5pt; color: #64748b; }
 .supported { color: #24704f; }
@@ -64,7 +63,8 @@ td, th { padding: 5pt 4pt; border-bottom: 0.5pt solid #dce3ee; vertical-align: t
 .unknown { color: #8a641c; }
 .informational { color: #64748b; }
 .long-check { border-bottom: 0.5pt solid #dce3ee; padding-bottom: 6pt; }
-.shared-start { page-break-before: always; }
+.review { background: #f1f5fb; padding: 6pt; margin: 5pt 0 7pt; }
+.reason td { font-size: 7.4pt; padding-top: 1pt; color: #59697e; }
 """
 
 
@@ -123,6 +123,18 @@ def _methods(values: object) -> str:
 
 def _stage(value: str) -> str:
     return value.replace("_", " ").capitalize()
+
+
+def _business_reason(value: str) -> str:
+    """Keep the lab action while leaving machine diagnostics in the JSON export."""
+
+    if value == (
+        "The source fact has not been normalized reliably; semantic correspondence "
+        "does not repair or replace source facts."
+    ):
+        return "Check the source wording before deciding whether the lab can meet this requirement."
+    value = re.sub(r"\breq_[A-Za-z0-9_]+\b:?\s*", "", value)
+    return value.replace("Unrepresented source quantity:", "Confirm this source requirement:")
 
 
 def _checked_rows(payload: dict) -> list[tuple[dict, StructuredComparison]]:
@@ -235,14 +247,23 @@ def _check_rows(
     applies_to: dict[str, list[str]] | None = None,
     *,
     section_breaks: bool = False,
+    shown_reasons: set[tuple] | None = None,
 ) -> str:
+    shown_reasons = shown_reasons if shown_reasons is not None else set()
     parts = [_CHECK_TABLE_OPEN]
     for index, check in enumerate(comparison.checks):
         if section_breaks and index and index % 8 == 0:
             parts.extend(["</table>", _SECTION_BOUNDARY, _CHECK_TABLE_OPEN])
         requested = check.requested
         declared = check.declared or "Not recorded by the lab"
-        reason = check.reason
+        reason = _business_reason(check.reason)
+        reason_key = (
+            reason,
+            check.stage,
+            check.requirement_claim.sequence if check.requirement_claim else None,
+        )
+        show_reason = check.status != "supported" or reason_key not in shown_reasons
+        shown_reasons.add(reason_key)
         sequence = check.requirement_claim.sequence if check.requirement_claim else None
         stage_label = _stage(check.stage)
         if sequence is not None:
@@ -310,7 +331,12 @@ def _check_rows(
             f"<tr><td><b>{_text(check.label)}</b><br>{_text(requested)}"
             f"{stage}{context}{sources}{scope}</td>"
             f"<td>{_text(declared)}</td><td class='{check.status}'>"
-            f"<b>{_STATUS[check.status]}</b></td><td>{_text(reason)}</td></tr>"
+            f"<b>{_STATUS[check.status]}</b></td></tr>"
+            + (
+                f"<tr class='reason'><td colspan='3'>{_text(reason)}</td></tr>"
+                if show_reason
+                else ""
+            )
         )
     parts.append("</table>")
     return "".join(parts)
@@ -324,6 +350,7 @@ def _html(payload: dict, *, section_breaks: bool = False) -> str:
     counts = Counter(comparison.status for _, comparison in rows)
     shared, applicability, shared_signatures = _shared_checks(rows)
     title = _value(document, "title", "original_name", fallback="Customer specification")
+    shown_reasons: set[tuple] = set()
     parts = [
         "<html><body><p class='eyebrow'>SCIONE · LAB WORKSPACE</p>",
         "<h1>Lab capability gap report</h1>",
@@ -331,7 +358,9 @@ def _html(payload: dict, *, section_breaks: bool = False) -> str:
         f"<p><b>{_text(title)}</b></p>",
         f"<p class='meta'>Customer: {_text(_value(document, 'company_name'))}<br>"
         f"Specification: {_text(_value(document, 'specification_id', 'identifier'))} · "
-        f"Revision: {_text(_value(document, 'revision'))}<br>"
+        "Specification date: "
+        f"{_text(_value(document, 'specification_date', fallback='Date not provided'))}<br>"
+        f"Source revision: {_text(_value(document, 'revision'))}<br>"
         f"Lab: {_text(_value(payload, 'lab_name'))}<br>"
         f"Prepared: {_text(_date(payload.get('created_at')))}</p>",
         "<div class='summary'>",
@@ -371,6 +400,25 @@ def _html(payload: dict, *, section_breaks: bool = False) -> str:
     else:
         parts.append("<p>No active test requirements are included in this assessment.</p>")
     for index, (row, comparison) in enumerate(rows, 1):
+        review = payload.get("assessment_reviews", {}).get(row.get("requirement_id"), {})
+        review_text = ""
+        if isinstance(review, dict) and review:
+            decisions = {
+                "keep": "Keep assessment",
+                "clarify_customer": "Ask customer to clarify",
+                "outsource": "Plan to outsource",
+                "decline": "Do not offer this test",
+            }
+            state = "Reviewed" if review.get("review_status") == "accepted" else "Needs review"
+            decision = decisions.get(review.get("decision"), "Follow-up recorded")
+            review_text = (
+                f"<div class='review'><b>Lab review: {_text(state)} · {_text(decision)}</b>"
+            )
+            if review.get("note"):
+                review_text += f"<p>{_text(review['note'])}</p>"
+            review_text += (
+                "<p class='meta'>Review decisions do not change the capability findings.</p></div>"
+            )
         own_checks = [
             check for check in comparison.checks if _signature(check) not in shared_signatures
         ]
@@ -387,9 +435,11 @@ def _html(payload: dict, *, section_breaks: bool = False) -> str:
                     if len(own_checks) < len(comparison.checks)
                     else ""
                 ),
+                review_text,
                 _check_rows(
                     comparison.model_copy(update={"checks": own_checks}),
                     section_breaks=section_breaks,
+                    shown_reasons=shown_reasons,
                 ),
             ]
         )
@@ -408,6 +458,7 @@ def _html(payload: dict, *, section_breaks: bool = False) -> str:
                     ),
                     applicability,
                     section_breaks=section_breaks,
+                    shown_reasons=shown_reasons,
                 ),
             ]
         )
