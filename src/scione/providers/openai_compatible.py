@@ -23,6 +23,7 @@ from scione.providers.base import (
     StructuredGenerationResponse,
     TokenUsage,
 )
+from scione.providers.json_output import loads_exact
 
 _BASE_URLS = {
     "fireworks": "https://api.fireworks.ai/inference/v1",
@@ -68,19 +69,6 @@ def _usage(value: Any) -> TokenUsage:
         output_tokens=_count(data.get("completion_tokens")),
         total_tokens=_count(data.get("total_tokens")),
     )
-
-
-def _one_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError("Duplicate JSON key.")
-        result[key] = value
-    return result
-
-
-def _reject_constant(_value: str) -> None:
-    raise ValueError("Non-finite JSON number.")
 
 
 class OpenAICompatibleModelProvider(ModelProvider):
@@ -320,7 +308,7 @@ class OpenAICompatibleModelProvider(ModelProvider):
         if not raw:
             raise fail(f"{label} returned an empty structured response.", raw_text=raw, **metadata)
         try:
-            parsed = json.loads(raw, object_pairs_hook=_one_object, parse_constant=_reject_constant)
+            parsed = loads_exact(raw)
         except ValueError:
             raise fail(
                 f"{label} returned invalid or ambiguous JSON.", raw_text=raw, **metadata

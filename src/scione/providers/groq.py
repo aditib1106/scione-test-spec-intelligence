@@ -17,6 +17,7 @@ from scione.providers.base import (
     StructuredGenerationResponse,
     TokenUsage,
 )
+from scione.providers.json_output import loads_exact
 
 
 def _prepare_strict_schema(value: Any) -> Any:
@@ -236,10 +237,14 @@ class GroqModelProvider(ModelProvider):
             )
 
         try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError as exc:
+            parsed = loads_exact(content)
+        except ValueError as exc:
             raise ProviderError(
-                f"Groq returned invalid JSON (line {exc.lineno}, column {exc.colno}).",
+                (
+                    f"Groq returned invalid JSON (line {exc.lineno}, column {exc.colno})."
+                    if isinstance(exc, json.JSONDecodeError)
+                    else "Groq returned invalid or ambiguous JSON."
+                ),
                 raw_text=content,
                 **metadata,
             ) from exc

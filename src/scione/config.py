@@ -49,8 +49,11 @@ class Settings(BaseSettings):
     ) = None
     sail_api_key: SecretStr | None = None
     sail_model: str = "zai-org/GLM-5.3"
-    sail_timeout_seconds: float = Field(default=90.0, gt=0)
-    sail_max_output_tokens: int = Field(default=8192, gt=0)
+    # Whole-test matching can include many independently grounded fields. Allow
+    # provider load variance without discarding a valid long response; every
+    # request still has a finite deadline and the Sail adapter never retries.
+    sail_timeout_seconds: float = Field(default=300.0, gt=0)
+    sail_max_output_tokens: int = Field(default=12288, gt=0)
     sail_temperature: float = Field(default=0.0, ge=0, le=2)
     scione_single_attempt_mode: bool = True
     scione_workspace_dir: Path = Path("local_data")
