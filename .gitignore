@@ -255,3 +255,10 @@ uploads/
 /docs/plans/
 /docs/evaluation/
 /docs/architecture/capability_pipeline.md
+
+# Versioned Railway infrastructure only; local bindings, caches and SDK installs stay private.
+/.railway/*
+!/.railway/railway.ts
+!/.railway/package.json
+!/.railway/package-lock.json
+!/.railway/README.md

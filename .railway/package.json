@@ -1,0 +1,8 @@
+{
+  "name": "scione-railway-infrastructure",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "railway": "3.16.0"
+  }
+}
