@@ -240,6 +240,24 @@ for (const scenario of [
     );
     await page.goto(`${base}/reports?document=source-b`);
     await expect(
+      page.getByRole("table", { name: "Specular gloss requirement details" }),
+    ).toHaveCount(0);
+    await page.getByRole("combobox", { name: "Show", exact: true }).click();
+    await page
+      .getByRole("option", { name: "Fully matched", exact: true })
+      .click();
+    await expect(page.getByText("No tests in this group.")).toBeVisible();
+    await page.getByRole("combobox", { name: "Show", exact: true }).click();
+    await page
+      .getByRole("option", { name: "Needs attention", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Specular gloss", exact: true })
+      .click();
+    await expect(
+      page.getByRole("table", { name: "Specular gloss requirement details" }),
+    ).toBeVisible();
+    await expect(
       page.getByRole("link", { name: scenario.label, exact: true }),
     ).toHaveAttribute("href", scenario.destination);
     if (scenario.label !== "Update lab information")

@@ -99,17 +99,20 @@ function stepLabel(check: ComparisonCheck, siblings: ComparisonCheck[]) {
   return `Step ${claim.sequence}${temperature}${claim.configuration ? ` · ${claim.configuration}` : ""}`;
 }
 
-function dimension(
-  checks: ComparisonCheck[],
-  type: "method" | "condition" | "criterion",
-) {
-  const relevant = checks.filter((check) => {
-    if (type === "method")
-      return check.kind === "method" || check.parameter_id === "method";
-    if (type === "criterion")
-      return /criter|report|measurement/.test(check.kind);
-    return /condition|scope|instruction/.test(check.kind);
-  });
+type Element = "method" | "condition" | "criterion";
+
+function matchesElement(check: ComparisonCheck, type: Element) {
+  if (type === "method")
+    return (
+      check.kind === "method" ||
+      ["method", "test_method"].includes(check.parameter_id ?? "")
+    );
+  if (type === "criterion") return /criter|report|measurement/.test(check.kind);
+  return /condition|scope|instruction/.test(check.kind);
+}
+
+function dimension(checks: ComparisonCheck[], type: Element) {
+  const relevant = checks.filter((check) => matchesElement(check, type));
   if (relevant.some((check) => check.status === "gap"))
     return { label: "Gap", color: "error.main" };
   if (relevant.some((check) => check.status === "unknown"))
@@ -207,6 +210,7 @@ export default function Comparison({ workspace }: PageProps) {
   const library = useResource<{ documents: LibraryDocument[] }>("/api/library");
   const [selectedId, setSelectedId] = useState("");
   const [filter, setFilter] = useState("all");
+  const [element, setElement] = useState<Element | "all">("all");
   const [tab, setTab] = useState("comparison");
   const [page, setPage] = useState(1);
   const [pageImage, setPageImage] = useState("");
@@ -220,6 +224,7 @@ export default function Comparison({ workspace }: PageProps) {
   useEffect(() => {
     setSelectedId("");
     setFilter("all");
+    setElement("all");
     setPage(1);
   }, [documentId]);
 
@@ -228,15 +233,31 @@ export default function Comparison({ workspace }: PageProps) {
   }, [data.data?.comparison_id]);
 
   const report = data.data;
-  const visible = useMemo(
-    () =>
-      (report?.requirements ?? []).filter(
-        (item) => filter === "all" || item.comparison.status === filter,
-      ),
-    [report, filter],
-  );
-  const selected =
-    visible.find((item) => item.requirement_id === selectedId) || visible[0];
+  const visible = useMemo(() => {
+    const priority: Record<ComparisonStatus, number> = {
+      not_matched: 0,
+      partially_matched: 1,
+      needs_information: 2,
+      fully_matched: 3,
+      excluded: 4,
+    };
+    return (report?.requirements ?? [])
+      .filter(
+        (item) =>
+          (filter === "all" ||
+            (filter === "attention"
+              ? !["fully_matched", "excluded"].includes(item.comparison.status)
+              : item.comparison.status === filter)) &&
+          (element === "all" ||
+            item.comparison.checks.some((check) =>
+              matchesElement(check, element),
+            )),
+      )
+      .sort(
+        (a, b) => priority[a.comparison.status] - priority[b.comparison.status],
+      );
+  }, [report, filter, element]);
+  const selected = visible.find((item) => item.requirement_id === selectedId);
   const actions = selected ? nextActions(documentId, selected) : [];
   const reportBase = report
     ? `/api/comparison-snapshots/${encodeURIComponent(report.comparison_id)}`
@@ -496,15 +517,39 @@ export default function Comparison({ workspace }: PageProps) {
                 <>
                   <Paper variant="outlined" sx={{ overflow: "hidden", mb: 3 }}>
                     <Stack
-                      direction="row"
+                      direction={{ xs: "column", sm: "row" }}
                       justifyContent="space-between"
                       alignItems="center"
                       spacing={2}
                       sx={{ p: 2 }}
                     >
                       <Typography variant="subtitle1">
-                        Requested tests
+                        Requested tests · {visible.length} shown
                       </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Items needing attention appear first. Select a test to
+                        inspect evidence.
+                      </Typography>
+                      <FormControl size="small" sx={{ minWidth: 180 }}>
+                        <InputLabel id="comparison-element-label">
+                          Comparison element
+                        </InputLabel>
+                        <Select
+                          labelId="comparison-element-label"
+                          label="Comparison element"
+                          value={element}
+                          onChange={(event) =>
+                            setElement(event.target.value as Element | "all")
+                          }
+                        >
+                          <MenuItem value="all">All elements</MenuItem>
+                          <MenuItem value="method">Method</MenuItem>
+                          <MenuItem value="condition">Conditions</MenuItem>
+                          <MenuItem value="criterion">
+                            Criteria / reporting
+                          </MenuItem>
+                        </Select>
+                      </FormControl>
                       <FormControl size="small" sx={{ minWidth: 170 }}>
                         <InputLabel id="comparison-result-label">
                           Show
@@ -516,6 +561,7 @@ export default function Comparison({ workspace }: PageProps) {
                           onChange={(event) => setFilter(event.target.value)}
                         >
                           <MenuItem value="all">All tests</MenuItem>
+                          <MenuItem value="attention">Needs attention</MenuItem>
                           {Object.entries(results).map(([value, state]) => (
                             <MenuItem key={value} value={value}>
                               {state.label}
@@ -557,6 +603,16 @@ export default function Comparison({ workspace }: PageProps) {
                                     textAlign: "left",
                                     justifyContent: "flex-start",
                                   }}
+                                  aria-expanded={
+                                    selected?.requirement_id ===
+                                    requirement.requirement_id
+                                  }
+                                  aria-controls={
+                                    selected?.requirement_id ===
+                                    requirement.requirement_id
+                                      ? "test-evidence"
+                                      : undefined
+                                  }
                                   onClick={() =>
                                     setSelectedId(requirement.requirement_id)
                                   }
@@ -628,7 +684,11 @@ export default function Comparison({ workspace }: PageProps) {
                   </Paper>
 
                   {selected && (
-                    <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+                    <Paper
+                      id="test-evidence"
+                      variant="outlined"
+                      sx={{ overflow: "hidden" }}
+                    >
                       <Box
                         sx={{
                           p: { xs: 2, md: 2.5 },
@@ -686,94 +746,122 @@ export default function Comparison({ workspace }: PageProps) {
                             </TableRow>
                           </TableHead>
                           <TableBody>
-                            {selected.comparison.checks.map((check, index) => (
-                              <TableRow key={`${check.parameter_id}-${index}`}>
-                                <TableCell sx={{ minWidth: 140 }}>
-                                  <Typography variant="body2" fontWeight={600}>
-                                    {check.label}
-                                  </Typography>
-                                  {check.stage && (
-                                    <Typography
-                                      variant="caption"
-                                      color="text.secondary"
-                                    >
-                                      {stageLabel(check.stage)}
-                                    </Typography>
-                                  )}
-                                  {stepLabel(
-                                    check,
-                                    selected.comparison.checks,
-                                  ) && (
-                                    <Typography
-                                      variant="caption"
-                                      display="block"
-                                      color="text.secondary"
-                                    >
-                                      {stepLabel(
-                                        check,
-                                        selected.comparison.checks,
-                                      )}
-                                    </Typography>
-                                  )}
-                                </TableCell>
-                                <TableCell
-                                  sx={{
-                                    minWidth: 180,
-                                    maxWidth: 300,
-                                    overflowWrap: "anywhere",
-                                  }}
+                            {selected.comparison.checks
+                              .filter(
+                                (check) =>
+                                  element === "all" ||
+                                  matchesElement(check, element),
+                              )
+                              .map((check, index) => (
+                                <TableRow
+                                  key={`${check.parameter_id}-${index}`}
                                 >
-                                  {check.requested}
-                                </TableCell>
-                                <TableCell
-                                  sx={{
-                                    minWidth: 180,
-                                    maxWidth: 300,
-                                    overflowWrap: "anywhere",
-                                  }}
-                                >
-                                  {check.declared || (
+                                  <TableCell sx={{ minWidth: 140 }}>
                                     <Typography
                                       variant="body2"
+                                      fontWeight={600}
+                                    >
+                                      {check.label}
+                                    </Typography>
+                                    {check.stage && (
+                                      <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                      >
+                                        {stageLabel(check.stage)}
+                                      </Typography>
+                                    )}
+                                    {stepLabel(
+                                      check,
+                                      selected.comparison.checks,
+                                    ) && (
+                                      <Typography
+                                        variant="caption"
+                                        display="block"
+                                        color="text.secondary"
+                                      >
+                                        {stepLabel(
+                                          check,
+                                          selected.comparison.checks,
+                                        )}
+                                      </Typography>
+                                    )}
+                                  </TableCell>
+                                  <TableCell
+                                    sx={{
+                                      minWidth: 180,
+                                      maxWidth: 300,
+                                      overflowWrap: "anywhere",
+                                    }}
+                                  >
+                                    {check.requested}
+                                    {check.source_pages.length > 0 && (
+                                      <Typography
+                                        variant="caption"
+                                        display="block"
+                                        sx={{ mt: 1 }}
+                                      >
+                                        <RouterLink
+                                          to={sourceUrl(
+                                            documentId,
+                                            selected.requirement_id,
+                                          )}
+                                        >
+                                          Source PDF · pages{" "}
+                                          {check.source_pages.join(", ")}
+                                        </RouterLink>
+                                      </Typography>
+                                    )}
+                                  </TableCell>
+                                  <TableCell
+                                    sx={{
+                                      minWidth: 180,
+                                      maxWidth: 300,
+                                      overflowWrap: "anywhere",
+                                    }}
+                                  >
+                                    {check.declared || (
+                                      <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                      >
+                                        Not recorded
+                                      </Typography>
+                                    )}
+                                  </TableCell>
+                                  <TableCell
+                                    sx={{ minWidth: 230, maxWidth: 380 }}
+                                  >
+                                    <Typography
+                                      variant="body2"
+                                      fontWeight={600}
+                                      color={
+                                        check.status === "supported"
+                                          ? "success.main"
+                                          : check.status === "gap"
+                                            ? "error.main"
+                                            : check.status === "unknown"
+                                              ? "warning.main"
+                                              : "text.secondary"
+                                      }
+                                    >
+                                      {check.status === "supported"
+                                        ? "Covered"
+                                        : check.status === "gap"
+                                          ? "Capability gap"
+                                          : check.status === "unknown"
+                                            ? "Needs information"
+                                            : "Recorded for reference"}
+                                    </Typography>
+                                    <Typography
+                                      variant="caption"
                                       color="text.secondary"
                                     >
-                                      Not recorded
+                                      {check.reason}
                                     </Typography>
-                                  )}
-                                </TableCell>
-                                <TableCell
-                                  sx={{ minWidth: 230, maxWidth: 380 }}
-                                >
-                                  <Typography
-                                    variant="body2"
-                                    fontWeight={600}
-                                    color={
-                                      check.status === "supported"
-                                        ? "success.main"
-                                        : check.status === "gap"
-                                          ? "error.main"
-                                          : check.status === "unknown"
-                                            ? "warning.main"
-                                            : "text.secondary"
-                                    }
-                                  >
-                                    {check.status === "supported"
-                                      ? "Covered"
-                                      : check.status === "gap"
-                                        ? "Capability gap"
-                                        : check.status === "unknown"
-                                          ? "Needs information"
-                                          : "Recorded for reference"}
-                                  </Typography>
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
-                                    {check.reason}
-                                  </Typography>
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
                           </TableBody>
                         </Table>
                       </TableContainer>
