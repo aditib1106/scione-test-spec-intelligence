@@ -51,11 +51,43 @@ def build_parser() -> argparse.ArgumentParser:
         "--backup-dir", type=Path, help="Recovery directory named .demo-backups."
     )
 
+    db = subparsers.add_parser("db", help="Inspect or explicitly upgrade the database.")
+    db.add_argument(
+        "operation",
+        choices=["status", "upgrade"],
+        help="Stop all writers and back up the database and workspace before upgrade.",
+    )
+
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.command == "db":
+        from scione.config import Settings
+        from scione.database import MigrationError, configured_engine, state, upgrade
+
+        engine = None
+        try:
+            engine = configured_engine(Settings(), readonly=args.operation == "status")
+            if engine is None:
+                print("Database absent; run scione db upgrade to initialize.")
+            elif args.operation == "upgrade":
+                print(f"Database revision: {upgrade(engine)}")
+            else:
+                with engine.connect() as connection:
+                    print(f"Database status: {state(connection)}")
+            return 0
+        except MigrationError as exc:
+            print(f"Database operation refused: {exc}")
+            return 1
+        except Exception:
+            print("Database operation failed. Check connection settings; credentials are hidden.")
+            return 1
+        finally:
+            if engine is not None:
+                engine.dispose()
 
     if args.command == "serve":
         import uvicorn

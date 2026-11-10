@@ -193,21 +193,12 @@ class LibraryStore:
                             cursor.execute("PRAGMA foreign_keys=ON")
                             cursor.close()
 
-                    metadata.create_all(engine)
-                    with engine.begin() as connection:
-                        version = connection.execute(
-                            select(schema_versions.c.version).where(
-                                schema_versions.c.component == "library"
-                            )
-                        ).scalar_one_or_none()
-                        if version is None:
-                            connection.execute(
-                                insert(schema_versions).values(component="library", version=1)
-                            )
-                        elif version != 1:
-                            raise LibraryStoreError(
-                                "This database schema needs a compatible application version."
-                            )
+                    from scione.database import MigrationError, ensure_current
+
+                    try:
+                        ensure_current(engine)
+                    except MigrationError as exc:
+                        raise LibraryStoreError(str(exc)) from None
                     self._engine = engine
                 except (SQLAlchemyError, ValueError) as exc:
                     if engine is not None:

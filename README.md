@@ -173,3 +173,41 @@ authorization, deployed host/origin settings, backups and operational configurat
 `scione serve` binds to loopback and is not a public hosting configuration. Use a client-owned
 managed database and object storage for durable handoff. Credentials stay server-side; the
 browser never receives a database URL. Personal student credits are not a hosting dependency.
+
+### 数据库初始化与迁移
+
+迁移资源随 Python 包安装，命令复用 `Settings`（包括 `.env`、`.env.database`）。
+不要把含凭据的连接 URL 写进命令行或日志。
+
+```sh
+uv run scione db status
+uv run scione db upgrade
+```
+
+`status` 只读检查，SQLite 文件不存在时不会创建文件或目录。`upgrade` 显式创建
+空库或接管结构完全匹配的 v1 库，可重复执行。已有库必须通过表、列、类型、
+主外键、唯一约束和 `schema_versions.library=1` 检查，才会登记 Alembic `0001`。
+运行时仅自动初始化真正的空库，已有未登记库会要求执行升级，未知或超前 revision
+会被拒绝。Alembic revision 是唯一迁移进度，旧版本标记只用于兼容检查。
+构造 store 或导入模块不会连接数据库。结构不匹配时应人工调查，不要盲目 stamp。
+
+**升级前必须停止应用及所有数据库和文件工作区写入进程，不支持在线迁移。**
+先备份数据库与整个 `SCIONE_WORKSPACE_DIR`，保存为同一恢复点。SQLite 在停止
+写入后使用 Python `sqlite3.Connection.backup()` 或 sqlite3 的 `.backup` 命令生成
+一致性备份（不要只复制一个可能带 WAL 的主文件）。MySQL 使用匹配服务器版本的
+`mysqldump --single-transaction` 做逻辑备份，通过受保护的客户端配置传递凭据，
+不要把密码放到命令行。备份期间持续停写，确认命令成功，再备份文件工作区。
+
+先在独立目录和独立数据库恢复备份，核对所有业务表行、主键、关系、并发版本号、
+历史比较 JSON 和 PDF 字节，再在恢复副本上运行 `db status`、`db upgrade` 并重启验证。
+验证完成后才升级原库。失败时保持停写，从同一恢复点恢复数据库和文件工作区，
+并使用匹配的应用版本重启。迁移不提供删除业务表的 downgrade 命令。
+
+SQLite 迁移测试属于离线 Python 测试集。MySQL 8.4 必须另用独立测试库实际验证，
+仅通过 SQLite 测试不表示已完成 MySQL 兼容验收。本次不涉及历史 payload 重写、
+业务表调整、文件搬迁或后续关系型溯源功能。
+
+MySQL 验收测试使用独立空库，通过 `SCIONE_MIGRATION_TEST_URL` 指定连接，运行
+`uv run pytest -q tests/integration/test_mysql_migrations.py`。测试会清理该测试库。
+未设置此变量时离线测试会跳过 MySQL 用例。本次已在临时 MySQL 8.4.13 容器
+验证空库初始化、v1 接管与数据保留、重复升级、重启和异常版本拒绝。
