@@ -130,12 +130,12 @@ spreads remain unresolved rather than being presented as trustworthy acceptance
 limits. These are conservative checks, not a complete scientific language model.
 
 The full 32,000-row synthetic method bank is separate from the active 99-test /
-113-method catalog. `GET /api/catalog/method-bank` provides read-only paginated
+153-method catalog. `GET /api/catalog/method-bank` provides read-only paginated
 lookup with exact identifier/family/domain/material filters and source hashes.
 Matching retrieves bounded candidates, retaining complete editions and parts.
 The bank never populates lab declarations or asserts equivalence between methods.
 
-Complex matching uses `whole_requirement_batches_v6`: preflight every complete-test
+Complex matching uses `whole_requirement_batches_v7`: preflight every complete-test
 batch before any network call, at most eight requests, with no retries. The matching
 input guard defaults to 120,000 characters per request, including schema/prompt.
 Sail and Fireworks use keyed correspondence output and waves of at most two independent
@@ -147,11 +147,20 @@ execution manifest, not a provider response; `child_attempts` retain every actua
 request/raw response/usage. Any child failure stops the plan and rejects the combined
 result. Previous saved success remains available. No source claims are truncated.
 
-Paid Sail/Fireworks matching requests use `matching_keyed_v3`: every source test and
+Paid Sail/Fireworks matching requests use `matching_keyed_v5`: every source test and
 claim ID is a required JSON object key. The lossless adapter restores the application
 lists in original input order. Missing/extra IDs fail validation; they are not filled
 with invented unknown records. The exact keyed provider object and raw text remain
 in each attempt. Other providers retain the array wire contract.
+
+The compact wire omits legacy quotation bridges, requires an explicit aligned
+scope relation, and distinguishes text coverage from numeric comparison. Candidate
+ID enums are shared through schema references. Repeated long quotations may use
+`source_text_table` references; a mandatory round-trip check proves that expansion
+recovers every original input value. No source is summarized or truncated. Source
+submission/allocation quantities and verified shared project delivery clauses can
+remain workflow obligations without pretending to establish equipment capability.
+Core operating conditions and specimen acceptance facts remain comparable.
 
 The native request-specific schema bounds each test's catalog and capability IDs to
 its allowed candidates, with null available for unresolved identity. Linked lab-claim
@@ -169,7 +178,7 @@ thread pool. Every request is preflighted before that pool starts. A failed wave
 both in-flight attempts, starts no later wave and accepts no partial result. Workers
 finish before the request returns; no recurring queue or automatic retry is created.
 The soft output-planning budget scales with the provider ceiling and is capped at
-sixty claims; a larger indivisible test still receives its own guarded request.
+eighty claims; a larger indivisible test still receives its own guarded request.
 Free providers remain sequential. Parallel parent latency is elapsed wall time; child
 artifacts retain individual measured latency and usage.
 
@@ -279,8 +288,8 @@ Saved assessment identity also hashes the complete computed report payload, incl
 source-review policy and warnings. A warning-policy upgrade creates a separate snapshot
 without replacing an earlier PDF/JSON assessment for the same source and lab inputs.
 
-Current policy versions are `atomic_requirements_v0_32`, `pilot_parameters_v6` and
-`semantic_alignment_guards_v0_17`; matching uses prompt `semantic_matching_v0_8`.
+Current policy versions are `atomic_requirements_v0_38`, `pilot_parameters_v7` and
+`semantic_alignment_guards_v0_24`; matching uses prompt `semantic_matching_v0_11`.
 
 ## Review and presentation
 
@@ -291,7 +300,7 @@ An unregistered field or local parser limitation alone is not proof that the sou
 extraction is wrong. Known invalid numeric facts remain guarded after confirmation;
 confirmation does not rewrite the original provider response or certify lab support.
 
-Source review policy `0.13` can show an unissued alternative-method acceptance class
+Source review policy `0.16` can show an unissued alternative-method acceptance class
 as a notice rather than blocking the explicitly specified primary route. This needs
 verified original role proposals, literal owned physical citations, an explicit
 primary class and the source's approval-dependent future-class statement. Numeric,
@@ -345,7 +354,7 @@ ambiguous setups and unresolved source facts cannot use this recovery path. Meta
 actions and comparison basis remain separate audit fields.
 
 When a semantic suggestion names a real lab entry but its scope cannot be accepted,
-the web table may show it as **Possible lab entry**. These values are read only from
+the web table may show it as **Lab information to review**. These values are read only from
 the selected captured capability, are explicitly unconfirmed, and never change the
 verdict. A later lab edit invalidates this presentation with the old matching input.
 This differs from a genuinely absent declaration.

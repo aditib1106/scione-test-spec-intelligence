@@ -14,6 +14,7 @@ file-backed pending authenticated storage migration.
 | requirement_claims            | Atomic parameter/kind/stage/unit columns and complete JSON detail                          |
 | capability_revisions          | Saved lab declaration used in an assessment                                                |
 | comparison_runs               | Immutable business assessment JSON and first-rendered PDF bytes                            |
+| assessment_review_events      | Append-only per-test processing decisions bound to an exact assessment and input fingerprint |
 | lab_workspaces                | Current SQL lab identity/version, scoped by a server-selected workspace ID                 |
 | lab_capability_entries        | Separate current capability/test/method/price declarations                                 |
 | lab_capability_claims         | Queryable parameter/role/stage/configuration/unit plus typed payload                       |
@@ -68,10 +69,10 @@ The old Streamlit interface remains file-backed and must not be used as a SQL la
   Requested model aliases and resolved response versions
   are saved separately so an alias does not trigger a new call on every click.
 - Parameter-policy and input-projection revisions also bind the application matching
-  fingerprint. The current source normalizer is `atomic_requirements_v0_32`, parameter
-  policy `pilot_parameters_v6`, source review `0.13`, and semantic validation
-  `semantic_alignment_guards_v0_17`. Extraction uses `customer_requirements_compact_v0.18`
-  and semantic matching uses `semantic_matching_v0_8`.
+  fingerprint. The current source normalizer is `atomic_requirements_v0_38`, parameter
+  policy `pilot_parameters_v7`, source review `0.16`, and semantic validation
+  `semantic_alignment_guards_v0_24`. Extraction uses `customer_requirements_compact_v0.18`
+  and semantic matching uses `semantic_matching_v0_11`.
 - Report-only scope actions and quantities do not invalidate semantic matching. Editing
   lab, extraction or source/identity review inputs does; old attempts remain downloadable.
 
@@ -92,16 +93,35 @@ Every active requested clause stays represented. Missing information is distinct
 explicit limitation. A measurement/reporting range does not promise the material passes.
 Workflow instructions are retained as instructions, not inferred lab capabilities.
 Alternative methods and independent equipment configurations cannot be merged silently.
-Report policy `decisive_rules_first_v5` retains document-level source-coverage hints
+Report policy `native_atoms_first_v6` retains document-level source-coverage hints
 in `source_coverage_issues` and report notes. The interactive report shows one compact
 warning with exact expandable notes and a link to the current specification. Filtering
 extracted items cannot hide that document warning; it does not rewrite per-claim
 verdicts or establish that an unverified phrase is a semantic omission.
 
-Explicit AI matching proposes existing test/capability/claim correspondences and optional
-wording equivalence for a selected pair of recorded context/category strings. All
+The comparison and source views use `atomic_requirements_v0_38_native_first`.
+Grounded native atoms are the authoritative fact set. Legacy parser proposals,
+duplicates and residual wording stay in source-linked `normalization_actions`;
+genuinely uncovered numbers or material restrictions become source-review issues,
+not additional fabricated lab demands. Raw-only historical records retain their
+legacy parser. Original extraction is immutable. A located numeric or complete
+verbatim text fact can receive a neutral local ID without asserting a scientific
+identity; AI must still align that identity to the lab. Complete statements that
+no customer acceptance limit is specified remain informational.
+
+Selected catalog owner captions are distinct from scientific scope. A context made
+entirely of exact selected catalog labels, a single requested method and registered
+parameter labels may be cleared on detached comparison copies, with audit evidence.
+Scientific remainders, stages, materials, sequence and configurations remain guarded.
+This avoids rejecting a correct field link solely because the source repeated its
+test title; it does not make unspecified lab fields match.
+
+Explicit AI matching proposes existing test/capability/claim correspondences. Paid
+wire v5 requires a scope assessment for aligned claims and a directional value
+assessment for text-to-text pairs. Numeric values remain deterministic comparisons;
+prose coverage is an explicitly recorded, fallible semantic inference. All
 requirements and claims must be covered exactly once; invented or out-of-candidate IDs
-reject the attempt. Wording proposals retain both exact strings and a reason. Known
+reject the attempt. The captured input binds the original values and a reason. Known
 contradictions, missing fields, different unfamiliar codes, numeric changes and
 incompatible stage/sequence/configuration cannot be overridden by a proposal.
 Accepted wording remains a fallible semantic judgement. Numerical comparison uses
@@ -109,7 +129,7 @@ accepted links or unique, compatible registered fields within an already aligned
 test/method declaration. It never uses arbitrary same-name fallback candidates. Missing source facts
 cannot be repaired by a semantic suggestion. Human identity decisions stay authoritative.
 
-A guarded `joint_scope_equivalence` can factor a positive nonnumeric context that
+Historical/array runs retain the guarded `joint_scope_equivalence` contract. It can factor a positive nonnumeric context that
 occurs verbatim once in the counterpart's text value. It binds both supplied joint
 strings and one selected lab claim, and cannot combine declarations, infer a missing
 qualifier or erase scientific differences. Original values/contexts and the proposal
@@ -146,8 +166,8 @@ Opening/refreshing a report and changing its filters never call a model. Develop
 tools retain model settings, original history and eval downloads. Failed runs preserve
 received output and usage where available without replacing a successful result.
 
-Matching plans use `whole_requirement_batches_v6`: preflighted whole-test batches,
-at most eight calls. Sail/Fireworks use `matching_keyed_v3` output and waves of at most
+Matching plans use `whole_requirement_batches_v7`: preflighted whole-test batches,
+at most eight calls. Sail/Fireworks use `matching_keyed_v5` output and waves of at most
 two concurrent calls; in-flight results are saved and later waves stop after a known
 failure. The exact source test/claim keys are required by the native schema. Each row's
 catalog/capability ID choices and lab-claim links are bounded to that row's candidates;

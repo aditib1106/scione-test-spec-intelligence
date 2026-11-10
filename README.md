@@ -11,25 +11,30 @@ requirements, checks source evidence, compares with its declarations and exports
 report. Reading the full content of referenced standards is outside the MVP.
 
 - **My Lab**: manually enter tests, methods, conditions, reportable outputs and optional
-  rates. New workspaces start empty. Explicit example loading offers CSP-EN-301 (four
-  declarations), an updated 134-field demonstration lab, the earlier 76-field
-  detailed profile, or the MS-PNT-410 pilot lab. Examples are explicitly synthetic;
-  they do not establish what a real lab supports.
-  My Lab's loader accepts an empty lab only. The separate Developer Tools example
-  replacement requires explicit acknowledgement and retains the previous SQL revision.
+  rates. Normal startup preserves existing declarations. A deliberate development setup
+  can initialize the team's synthetic lab with `python scripts/initialize_lab.py`;
+  replacement requires `--replace-existing` and preserves previous SQL revisions.
+  There are no sample-loading buttons in the user workflow.
   Detailed parameters support arbitrary names, values/ranges, units and context. Current
   declarations, queryable parameter rows and immutable revisions are saved to SQL.
+  Identical general text declarations recorded on every service appear once under
+  **Shared lab services**. Service summaries prioritize their own limits and outputs;
+  numerical limits and unavailable services are never grouped away.
   Conditions and Criteria / reporting offer common parameter presets and typed input.
   Unfamiliar custom fields remain visible as unresolved; they are not automatically
   certified because their labels resemble a familiar parameter.
-- **Test Catalog**: 99 synthetic test identities and 113 active methods, with curated
+- **Test Catalog**: 99 synthetic test identities and 153 active methods, with curated
   aliases and stable pilot IDs. All 32,000 rows of the data team's synthetic method
   metadata are retained in a separate searchable index. Only bounded, relevant
   candidates enter matching; a catalog entry never creates lab capability or
   establishes equivalence between different methods.
 - **Specifications → Library**: company/search filters, specification metadata, revisions
-  and saved requirements. Select a test to see method/condition/criteria summaries;
+  and saved requirements. Remove a specification version from the normal library with a
+  confirmation; source files and historical reports remain stored. Re-uploading the identical
+  PDF restores it. Select a test to see method/condition/criteria summaries;
   expand detailed requirements for parameter, unit, stage and source-page records.
+  Identical PDF bytes reopen the saved record, retaining the first upload's filename
+  and latest analysis. A notice explains reuse; **Analyze again** creates a new run.
 - **Specifications → PDF & review**: a PDF reading pane beside a selected test's
   method, condition and criterion tables. Individual parameter rows show value,
   unit and stage; compact source icons and page badges locate their evidence.
@@ -39,7 +44,7 @@ report. Reading the full content of referenced standards is outside the MVP.
   Meaningful unparsed text is retained. Sample planning keeps lot counts
   and allocation separate from operating conditions. PDF pages support zoom, fit width
   and fullscreen reading with pagination. Source confirmation does not approve lab support.
-  **Edit** focuses on one selected requirement or parameter and saves a separate
+  **Edit test** is the single review-pane edit entry. The editor focuses on one selected requirement or parameter and saves a separate
   reviewed-facts revision. Other parameters, method roles, stage details and optional
   review notes expand only when needed. Optional bulk review sits in the test-header
   menu rather than the reading pane. Matching and
@@ -63,6 +68,13 @@ report. Reading the full content of referenced standards is outside the MVP.
   PDF/JSON downloads are a separate optional view. **Generate report** in source review
   continues to Reports and starts the configured-model comparison. **Generate/Update
   report** is also available in Reports; current completed comparisons are reused.
+  **Accept assessment** records that the lab reviewed this test's findings. **Edit
+  decision** records a follow-up plan and note, such as customer clarification,
+  outsourcing or declining the test. These append-only reviews belong to the exact
+  saved assessment; changed inputs require a new review. Acceptance does not turn
+  a gap or missing information into a capability match. Source and lab corrections
+  remain separate operations. Review history has its own JSON download; the saved
+  comparison PDF remains an immutable machine-assessment snapshot.
   AI aligns supplied identities/parameters and code checks the linked values. Browsing,
   refreshing and changing filters never start inference. Progress shows elapsed time;
   users can keep viewing the saved report while it runs. Remove/restore tests without
@@ -203,43 +215,57 @@ embedded SQL database requiring no service. This is the development/test default
 Changing the URL does not migrate existing data. A cloud MySQL migration needs data
 migration and runtime validation, in addition to connection configuration.
 
-## CSP-EN-301 walkthrough
+## Workflow with the team's customer documents
 
-1. **My Lab**: manually enter capabilities, or select **CSP-EN-301 · updated
-   demonstration lab** in an empty lab. This 134-field profile adds explicit panel
-   preparation, dimensions, methods and reporting. It deliberately does not offer
-   post-cycle gloss retention. It is illustrative input, not a real lab declaration
-   or an independent accuracy benchmark. The older 76-field detailed profile remains
-   available and deliberately omits separate topcoat details. To test without
-   clearing uploaded specs, **Developer Tools → Synthetic lab example** offers an
-   explicitly acknowledged **Load updated demo lab** replacement. Existing lab
-   revisions and source artifacts remain saved; generate an updated report after changing the lab.
-2. **Specifications → Library**: add a PDF with its company and specification details.
-   The authorized synthetic PDF is bundled at `docs/samples/CSP-EN-301_demo_spec.pdf`.
-3. Open **PDF & review**, select a configured provider/model and analyze after confirming
-   sending permission and API usage. Extraction is the first explicit model-call stage.
-4. Review any flagged source items. Inspect parameter rows and use the source icon/page badge,
-   and confirm, correct or remove a test when appropriate. Unflagged rows need no
-   mandatory confirmation; Ready is not a calibrated confidence or accuracy score.
-   Library retains the saved summaries and expandable details after reload.
-5. Choose **Generate report**. Reports compares the saved requirements with the current
-   lab using the configured model, shows progress and then presents the interactive
-   comparison. A repeated visit or refresh does not repeat inference. Current completed
-   comparisons are reused. The supplied demo lab cannot report post-cycle gloss retention;
-   missing or unverified information remains separate from that explicit limitation.
-6. Update a capability if you can genuinely supply missing information. The old matching
-   attempt remains in history but no longer applies; use **Update report** for changed inputs
-   without re-extracting the PDF. Try removing/restoring a test, then export PDF/JSON.
-   Report-only removal does not invalidate the machine matching or delete the extraction.
+The catalog loads automatically. For the development lab, initialize the packaged
+source-derived declarations once, then maintain them through **My Lab**:
 
-For a walkthrough without provider calls, **Try worked example** imports the same PDF
-and an explicitly human-prepared reference extraction. Relevant views label it as prepared
-example data. It is not an LLM result, accuracy benchmark or simulated live call. This
-button never replaces a saved model extraction. Run analysis to exercise a real provider.
+```bash
+uv run python scripts/initialize_lab.py
+```
 
-The team's manually written example report is a design reference. Some proposed Exact
-statuses assume information absent from the lab sample, so conservative counts can differ.
-No prices are fabricated for this example.
+The frozen development baseline has 70 exact-method services and 1,681 structured
+fields across 26 independent service modules. It includes 22 explicit unavailable
+condition/output declarations. Seven other methods referenced by the local corpus
+are deliberately not offered. The team's original 57 CSV rows remain provenance;
+service limits and reporting policies are independently authored synthetic data,
+not customer acceptance values copied into a lab profile. Unknown pricing remains
+unknown. Normal startup never initializes or overwrites a lab.
+
+`tests/fixtures/corpus_lab_reference_v2.json` contains 70 source-cited, model-authored
+reference assertions across the 22 readable teammate documents, with frozen lab and
+PDF hashes. These are development references, not client-validated accuracy claims.
+Scanned/handwritten documents remain reserved for the separate OCR workflow.
+
+Controlled validation against this frozen lab demonstrated three fully matched
+items and one partial item on the original `CSP-EN-301.pdf`, using Sail for matching.
+The partial item includes an explicitly unavailable post-cycle gloss output.
+This does not establish accuracy across the corpus: broad matching runs still
+contain substantial source-normalization, method-role and missing-information
+issues. The faster Fireworks inventory-guided extraction is an explicit experiment;
+Sail remains the configured baseline. Review source evidence before relying on a
+draft assessment. Model-authored reference assertions are not production accuracy.
+
+1. Upload an original PDF under **Specifications** and assign its company, identifier
+   and revision. Start with `docs/Generated Customer Spec/CSP-EN-301.pdf` or
+   `CSP-EN-302.pdf` if the team's local source folder is available. The shared
+   `docs/samples/CSP-EN-301_demo_spec.pdf` remains an older source document; the system
+   accepts normal file uploads and does not pre-fill an extraction.
+2. Analyze with a configured provider. Review Method, Conditions and Criteria against
+   the PDF; the source icon locates evidence. Correct, remove or add source-backed tests
+   when needed. Original model output remains immutable.
+3. Choose **Generate report** to compare saved requirements with the current lab.
+   Inspect the interactive Method/Condition/Criteria rows and expand detailed parameters.
+   Missing information remains distinct from an explicit limitation. A full match
+   means the lab can perform and assess the request, not that specimens will pass.
+4. Resolve actionable gaps or remove/restore a test from the report scope. PDF and JSON
+   exports are optional. Reloading a saved report does not call a model.
+5. Future revisions can be saved under the same company's specification family. Library
+   retains versions and offers version comparison; removal hides only the selected version.
+
+The source PDFs under the team's generated folder remain local and may need to be
+obtained separately. Packaged catalog/lab metadata does not depend on those local PDFs
+at runtime. No model accuracy claim follows from a successful walkthrough.
 
 ## Storage and comparison
 
@@ -383,7 +409,7 @@ when a source issue remains unresolved.
 **Reports → Report options → Review test matching** shows customer requirements alongside lab declarations,
 comparison reasons and scope checks. Pending items remain visible in draft reports.
 If a real lab entry was suggested but its scope remains uncertain, the comparison shows
-**Possible lab entry** rather than treating it as a confirmed match or an absent record.
+**Lab information to review** rather than treating it as a confirmed match or an absent record.
 Per-test matched/gap/clarification counts show completed checks even when one missing
 lab detail keeps the overall item unresolved. Loading bars show elapsed waiting time,
 not a model confidence or estimated completion percentage. The disabled OCR entry
