@@ -69,6 +69,11 @@ export default function PdfPageViewer({
   const expandedImage = useRef<HTMLImageElement>(null);
   const lastNormalFocus = useRef<number | string | undefined>(undefined);
   const lastExpandedFocus = useRef<number | string | undefined>(undefined);
+  const zoomAnchor = useRef<{
+    fullscreen: boolean;
+    horizontal: number;
+    vertical: number;
+  } | null>(null);
 
   useLayoutEffect(() => {
     const observe = (
@@ -99,6 +104,7 @@ export default function PdfPageViewer({
   }, [expanded, expandedReady, imageUrl, loading]);
 
   const fitView = (fullscreen: boolean, mode: "width" | "page") => {
+    zoomAnchor.current = null;
     setFit(mode);
     setZoom(100);
     const viewport = (fullscreen ? expandedViewport : normalViewport).current;
@@ -114,7 +120,65 @@ export default function PdfPageViewer({
     }
   };
 
+  const changeZoom = (fullscreen: boolean, change: number) => {
+    const next = Math.max(75, Math.min(250, zoom + change));
+    if (next === zoom) return;
+    const viewport = (fullscreen ? expandedViewport : normalViewport).current;
+    const image = (fullscreen ? expandedImage : normalImage).current;
+    if (viewport && image) {
+      const imageBounds = image.getBoundingClientRect();
+      const viewportBounds = viewport.getBoundingClientRect();
+      if (imageBounds.width && imageBounds.height) {
+        zoomAnchor.current = {
+          fullscreen,
+          horizontal:
+            (viewportBounds.left +
+              viewport.clientLeft +
+              viewport.clientWidth / 2 -
+              imageBounds.left) /
+            imageBounds.width,
+          vertical:
+            (viewportBounds.top +
+              viewport.clientTop +
+              viewport.clientHeight / 2 -
+              imageBounds.top) /
+            imageBounds.height,
+        };
+      }
+    }
+    setZoom(next);
+  };
+
   useLayoutEffect(() => {
+    const anchor = zoomAnchor.current;
+    if (!anchor) return;
+    zoomAnchor.current = null;
+    const viewport = (anchor.fullscreen ? expandedViewport : normalViewport)
+      .current;
+    const image = (anchor.fullscreen ? expandedImage : normalImage).current;
+    if (!viewport || !image) return;
+    const imageBounds = image.getBoundingClientRect();
+    const viewportBounds = viewport.getBoundingClientRect();
+    viewport.scrollTo({
+      left:
+        viewport.scrollLeft +
+        imageBounds.left -
+        viewportBounds.left -
+        viewport.clientLeft +
+        anchor.horizontal * imageBounds.width -
+        viewport.clientWidth / 2,
+      top:
+        viewport.scrollTop +
+        imageBounds.top -
+        viewportBounds.top -
+        viewport.clientTop +
+        anchor.vertical * imageBounds.height -
+        viewport.clientHeight / 2,
+    });
+  }, [zoom]);
+
+  useLayoutEffect(() => {
+    zoomAnchor.current = null;
     normalViewport.current?.scrollTo({ top: 0, left: 0 });
     expandedViewport.current?.scrollTo({ top: 0, left: 0 });
   }, [imageUrl]);
@@ -236,7 +300,7 @@ export default function PdfPageViewer({
                   size="small"
                   aria-label="Zoom out"
                   disabled={zoom <= 75}
-                  onClick={() => setZoom((value) => Math.max(75, value - 25))}
+                  onClick={() => changeZoom(fullscreen, -25)}
                 >
                   <ZoomOutRoundedIcon fontSize="small" />
                 </IconButton>
@@ -259,7 +323,7 @@ export default function PdfPageViewer({
                   size="small"
                   aria-label="Zoom in"
                   disabled={zoom >= 250}
-                  onClick={() => setZoom((value) => Math.min(250, value + 25))}
+                  onClick={() => changeZoom(fullscreen, 25)}
                 >
                   <ZoomInRoundedIcon fontSize="small" />
                 </IconButton>
@@ -321,7 +385,7 @@ export default function PdfPageViewer({
                   ? `${(fittedWidth * zoom) / 100}px`
                   : `${zoom}%`,
                 minWidth: 0,
-                mx: zoom <= 100 ? "auto" : 0,
+                mx: "auto",
                 p: { xs: 0.5, sm: 1 },
                 boxSizing: "border-box",
               }}
