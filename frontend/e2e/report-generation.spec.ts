@@ -30,10 +30,20 @@ async function prepareReport(page: Page, request: APIRequestContext) {
     failNext: false,
     hold: false,
     release: () => {},
+    holdComparison: false,
+    completedReads: 0,
+    releaseComparison: () => {},
+    failComparison: false,
   };
   const held = new Promise<void>((resolve) => {
     state.release = () => {
       state.hold = false;
+      resolve();
+    };
+  });
+  const heldComparison = new Promise<void>((resolve) => {
+    state.releaseComparison = () => {
+      state.holdComparison = false;
       resolve();
     };
   });
@@ -55,8 +65,19 @@ async function prepareReport(page: Page, request: APIRequestContext) {
       },
     });
   });
-  await page.route(`**/api/comparisons/${documentId}`, (route) =>
-    route.fulfill({
+  await page.route(`**/api/comparisons/${documentId}`, async (route) => {
+    if (state.completed) {
+      state.completedReads++;
+      if (state.holdComparison) await heldComparison;
+      if (state.failComparison) {
+        await route.fulfill({
+          status: 503,
+          json: { detail: "Saved comparison temporarily unavailable." },
+        });
+        return;
+      }
+    }
+    await route.fulfill({
       json: {
         ...comparison,
         comparison_id: state.completed
@@ -67,8 +88,8 @@ async function prepareReport(page: Page, request: APIRequestContext) {
           ? "ai_semantic_matching"
           : "deterministic_rules",
       },
-    }),
-  );
+    });
+  });
   await page.route(
     `**/api/specifications/${documentId}/matching`,
     async (route) => {
@@ -117,6 +138,91 @@ async function prepareReport(page: Page, request: APIRequestContext) {
   );
   return { documentId, state, comparison };
 }
+
+test("generation stays busy until the completed comparison is visible", async ({
+  page,
+  request,
+}) => {
+  const { documentId, state } = await prepareReport(page, request);
+  state.hold = true;
+  state.holdComparison = true;
+  await page.goto(`/reports?document=${documentId}`);
+  await page
+    .getByRole("button", { name: "Generate report", exact: true })
+    .click();
+  const progress = page.getByRole("dialog", {
+    name: "Generating your report",
+    exact: true,
+  });
+  await expect(progress).toBeVisible();
+  await expect.poll(() => state.posts).toBe(1);
+  state.release();
+  try {
+    await expect(
+      progress.getByRole("status", {
+        name: "Updating your report",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect.poll(() => state.completedReads).toBe(1);
+    // Hide the dialog without losing the pending result handoff.
+    await progress
+      .getByRole("button", { name: "View saved report", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Updating report…", exact: true }),
+    ).toBeVisible();
+    expect(state.posts).toBe(1);
+    // A duplicate completion notification must share the result read.
+    await page.evaluate((documentId) => {
+      window.dispatchEvent(
+        new CustomEvent("scione:inference-completed", {
+          detail: { documentId },
+        }),
+      );
+    }, documentId);
+    await expect(
+      page.getByRole("button", { name: "Updating report…", exact: true }),
+    ).toBeVisible();
+    expect(state.completedReads).toBe(1);
+  } finally {
+    state.releaseComparison();
+  }
+  await expect(
+    page.getByRole("button", { name: "Check for updates", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Updating report…", exact: true }),
+  ).toHaveCount(0);
+  expect(state.posts).toBe(1);
+});
+
+test("a failed result refresh reloads saved matching without another model call", async ({
+  page,
+  request,
+}) => {
+  const { documentId, state } = await prepareReport(page, request);
+  state.failComparison = true;
+  await page.goto(`/reports?document=${documentId}`);
+  await page
+    .getByRole("button", { name: "Generate report", exact: true })
+    .click();
+  const failed = page.getByRole("dialog", {
+    name: "Report needs another look",
+    exact: true,
+  });
+  await expect(failed.getByRole("alert")).toContainText(
+    "The comparison is saved, but its results could not be loaded.",
+  );
+  expect(state.posts).toBe(1);
+  state.failComparison = false;
+  await failed.getByRole("button", { name: "Try again", exact: true }).click();
+  await expect(failed).not.toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Check for updates", exact: true }),
+  ).toBeVisible();
+  expect(state.posts).toBe(1);
+});
 
 test("source review generates a report once and refresh does not repeat inference", async ({
   page,

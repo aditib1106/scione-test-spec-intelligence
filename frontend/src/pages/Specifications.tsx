@@ -122,6 +122,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const [data, setData] = useState<SpecificationData | null>(null);
   const dataRef = useRef(data);
   dataRef.current = data;
+  const sourceReadSequence = useRef(0);
   const [loading, setLoading] = useState(Boolean(documentId));
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<Filter>(
@@ -151,13 +152,16 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const [analysisError, setAnalysisError] = useState("");
   const [analysisInFlight, setAnalyzing] = useState(false);
   const [analysisDocumentId, setAnalysisDocumentId] = useState("");
+  const [sourceSyncDocument, setSourceSyncDocument] = useState("");
   const analyzing =
     (analysisInFlight && analysisDocumentId === documentId) ||
+    (Boolean(sourceSyncDocument) && sourceSyncDocument === documentId) ||
     activeOperations.some(
       (item) => item.document_id === documentId && item.kind === "extraction",
     );
   const [analysisDocumentName, setAnalysisDocumentName] = useState("");
   const analysisSubmitting = useRef(false);
+  const ownedAnalysisDocument = useRef("");
   const analysisMounted = useRef(true);
   const analysisController = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -166,6 +170,20 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       analysisMounted.current = false;
       analysisController.current?.abort();
     };
+  }, []);
+  const acceptSavedData = useCallback((updated: SpecificationData) => {
+    if (
+      !analysisMounted.current ||
+      activeDocumentRef.current !== updated.document_id
+    )
+      return false;
+    // A successful write supersedes any GET that started before it completed.
+    sourceReadSequence.current += 1;
+    dataRef.current = updated;
+    setData(updated);
+    setLoading(false);
+    setSourceSyncDocument("");
+    return true;
   }, []);
   const [provider, setProvider] = useState(
     workspace.providers.find((item) => item.available)?.id ??
@@ -215,6 +233,13 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       signal?: AbortSignal,
       preferredRequirementId?: string | null,
     ) => {
+      const sequence = ++sourceReadSequence.current;
+      setSourceSyncDocument("");
+      const isCurrent = () =>
+        !signal?.aborted &&
+        analysisMounted.current &&
+        sourceReadSequence.current === sequence &&
+        activeDocumentRef.current === id;
       if (!id) {
         setData(null);
         setLoading(false);
@@ -227,7 +252,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
           `/api/specifications/${encodeURIComponent(id)}`,
           { signal },
         );
-        if (!signal?.aborted && activeDocumentRef.current === id) {
+        if (isCurrent()) {
           setData(next);
           setPage(1);
           setAnalysisError("");
@@ -251,11 +276,9 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
           });
         }
       } catch (reason) {
-        if (!signal?.aborted && activeDocumentRef.current === id)
-          setError(errorText(reason));
+        if (isCurrent()) setError(errorText(reason));
       } finally {
-        if (!signal?.aborted && activeDocumentRef.current === id)
-          setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
     },
     [],
@@ -279,15 +302,26 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         documentId
       )
         return;
+      // This page already owns the original POST and applies its returned data.
+      // Reattached operations after navigation/reload still need a fresh GET.
+      if (
+        analysisSubmitting.current &&
+        ownedAnalysisDocument.current === documentId
+      )
+        return;
+      const sequence = ++sourceReadSequence.current;
+      const isCurrent = () =>
+        !controller.signal.aborted &&
+        analysisMounted.current &&
+        activeDocumentRef.current === documentId &&
+        sourceReadSequence.current === sequence;
+      setSourceSyncDocument(documentId);
+      setError("");
       void request<SpecificationData>(`/api/specifications/${documentId}`, {
         signal: controller.signal,
       })
         .then((updated) => {
-          if (
-            controller.signal.aborted ||
-            activeDocumentRef.current !== documentId
-          )
-            return;
+          if (!isCurrent()) return;
           setData(updated);
           setSelectedId((current) =>
             updated.run?.extraction.requirements.some(
@@ -297,8 +331,17 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               : (updated.run?.extraction.requirements[0]?.id ?? ""),
           );
         })
-        .catch(() => {
-          /* The ordinary page reload action remains available. */
+        .catch((reason) => {
+          if (isCurrent())
+            setError(
+              `Saved results could not be refreshed. ${errorText(reason)}`,
+            );
+        })
+        .finally(() => {
+          if (isCurrent()) {
+            setSourceSyncDocument("");
+            setLoading(false);
+          }
         });
     };
     window.addEventListener("scione:inference-completed", completed);
@@ -596,7 +639,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         },
       );
       if (activeDocumentRef.current !== documentId) return;
-      setData(updated);
+      acceptSavedData(updated);
       const next = advance(updated, ids, selectedId);
       if (ids.includes(selectedId)) {
         const nextId = next || selectedId;
@@ -664,6 +707,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       return;
     const documentAtSubmit = documentId;
     analysisSubmitting.current = true;
+    ownedAnalysisDocument.current = documentAtSubmit;
     const analysisStartedAt = performance.now();
     const analysisPages = data.document.page_count;
     const controller = new AbortController();
@@ -712,7 +756,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
           )?.id ??
           updated.run?.extraction.requirements[0]?.id ??
           "";
-        setData(updated);
+        acceptSavedData(updated);
         setSelectedId(nextRequirement);
         lastRequirementParam.current = nextRequirement || null;
         setParams(
@@ -730,6 +774,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         setAnalysisError(
           `${message} Refreshing saved data while keeping the previous result visible.`,
         );
+        const sequence = ++sourceReadSequence.current;
         try {
           const latest = await request<SpecificationData>(
             `/api/specifications/${encodeURIComponent(documentAtSubmit)}`,
@@ -737,13 +782,15 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
           );
           if (
             analysisMounted.current &&
+            sourceReadSequence.current === sequence &&
             activeDocumentRef.current === documentAtSubmit
           )
-            setData(latest);
+            acceptSavedData(latest);
         } catch (refreshReason) {
           if (
             analysisMounted.current &&
             !controller.signal.aborted &&
+            sourceReadSequence.current === sequence &&
             activeDocumentRef.current === documentAtSubmit
           )
             setAnalysisError(
@@ -753,6 +800,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       }
     } finally {
       analysisSubmitting.current = false;
+      ownedAnalysisDocument.current = "";
       if (analysisController.current === controller)
         analysisController.current = null;
       if (analysisMounted.current) {
@@ -939,7 +987,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     const added = updated.run?.extraction.requirements.find(
       (item) => !requirements.some((existing) => existing.id === item.id),
     );
-    setData(updated);
+    acceptSavedData(updated);
     setFilter("all");
     if (added) {
       setSelectedId(added.id);
@@ -1619,8 +1667,16 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                       item.kind === "extraction",
                   )?.started_at
                 }
-                title="Document analysis in progress"
-                detail={`${data?.original_name || analysisDocumentName} · Reading test requirements and validating the extracted details.`}
+                title={
+                  sourceSyncDocument === documentId
+                    ? "Updating extracted requirements"
+                    : "Document analysis in progress"
+                }
+                detail={
+                  sourceSyncDocument === documentId
+                    ? "Analysis has finished. Loading the saved results."
+                    : `${data?.original_name || analysisDocumentName} · Reading test requirements and validating the extracted details.`
+                }
                 estimateKey="analysis"
                 workUnits={data.document.page_count}
               />
@@ -1878,7 +1934,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                                 updated.document_id !== documentId
                               )
                                 return;
-                              setData(updated);
+                              acceptSavedData(updated);
                               onRefresh();
                             }}
                           />

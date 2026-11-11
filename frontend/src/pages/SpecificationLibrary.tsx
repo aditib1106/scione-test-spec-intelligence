@@ -786,7 +786,12 @@ export default function SpecificationLibrary({
                 </Button>
                 <Button
                   component={RouterLink}
-                  to={reviewUrl(current.document_id)}
+                  to={reviewUrl(
+                    current.document_id,
+                    detailTab === "tests"
+                      ? selectedTest?.requirement_id
+                      : selectedTestId || undefined,
+                  )}
                   variant="outlined"
                   endIcon={<ArrowForwardRoundedIcon />}
                 >
@@ -946,39 +951,21 @@ export default function SpecificationLibrary({
                   </List>
                   {selectedTest && (
                     <Box sx={{ p: { xs: 2, md: 3 }, minWidth: 0 }}>
-                      <Stack
-                        direction={{ xs: "column", sm: "row" }}
-                        justifyContent="space-between"
-                        spacing={1.5}
-                        sx={{ mb: 2.5 }}
-                      >
-                        <Box sx={{ minWidth: 0 }}>
-                          <Typography
-                            variant="h6"
-                            sx={{ overflowWrap: "anywhere" }}
-                          >
-                            {selectedTest.test_name}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{ mt: 0.5 }}
-                          >
-                            Saved customer requirements
-                          </Typography>
-                        </Box>
-                        <Button
-                          component={RouterLink}
-                          to={reviewUrl(
-                            current.document_id,
-                            selectedTest.requirement_id,
-                          )}
-                          startIcon={<OpenInNewRoundedIcon />}
-                          sx={{ alignSelf: "flex-start", flexShrink: 0 }}
+                      <Box sx={{ mb: 2.5, minWidth: 0 }}>
+                        <Typography
+                          variant="h6"
+                          sx={{ overflowWrap: "anywhere" }}
                         >
-                          View source PDF
-                        </Button>
-                      </Stack>
+                          {selectedTest.test_name}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mt: 0.5 }}
+                        >
+                          Saved customer requirements
+                        </Typography>
+                      </Box>
                       <Stack
                         spacing={2.5}
                         divider={

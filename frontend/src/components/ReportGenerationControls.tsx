@@ -70,7 +70,7 @@ export default function ReportGenerationControls({
   providers: ProviderOption[];
   requirementCount?: number;
   generationIntentId?: string | null;
-  onComplete: () => void;
+  onComplete: () => void | Promise<boolean | void>;
 }) {
   const { canDevelop } = useAuth();
   const configured = providers.find((provider) => provider.available);
@@ -78,7 +78,9 @@ export default function ReportGenerationControls({
   const operation = active.find((item) => item.document_id === documentId);
   const [localBusy, setBusy] = useState(false);
   const busy = localBusy || operation?.kind === "matching";
-  const [phase, setPhase] = useState<"preparing" | "comparing">("preparing");
+  const [phase, setPhase] = useState<"preparing" | "comparing" | "updating">(
+    "preparing",
+  );
   const [progressOpen, setProgressOpen] = useState(false);
   const [developerOpen, setDeveloperOpen] = useState(false);
   const [error, setError] = useState("");
@@ -113,6 +115,13 @@ export default function ReportGenerationControls({
       !controller.signal.aborted &&
       activeDocument.current === submittedDocument;
     const path = `/api/specifications/${encodeURIComponent(documentId)}/matching`;
+    const updateVisibleReport = async () => {
+      setPhase("updating");
+      if ((await onComplete()) === false && isCurrent())
+        throw new Error(
+          "The comparison is saved, but its results could not be loaded. Try again to reload the saved report.",
+        );
+    };
     try {
       const input = await request<MatchingInputs>(path, {
         signal: controller.signal,
@@ -121,9 +130,10 @@ export default function ReportGenerationControls({
       // A current completed result is already a valid report input. Merely
       // revisiting or refreshing it must not start another paid model operation.
       if (input.current_run_id) {
+        await updateVisibleReport();
+        if (!isCurrent()) return;
         setProgressOpen(false);
         setNotice("Your report is up to date.");
-        onComplete();
         return;
       }
       if (!configured)
@@ -156,11 +166,12 @@ export default function ReportGenerationControls({
           (performance.now() - inferenceStarted) / 1000,
           requirementCount,
         );
+      await updateVisibleReport();
+      if (!isCurrent()) return;
       setProgressOpen(false);
       setNotice(
         result.cached ? "Your report is up to date." : "Report generated.",
       );
-      onComplete();
     } catch (reason) {
       if (isCurrent()) setError(generationError(reason));
     } finally {
@@ -211,7 +222,9 @@ export default function ReportGenerationControls({
             sx={{ whiteSpace: "nowrap", minHeight: 34 }}
           >
             {busy
-              ? "Generating…"
+              ? phase === "updating"
+                ? "Updating report…"
+                : "Generating…"
               : aiApplied
                 ? "Check for updates"
                 : "Generate report"}
@@ -250,12 +263,16 @@ export default function ReportGenerationControls({
               title={
                 phase === "preparing"
                   ? "Preparing your comparison"
-                  : "Comparing your requirements"
+                  : phase === "updating"
+                    ? "Updating your report"
+                    : "Comparing your requirements"
               }
               detail={
                 phase === "preparing"
                   ? "Reading the latest saved specification and lab information."
-                  : "Comparing test methods, conditions and reporting. Longer specifications may take a few minutes."
+                  : phase === "updating"
+                    ? "The comparison is complete. Loading the saved results."
+                    : "Comparing test methods, conditions and reporting. Longer specifications may take a few minutes."
               }
             />
           ) : (

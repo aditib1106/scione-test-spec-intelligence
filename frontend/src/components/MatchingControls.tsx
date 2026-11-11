@@ -64,7 +64,7 @@ export default function MatchingControls({
   comparisonId: string;
   aiApplied: boolean;
   providers: ProviderOption[];
-  onComplete: () => void;
+  onComplete: () => void | Promise<boolean | void>;
   compact?: boolean;
 }) {
   const path = `/api/specifications/${encodeURIComponent(documentId)}/matching`;
@@ -173,7 +173,7 @@ export default function MatchingControls({
           ? "Reused the saved AI matching for these inputs."
           : "AI matching saved. The report is being refreshed.",
       );
-      onComplete();
+      await onComplete();
     } catch (reason) {
       if (
         !mounted.current ||

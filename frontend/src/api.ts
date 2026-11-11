@@ -216,8 +216,26 @@ export function useResource<T>(path: string | null) {
   const [loading, setLoading] = useState(Boolean(path));
   const [revision, setRevision] = useState(0);
   const previousPath = useRef(path);
+  const pendingRefresh = useRef<{
+    promise: Promise<boolean>;
+    resolve: (loaded: boolean) => void;
+  } | null>(null);
   const refresh = useCallback(() => {
+    // Completion events and the initiating control can ask for the same read.
+    // Share its completion instead of aborting/restarting it for each caller.
+    if (pendingRefresh.current) return pendingRefresh.current.promise;
+    let resolve!: (loaded: boolean) => void;
+    const promise = new Promise<boolean>((done) => {
+      resolve = done;
+    });
+    pendingRefresh.current = { promise, resolve };
     setRevision((value) => value + 1);
+    return promise;
+  }, []);
+  const finishRefresh = useCallback((loaded: boolean) => {
+    const pending = pendingRefresh.current;
+    pendingRefresh.current = null;
+    pending?.resolve(loaded);
   }, []);
   useEffect(() => {
     const controller = new AbortController();
@@ -232,20 +250,28 @@ export function useResource<T>(path: string | null) {
         .then((value) => {
           if (controller.signal.aborted || epoch !== sessionEpoch) return;
           if (generation !== resourceRevision) {
-            refresh();
+            // A write invalidated this read. Keep waiters attached until its
+            // replacement has loaded the current saved result.
+            setRevision((value) => value + 1);
             return;
           }
           rememberResource(path, value);
           setData(value);
+          finishRefresh(true);
         })
         .catch((reason) => {
-          if (!controller.signal.aborted) setError(reason.message);
+          if (!controller.signal.aborted) {
+            setError(reason.message);
+            finishRefresh(false);
+          }
         })
         .finally(() => {
           if (!controller.signal.aborted) setLoading(false);
         });
+    else finishRefresh(false);
     return () => controller.abort();
-  }, [path, revision, refresh]);
+  }, [path, revision, finishRefresh]);
+  useEffect(() => () => finishRefresh(false), [path, finishRefresh]);
   useEffect(() => {
     window.addEventListener("scione:inference-completed", refresh);
     return () =>
