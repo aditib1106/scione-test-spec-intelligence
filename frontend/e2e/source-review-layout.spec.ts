@@ -119,10 +119,16 @@ test("planning count metadata stays outside operating conditions without rewriti
   ).toHaveCount(0);
   await page
     .getByRole("button", {
-      name: "Sample plan & other instructions",
+      name: "View extraction evidence",
       exact: true,
     })
     .click();
+  await page
+    .getByRole("tab", { name: "Sample & instructions", exact: true })
+    .click();
+  await expect(
+    page.getByText("Submitted lot count", { exact: true }),
+  ).toBeVisible();
   const dialog = await editRequirement(
     page,
     "Sample plan",
@@ -186,11 +192,40 @@ test("review keeps a tall PDF, separates parameters from prose, and opens one fo
     table.getByText(parameter.label, { exact: true }).first(),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: /^p\. \d/ })).toHaveCount(0);
-  const original = page.getByRole("button", {
-    name: "Original specification wording",
+  const evidence = page.getByRole("button", {
+    name: "View extraction evidence",
     exact: true,
   });
-  await expect(original).toHaveAttribute("aria-expanded", "false");
+  await expect(evidence).toHaveAttribute("aria-expanded", "false");
+  expect((await evidence.boundingBox())!.y).toBeLessThan(
+    (await page.getByRole("table", { name: "Test details" }).boundingBox())!.y,
+  );
+  await evidence.click();
+  await expect(evidence).toHaveAttribute("aria-expanded", "true");
+  await expect(
+    page.getByText(selected.evidence[0].quote, { exact: true }).first(),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("extraction-evidence.png"),
+    animations: "disabled",
+  });
+  await page
+    .getByRole("button", {
+      name: `Locate extraction evidence on page ${selected.evidence[0].page}`,
+      exact: true,
+    })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("img", { name: /PDF page/ }).first(),
+  ).toBeVisible();
+  await evidence.click();
+  await expect(
+    page.getByRole("button", {
+      name: "Original specification wording",
+      exact: true,
+    }),
+  ).toHaveCount(0);
   const locator = table
     .getByRole("button", {
       name: `View condition source on page ${parameter.source_pages[0]} for ${parameter.label}`,

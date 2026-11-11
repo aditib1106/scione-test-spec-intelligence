@@ -37,7 +37,7 @@ import DocumentScannerOutlinedIcon from "@mui/icons-material/DocumentScannerOutl
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
-import SourcePageReference from "../components/SourcePageReference";
+import ExtractionEvidence from "../components/ExtractionEvidence";
 import { ApiError, apiFetch, request, useResource } from "../api";
 import { useInferenceActivity } from "../components/InferenceActivity";
 import { useAuth } from "../auth";
@@ -51,11 +51,6 @@ import InferenceProgress, {
 } from "../components/InferenceProgress";
 import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
 import SourceCoverageNotice from "../components/SourceCoverageNotice";
-import {
-  claimContext,
-  claimValue,
-  isSamplePlanClaim,
-} from "../components/sourceReviewClaims";
 import type { PageProps, Requirement, SpecificationData } from "../types";
 
 const blue = "#2459cc";
@@ -959,13 +954,6 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const sourceNotices = selected
     ? (data?.assessments[selected.id]?.notices ?? [])
     : [];
-  const planningClaims = selected
-    ? (
-        data?.normalized_requirements?.[selected.id]?.claims ??
-        selected.atomic_claims ??
-        []
-      ).filter(isSamplePlanClaim)
-    : [];
   const selectedStatusChip =
     selected && states[state] ? (
       <Chip
@@ -980,6 +968,15 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     ) : null;
   const detail = selected ? (
     <Stack spacing={1.25}>
+      <ExtractionEvidence
+        key={`${documentId}-${selected.id}`}
+        requirement={selected}
+        claims={data?.normalized_requirements?.[selected.id]?.claims}
+        notices={sourceNotices}
+        note={note}
+        onNote={setNote}
+        onSource={locateSource}
+      />
       {state === "needs_attention" && (
         <Box
           sx={{
@@ -1036,178 +1033,6 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         sourceClaimId={sourceClaimId}
         onSource={locateSource}
       />
-      {sourceNotices.length > 0 && (
-        <Accordion
-          disableGutters
-          elevation={0}
-          sx={{
-            border: "1px solid #dae4f3",
-            borderRadius: "8px !important",
-            bgcolor: "#f7faff",
-            "&:before": { display: "none" },
-          }}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="body2" fontWeight={600}>
-              Alternative method notes
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack gap={1}>
-              {sourceNotices.map((notice, index) => (
-                <Typography
-                  key={index}
-                  variant="body2"
-                  sx={{ lineHeight: 1.65 }}
-                >
-                  {notice.replace(/\breq_[A-Za-z0-9_-]+\b[: ]*/g, "")}
-                </Typography>
-              ))}
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
-      )}
-      {(selected.applicability.length > 0 ||
-        selected.special_instructions.length > 0 ||
-        planningClaims.length > 0) && (
-        <Accordion
-          disableGutters
-          elevation={0}
-          sx={{
-            border: "1px solid #e2e8f0",
-            borderRadius: "10px !important",
-            "&:before": { display: "none" },
-          }}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="body2" fontWeight={600}>
-              Sample plan & other instructions
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack gap={1.5}>
-              {planningClaims.map((claim) => (
-                <Box
-                  key={claim.id}
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "minmax(110px, 0.8fr) minmax(0, 1.2fr)",
-                    gap: 1.5,
-                    pb: 1.25,
-                    borderBottom: "1px solid #e5ebf3",
-                  }}
-                >
-                  <Typography variant="body2" fontWeight={600}>
-                    {claim.label}
-                  </Typography>
-                  <Box>
-                    <Typography
-                      variant="body2"
-                      sx={{ overflowWrap: "anywhere" }}
-                    >
-                      {claimValue(claim)}
-                    </Typography>
-                    {claimContext(claim) && (
-                      <Typography variant="caption" color="text.secondary">
-                        {claimContext(claim)}
-                      </Typography>
-                    )}
-                    {claim.source_pages.map((sourcePage) => (
-                      <SourcePageReference
-                        key={sourcePage}
-                        page={sourcePage}
-                        label={`View sample plan source on page ${sourcePage} for ${claim.label}`}
-                        onClick={() => locateSource(null, sourcePage, claim.id)}
-                      />
-                    ))}
-                  </Box>
-                </Box>
-              ))}
-              {[...selected.applicability, ...selected.special_instructions]
-                .length > 0 && (
-                <Accordion
-                  disableGutters
-                  elevation={0}
-                  sx={{ "&:before": { display: "none" } }}
-                >
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="caption" fontWeight={600}>
-                      Original instruction wording
-                    </Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Stack gap={1}>
-                      {[
-                        ...selected.applicability,
-                        ...selected.special_instructions,
-                      ].map((text, index) => (
-                        <Typography
-                          key={index}
-                          variant="body2"
-                          sx={{ lineHeight: 1.65 }}
-                        >
-                          {text}
-                        </Typography>
-                      ))}
-                    </Stack>
-                  </AccordionDetails>
-                </Accordion>
-              )}
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
-      )}
-      <Accordion
-        disableGutters
-        elevation={0}
-        sx={{
-          borderTop: "1px solid #e2e8f0",
-          borderRadius: "0 !important",
-          "&:before": { display: "none" },
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="body2" fontWeight={600}>
-            Source evidence & notes
-          </Typography>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Stack spacing={1.25}>
-            {selected.evidence.map((evidence, index) => (
-              <Box
-                key={index}
-                sx={{ pb: 1.25, borderBottom: "1px solid #e5ebf2" }}
-              >
-                <Button
-                  size="small"
-                  onClick={() => {
-                    locateSource(null, evidence.page);
-                  }}
-                >
-                  Page {evidence.page}
-                </Button>
-                <Typography
-                  variant="body2"
-                  sx={{ whiteSpace: "pre-wrap", lineHeight: 1.65 }}
-                >
-                  {evidence.quote}
-                </Typography>
-              </Box>
-            ))}
-            <TextField
-              multiline
-              minRows={2}
-              maxRows={5}
-              fullWidth
-              label="Review note (optional)"
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              inputProps={{ maxLength: 4000 }}
-            />
-          </Stack>
-        </AccordionDetails>
-      </Accordion>
     </Stack>
   ) : (
     <Box sx={{ py: 5, textAlign: "center" }}>

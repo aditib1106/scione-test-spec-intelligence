@@ -429,50 +429,18 @@ export default function ExtractionReviewTable({
             </AccordionDetails>
           </Accordion>
         )}
-        {rawValues.length > 0 && (
-          <Accordion
-            disableGutters
-            elevation={0}
-            defaultExpanded={!concrete.length && !other.length}
-            sx={{
-              mt: 0.5,
-              borderTop: "1px solid #e3e9f1",
-              borderRadius: "0 !important",
-              "&:before": { display: "none" },
-            }}
-          >
-            <AccordionSummary
-              expandIcon={<ExpandMoreRoundedIcon />}
-              sx={{ minHeight: 40, px: 1 }}
+        {rawValues.length > 0 && !concrete.length && !other.length && (
+          <Box sx={{ p: 1.25 }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mb: 1 }}
             >
-              <Typography variant="caption" fontWeight={600}>
-                Original specification wording
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails sx={{ px: 1 }}>
-              {!active.length && (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: "block", mb: 1 }}
-                >
-                  Detailed parameters are not available for this saved
-                  extraction.
-                </Typography>
-              )}
-              {displayName &&
-                displayName !== requirement.original_test_name && (
-                  <Typography variant="body2" sx={{ mb: 1.25 }}>
-                    <Box component="span" fontWeight={650}>
-                      Original test label:{" "}
-                    </Box>
-                    {requirement.original_test_name}
-                  </Typography>
-                )}
-              {originalWording(rawValues)}
-              {sourceLinks(group)}
-            </AccordionDetails>
-          </Accordion>
+              Requirement as written in the specification
+            </Typography>
+            {originalWording(rawValues)}
+            {sourceLinks(group)}
+          </Box>
         )}
       </Box>
     </Stack>

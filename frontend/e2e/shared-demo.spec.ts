@@ -84,7 +84,7 @@ test("shared PDF walkthrough keeps source review, declarations and gap results s
   await expect(
     page.getByRole("heading", { name: "Cross-cut adhesion", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Source evidence & notes" }).click();
+  await page.getByRole("button", { name: "View extraction evidence" }).click();
   const pendingNote =
     "Check all bake conditions and substrate scope against the shared PDF.";
   await page

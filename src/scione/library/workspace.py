@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from scione.library.assessment_reviews import SQLAssessmentReviews
 from scione.library.candidate_display import candidate_lab_entries
+from scione.library.comparison_explanations import present_comparison_explanations
 from scione.library.store import LibraryStore, digest
 from scione.matching.batching import MATCHING_BATCH_POLICY_VERSION
 from scione.matching.models import MATCHING_PROMPT_VERSION, MATCHING_VALIDATION_VERSION
@@ -238,10 +239,10 @@ class LibraryWorkspace:
             cached = self._comparison_views.get(signature)
             if cached is not None:
                 self._comparison_views.move_to_end(signature)
-                report, saved = deepcopy(cached)
+                report, saved, explanations = deepcopy(cached)
         if cached is not None:
             self._assert_comparison_inputs_current(report, document, matching_revision)
-            return self._reviewed_comparison(saved)
+            return self._reviewed_comparison(saved, explanations=explanations)
         report = self.workspace.draft_from_inputs(inputs)
         run = report.source_run
         # Machine extraction rows are immutable. Reviewed facts have their own
@@ -481,14 +482,15 @@ class LibraryWorkspace:
         # the earlier snapshot with the same input-based identifier.
         identity = digest(payload)
         saved = self.store.save_comparison(identity, payload)
+        explanations = present_comparison_explanations(saved, matching_run)
         with lock:
             self._remember(
-                self._comparison_views, signature, deepcopy((report, saved)),
+                self._comparison_views, signature, deepcopy((report, saved, explanations)),
                 limit=_COMPARISON_CACHE_LIMIT,
             )
-        return self._reviewed_comparison(saved)
+        return self._reviewed_comparison(saved, explanations=explanations)
 
-    def _reviewed_comparison(self, saved: dict) -> dict:
+    def _reviewed_comparison(self, saved: dict, *, explanations: dict | None = None) -> dict:
         # Pagination is presentation metadata; the persisted comparison remains immutable.
         reviews = SQLAssessmentReviews(
             self.store, self.workspace.labs.workspace_id
@@ -501,7 +503,8 @@ class LibraryWorkspace:
             {**saved, "machine_comparison_id": saved["comparison_id"],
              "assessment_reviews": reviews, "export_format_version": EXPORT_PRESENTATION_VERSION},
         )
-        return {**saved, **({"assessment_reviews": reviews} if reviews else {}),
+        return {**(explanations if explanations is not None else saved),
+                **({"assessment_reviews": reviews} if reviews else {}),
                 "export_snapshot_id": export["comparison_id"]}
 
     def review_assessment(self, document_id: str, body) -> dict:

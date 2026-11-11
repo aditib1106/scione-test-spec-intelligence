@@ -53,9 +53,16 @@ def test_repeated_report_and_review_save_do_not_rederive_or_recompile(cached_rep
     workspace, source, _run, counts = cached_report
     first = workspace.library.comparison(source.document_id)
     expected = deepcopy(first["requirements"])
+    expected_sources = deepcopy(first["explanation_sources"])
+    frozen = workspace.library.store.comparison(first["comparison_id"])
+    assert "explanation_sources" not in frozen
+    assert frozen["requirements"] == expected
+    assert expected_sources
+    first["explanation_sources"].clear()
     first["requirements"].clear()  # A caller cannot mutate the cached derivation.
     second = workspace.library.comparison(source.document_id)
     assert second["requirements"] == expected
+    assert second["explanation_sources"] == expected_sources
     reviewed = workspace.library.review_assessment(source.document_id, review_body(second))
     assert reviewed["requirements"] == expected
     assert reviewed["comparison_id"] == second["comparison_id"]

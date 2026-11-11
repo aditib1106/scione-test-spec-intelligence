@@ -1142,6 +1142,11 @@ export default function Comparison({ workspace }: PageProps) {
                             {selected.comparison.status !== "excluded" ? (
                               <ReportDimensions
                                 requirement={selected}
+                                reasonSources={
+                                  report.explanation_sources?.[
+                                    selected.requirement_id
+                                  ]
+                                }
                                 expanded={expanded[selectedKey] ?? {}}
                                 onToggle={(group, open) =>
                                   setExpanded((current) => ({

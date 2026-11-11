@@ -1,6 +1,7 @@
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import {
   Box,
+  Divider,
   ButtonBase,
   Chip,
   IconButton,
@@ -24,7 +25,9 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import type {
   ComparisonCheck,
   ComparisonRequirement,
+  ReasonSource,
 } from "../comparisonTypes";
+import type { PopoverActions } from "@mui/material";
 
 export type ReportDimension = "method" | "condition" | "criterion";
 type ResultState = "match" | "partial" | "gap" | "unknown" | "note" | "empty";
@@ -78,12 +81,82 @@ function checkState(check: ComparisonCheck): ResultState {
 }
 
 function explanationText(reason: string) {
+  const validationMessages: Record<string, string> = {
+    "Semantic scope cannot equate explicit distinct phases.":
+      "The customer requirement and this lab entry apply to different test stages.",
+    "Semantic scope cannot merge distinct configurations.":
+      "The customer requirement and this lab entry use different test setups.",
+    "Semantic scope cannot change an explicit step sequence.":
+      "The customer requirement and this lab entry refer to different test steps.",
+    "Semantic scope cannot change medium, layer or location.":
+      "The customer requirement and this lab entry refer to different materials, layers or measurement locations.",
+    "Semantic scope cannot supply a missing setup identifier.":
+      "The lab entry does not identify the setup required by the customer.",
+    "Linked declarations use different parameter policies.":
+      "The selected lab entries describe different measurements and cannot be combined for this requirement.",
+    "The source fact has not been normalized reliably; semantic correspondence does not repair or replace source facts.":
+      "Clarify the extracted requirement before comparing it with the lab's capability.",
+  };
+  if (validationMessages[reason]) return validationMessages[reason];
   if (
     reason ===
     "The stage, subject, source context, sequence or configuration is not equivalent."
   )
     return "Check whether this lab record applies to the requested conditions and test stage.";
   return reason.split(" Wording correspondence uses")[0];
+}
+
+function reasonAuthor(
+  check: ComparisonCheck,
+  source?: ReasonSource,
+): "AI" | "System" | "AI-assisted" | null {
+  if (source === "system") return "System";
+  if (source === "ai") return "AI";
+  if (source === "ai_assisted") return "AI-assisted";
+  if (
+    (check.comparison_metadata ?? []).some(
+      (entry) =>
+        entry.semantic_inference &&
+        entry.reason?.trim() === check.reason.trim(),
+    )
+  )
+    return "AI";
+  if (
+    [
+      "deterministic_exact_fields",
+      "deterministic_literal_text",
+      "source_optional_route_policy",
+    ].includes(check.comparison_basis ?? "") ||
+    check.comparison_metadata?.some((entry) => entry.numeric_evaluation) ||
+    new Set([
+      "The requested setting or range is covered by this lab declaration in the same context.",
+      "The request exceeds this lab declaration's stated range in the same context.",
+      "The lab has not declared a complete selectable or reportable range.",
+      "The lab has no declaration for this parameter in the requested stage.",
+      "The requested test/method is present in the selected lab declaration.",
+      "The requested test/method is not listed by this lab.",
+      "The requested test/method still needs an identity decision.",
+    ]).has(explanationText(check.reason))
+  )
+    return "System";
+  return null;
+}
+
+function AuthorBadge({ label }: { label: "AI" | "System" | "AI-assisted" }) {
+  return (
+    <Chip
+      size="small"
+      label={label}
+      sx={{
+        height: 21,
+        fontSize: 10.5,
+        fontWeight: 650,
+        bgcolor: label === "System" ? "#eef1f5" : "#eaf0fc",
+        color: label === "System" ? "#556477" : "#315b96",
+        "& .MuiChip-label": { px: 0.8 },
+      }}
+    />
+  );
 }
 
 function ResultBadge({ state }: { state: ResultState }) {
@@ -166,10 +239,12 @@ function contextLabel(check: ComparisonCheck, siblings: ComparisonCheck[]) {
 
 export default function ReportDimensions({
   requirement,
+  reasonSources,
   expanded,
   onToggle,
 }: {
   requirement: ComparisonRequirement;
+  reasonSources?: Record<string, ReasonSource>;
   expanded: Partial<Record<ReportDimension, boolean>>;
   onToggle: (group: ReportDimension, open: boolean) => void;
 }) {
@@ -177,6 +252,7 @@ export default function ReportDimensions({
     anchor: HTMLElement;
     checks: ComparisonCheck[];
   } | null>(null);
+  const explanationActions = useRef<PopoverActions>(null);
   const methodChecks = requirement.comparison.checks.filter(
     (check) => belongs(check) === "method",
   );
@@ -206,11 +282,16 @@ export default function ReportDimensions({
       <IconButton
         size="small"
         aria-label={`Reason for ${checks.length === 1 ? checks[0].label : "method comparison"}`}
-        title="View explanation"
+        title="Why this result?"
         onClick={(event) =>
           setExplanation({ anchor: event.currentTarget, checks })
         }
-        sx={{ color: "#7a8898", p: 0.5, flexShrink: 0 }}
+        sx={{
+          color: "#456b93",
+          p: 0.6,
+          flexShrink: 0,
+          "&:hover": { bgcolor: "#edf3fb", color: "primary.main" },
+        }}
       >
         <InfoOutlinedIcon sx={{ fontSize: 18 }} />
       </IconButton>
@@ -522,6 +603,7 @@ export default function ReportDimensions({
         </Table>
       </TableContainer>
       <Popover
+        action={explanationActions}
         open={Boolean(explanation)}
         anchorEl={explanation?.anchor}
         onClose={closeExplanation}
@@ -533,31 +615,237 @@ export default function ReportDimensions({
           paper: {
             role: "dialog",
             "aria-label": `Reason for ${explanation?.checks.length === 1 ? explanation.checks[0].label : "method comparison"}`,
-            sx: { maxWidth: 360, p: 2 },
+            sx: {
+              width: 480,
+              maxWidth: "calc(100vw - 32px)",
+              maxHeight: "min(680px, calc(100dvh - 48px))",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              borderRadius: 2,
+              border: "1px solid #dfe7ef",
+            },
           },
         }}
       >
-        <Stack spacing={1.5}>
-          {explanation?.checks.map((check, index) => (
-            <Box key={index}>
-              <Typography fontSize={14} fontWeight={650} sx={{ mb: 0.5 }}>
-                {check.label}
-              </Typography>
-              <Typography fontSize={14} lineHeight={1.6}>
-                {explanationText(check.reason)}
-              </Typography>
-              {check.source_pages.length > 0 && (
-                <Typography
-                  fontSize={12}
-                  color="text.secondary"
-                  sx={{ mt: 0.75 }}
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ px: 2.5, py: 1.5, bgcolor: "#f6f8fb", flexShrink: 0 }}
+        >
+          <Typography fontSize={15} fontWeight={650}>
+            Why this result?
+          </Typography>
+          <IconButton
+            size="small"
+            aria-label="Close explanation"
+            onClick={closeExplanation}
+          >
+            <CloseRoundedIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+        <Stack
+          role="region"
+          aria-label="Result explanation details"
+          tabIndex={0}
+          divider={<Divider />}
+          sx={{
+            minHeight: 0,
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+          }}
+        >
+          {explanation?.checks.map((check, index) => {
+            const author = reasonAuthor(
+              check,
+              check.id ? reasonSources?.[check.id] : undefined,
+            );
+            const aiAssisted = [
+              "semantic_alignment",
+              "literal_descriptive_correspondence",
+            ].includes(check.comparison_basis ?? "");
+            const notes = [
+              ...new Set(
+                (check.comparison_metadata ?? [])
+                  .filter((entry) => entry.semantic_inference && entry.reason)
+                  .map((entry) => entry.reason!.trim())
+                  .filter((reason) => reason !== check.reason),
+              ),
+            ];
+            const quote = check.requirement_claim?.raw_text?.trim();
+            return (
+              <Stack key={index} spacing={1.75} sx={{ p: 2.5 }}>
+                <Stack
+                  direction="row"
+                  alignItems="flex-start"
+                  justifyContent="space-between"
+                  gap={1.5}
                 >
-                  Source: {check.source_pages.length === 1 ? "page" : "pages"}{" "}
-                  {check.source_pages.join(", ")}
-                </Typography>
-              )}
-            </Box>
-          ))}
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    flexWrap="wrap"
+                    gap={0.75}
+                  >
+                    <Typography fontSize={15} fontWeight={650}>
+                      {check.label}
+                    </Typography>
+                    {aiAssisted && <AuthorBadge label="AI-assisted" />}
+                  </Stack>
+                  <ResultBadge state={checkState(check)} />
+                </Stack>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    border: "1px solid #e3e9ee",
+                    borderRadius: 1.5,
+                    overflow: "hidden",
+                  }}
+                >
+                  {[
+                    {
+                      label: "Customer requirement",
+                      text: check.requested,
+                    },
+                    {
+                      label: "Recorded lab capability",
+                      text:
+                        check.declared ||
+                        "No matching lab declaration recorded",
+                    },
+                  ].map(({ label, text }, cellIndex) => (
+                    <Box
+                      key={label}
+                      sx={{
+                        p: 1.5,
+                        minWidth: 0,
+                        bgcolor: cellIndex ? "#f6f8fb" : "#fff",
+                        borderLeft: cellIndex ? "1px solid #e3e9ee" : undefined,
+                      }}
+                    >
+                      <Typography
+                        fontSize={11.5}
+                        fontWeight={600}
+                        color="text.secondary"
+                        sx={{ mb: 0.75 }}
+                      >
+                        {label}
+                      </Typography>
+                      <Typography
+                        fontSize={13}
+                        lineHeight={1.6}
+                        sx={{ overflowWrap: "anywhere" }}
+                      >
+                        {text}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+                <Box>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    gap={0.75}
+                    sx={{ mb: 0.5 }}
+                  >
+                    {author && <AuthorBadge label={author} />}
+                    <Typography fontSize={12} fontWeight={650}>
+                      Assessment reason
+                    </Typography>
+                  </Stack>
+                  <Typography fontSize={13} lineHeight={1.7}>
+                    {explanationText(check.reason)}
+                  </Typography>
+                </Box>
+                {check.candidate_lab_entries?.length ? (
+                  <Box>
+                    <Typography fontSize={12} fontWeight={650} sx={{ mb: 0.5 }}>
+                      Related lab information
+                    </Typography>
+                    {check.candidate_lab_entries.map((entry) => (
+                      <Typography
+                        key={entry.claim_id}
+                        fontSize={13}
+                        lineHeight={1.7}
+                        sx={{ mb: 0.5 }}
+                      >
+                        {entry.label}: {entry.value}
+                        {entry.context ? ` · ${entry.context}` : ""}
+                      </Typography>
+                    ))}
+                    <Typography
+                      fontSize={12}
+                      lineHeight={1.6}
+                      color="text.secondary"
+                    >
+                      This entry was not used to confirm support.
+                    </Typography>
+                  </Box>
+                ) : null}
+                {notes.map((note) => (
+                  <Box key={note}>
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      gap={0.75}
+                      sx={{ mb: 0.5 }}
+                    >
+                      <AuthorBadge label="AI" />
+                      <Typography fontSize={12} fontWeight={650}>
+                        Matching note
+                      </Typography>
+                    </Stack>
+                    <Typography fontSize={13} lineHeight={1.7}>
+                      {note}
+                    </Typography>
+                  </Box>
+                ))}
+                {(quote || check.source_pages.length > 0) && (
+                  <Box
+                    component="details"
+                    sx={{ fontSize: 12 }}
+                    onToggle={() =>
+                      requestAnimationFrame(() =>
+                        explanationActions.current?.updatePosition(),
+                      )
+                    }
+                  >
+                    <Box
+                      component="summary"
+                      sx={{
+                        cursor: "pointer",
+                        color: "primary.main",
+                        fontWeight: 600,
+                        py: 0.25,
+                      }}
+                    >
+                      Specification evidence
+                      {check.source_pages.length > 0 &&
+                        ` · ${check.source_pages.length === 1 ? "Page" : "Pages"} ${check.source_pages.join(", ")}`}
+                    </Box>
+                    {quote && (
+                      <Typography
+                        component="blockquote"
+                        fontSize={12.5}
+                        lineHeight={1.75}
+                        sx={{
+                          m: 0,
+                          mt: 1,
+                          pl: 1.5,
+                          borderLeft: "3px solid #d6e3f2",
+                          color: "text.secondary",
+                        }}
+                      >
+                        {quote}
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+              </Stack>
+            );
+          })}
         </Stack>
       </Popover>
     </>

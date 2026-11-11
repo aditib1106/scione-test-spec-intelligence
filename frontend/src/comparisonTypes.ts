@@ -7,7 +7,10 @@ export type ComparisonStatus =
   | "needs_information"
   | "excluded";
 
+export type ReasonSource = "system" | "ai" | "ai_assisted" | "unrecorded";
+
 export interface ComparisonCheck {
+  id?: string;
   label: string;
   parameter_id: string | null;
   kind: string;
@@ -18,6 +21,18 @@ export interface ComparisonCheck {
   status: "supported" | "gap" | "unknown" | "informational";
   reason: string;
   source_pages: number[];
+  comparison_basis?:
+    | "semantic_alignment"
+    | "deterministic_exact_fields"
+    | "deterministic_literal_text"
+    | "literal_descriptive_correspondence"
+    | "source_optional_route_policy"
+    | null;
+  comparison_metadata?: {
+    reason?: string;
+    semantic_inference?: boolean;
+    numeric_evaluation?: boolean;
+  }[];
   candidate_lab_entries?: {
     claim_id: string;
     label: string;
@@ -28,6 +43,7 @@ export interface ComparisonCheck {
   }[];
   requirement_claim?: {
     normalization_state: string;
+    raw_text?: string;
     sequence?: number | null;
     configuration?: string | null;
     source_context?: string | null;
@@ -55,6 +71,7 @@ export interface ComparisonRequirement {
 }
 
 export interface ComparisonData {
+  explanation_sources?: Record<string, Record<string, ReasonSource>>;
   export_snapshot_id?: string;
   comparison_id: string;
   matching_run_id?: string | null;

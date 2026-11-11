@@ -250,6 +250,210 @@ test("unconfirmed lab candidates are visible without being reported as matches",
   await expect(duration.getByText("Match", { exact: true })).toHaveCount(0);
 });
 
+test("result explanations show recorded evidence and distinguish AI assistance from field checks", async ({
+  page,
+}, testInfo) => {
+  const comparison = await mockReport(page, 0, true);
+  const checks = comparison.requirements[0].comparison.checks;
+  checks[1].comparison_basis = "deterministic_exact_fields";
+  checks[1].id = "fixture_temperature";
+  checks[1].requirement_claim = {
+    normalization_state: "parsed",
+    raw_text: "Conduct the water jet test with water at 60 °C.",
+  };
+  checks[3].comparison_basis = "semantic_alignment";
+  checks[2].id = "fixture_duration";
+  comparison.explanation_sources = {
+    req_water: { fixture_temperature: "system", fixture_duration: "system" },
+  };
+  checks[2].reason = "Semantic scope cannot equate explicit distinct phases.";
+  checks[3].comparison_metadata = [
+    {
+      semantic_inference: true,
+      reason:
+        "The customer's rating uses the same scale as the lab's reported output.",
+    },
+  ];
+  let modelCalls = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      /\/(?:analyze|matching)$/.test(request.url())
+    )
+      modelCalls += 1;
+  });
+  await page.goto(`${base}/reports?document=summary-source`);
+  await page.getByRole("button", { name: "Conditions", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Reason for Water temperature", exact: true })
+    .click();
+  const temperature = page.getByRole("dialog", {
+    name: "Reason for Water temperature",
+    exact: true,
+  });
+  await expect(
+    temperature.getByText("Customer requirement", { exact: true }),
+  ).toBeVisible();
+  await expect(temperature.getByText("60 °C", { exact: true })).toBeVisible();
+  await expect(
+    temperature.getByText("20–50 °C", { exact: true }),
+  ).toBeVisible();
+  await expect(temperature.getByText("System", { exact: true })).toBeVisible();
+  await expect(
+    temperature.getByText("AI-assisted", { exact: true }),
+  ).toHaveCount(0);
+  await temperature
+    .getByText("Specification evidence · Page 2", { exact: true })
+    .click();
+  await expect(
+    temperature.getByText(checks[1].requirement_claim.raw_text!, {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("matching-explanation.png"),
+    animations: "disabled",
+  });
+  await temperature
+    .getByRole("button", { name: "Close explanation", exact: true })
+    .click();
+
+  await page
+    .getByRole("button", {
+      name: "Acceptance criteria / reporting",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Reason for Rating", exact: true })
+    .click();
+  const rating = page.getByRole("dialog", {
+    name: "Reason for Rating",
+    exact: true,
+  });
+  await expect(rating.getByText("AI-assisted", { exact: true })).toBeVisible();
+  await expect(rating.getByText("AI", { exact: true })).toBeVisible();
+  await expect(
+    rating.getByText(checks[3].comparison_metadata[0].reason!, { exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page
+    .getByRole("button", { name: "Reason for Duration", exact: true })
+    .click();
+  const duration = page.getByRole("dialog", {
+    name: "Reason for Duration",
+    exact: true,
+  });
+  await expect(
+    duration.getByText("No matching lab declaration recorded", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    duration.getByText("Related lab information", { exact: true }),
+  ).toBeVisible();
+  await expect(duration.getByText("System", { exact: true })).toBeVisible();
+  await expect(
+    duration.getByText(
+      "The customer requirement and this lab entry apply to different test stages.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    duration.getByText(
+      "Semantic scope cannot equate explicit distinct phases.",
+      { exact: true },
+    ),
+  ).toHaveCount(0);
+  await expect(
+    duration.getByText("Conditioning duration: 60 s · Dry nitrogen", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(modelCalls).toBe(0);
+});
+
+test("expanded specification evidence scrolls inside the explanation and keeps author labels distinct", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({
+    width: testInfo.project.name === "desktop" ? 1440 : 390,
+    height: 640,
+  });
+  const comparison = await mockReport(page);
+  const check = comparison.requirements[0].comparison.checks[1];
+  check.comparison_basis = "semantic_alignment";
+  check.reason =
+    "The requested setting or range is covered by this lab declaration in the same context.";
+  check.comparison_metadata = [
+    {
+      semantic_inference: true,
+      reason:
+        "The specified water temperature corresponds to the lab's water-temperature range.",
+    },
+  ];
+  check.requirement_claim = {
+    normalization_state: "parsed",
+    raw_text: Array.from(
+      { length: 45 },
+      (_, index) =>
+        `Source line ${index + 1}: record the water temperature and the conditions for this specimen.`,
+    ).join(" "),
+  };
+  await page.goto(`${base}/reports?document=summary-source`);
+  await page.getByRole("button", { name: "Conditions", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Reason for Water temperature", exact: true })
+    .click();
+  const explanation = page.getByRole("dialog", {
+    name: "Reason for Water temperature",
+    exact: true,
+  });
+  await expect(explanation.getByText("System", { exact: true })).toBeVisible();
+  await expect(explanation.getByText("AI", { exact: true })).toBeVisible();
+  await expect(
+    explanation.getByText("AI-assisted", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    explanation.getByText(/AI helped relate the requirement/),
+  ).toHaveCount(0);
+  await explanation
+    .getByText("Specification evidence · Page 2", { exact: true })
+    .click();
+  const scrollArea = explanation.getByRole("region", {
+    name: "Result explanation details",
+  });
+  await expect
+    .poll(() =>
+      scrollArea.evaluate(
+        (element) => element.scrollHeight - element.clientHeight,
+      ),
+    )
+    .toBeGreaterThan(150);
+  const pageScroll = await page.evaluate(() => window.scrollY);
+  await scrollArea.hover();
+  await page.mouse.wheel(0, 650);
+  await expect
+    .poll(() => scrollArea.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(50);
+  expect(await page.evaluate(() => window.scrollY)).toBe(pageScroll);
+  await scrollArea.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  const quote = explanation.locator("blockquote");
+  const quoteBottom = await quote.evaluate(
+    (element) => element.getBoundingClientRect().bottom,
+  );
+  const viewportBottom = (await page.viewportSize())!.height;
+  expect(quoteBottom).toBeLessThanOrEqual(viewportBottom);
+  await expect(
+    explanation.getByRole("button", { name: "Close explanation", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("explanation-scroll-and-authors.png"),
+    animations: "disabled",
+  });
+});
+
 test("report expands conditions and criteria in their own groups", async ({
   page,
 }, testInfo) => {

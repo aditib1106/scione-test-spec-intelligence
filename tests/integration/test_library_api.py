@@ -32,7 +32,10 @@ THICKNESS = "Dry film thickness: ISO 60152:2025. Separate topcoat thickness 42-5
 
 
 def _machine_snapshot(live):
-    return {key: value for key, value in live.items() if key != "export_snapshot_id"}
+    return {
+        key: value for key, value in live.items()
+        if key not in {"export_snapshot_id", "explanation_sources"}
+    }
 
 
 class LocalClient:
