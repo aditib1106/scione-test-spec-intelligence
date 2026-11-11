@@ -30,6 +30,7 @@ _TEMPORAL_PHASES = {
 _OPERATION_PHASES = {"curing", "measurement", "conditioning", "exposure", "preparation"}
 _CYCLE_PHASES = {"thermal_cycle", "cycle_recovery", "cold", "hot"}
 _DOCUMENT_ACRONYMS = {"ISO", "ASTM", "DIN", "EN", "GB", "OEM", "PDF", "CSV", "JSON", "LIMS"}
+_CIE_LAB_CAPTION = re.compile(r"\bCIE\s+L\s*\*\s*,?\s*a\s*\*\s*,?\s*b\s*\*")
 
 
 def _hard_codes(text):
@@ -126,6 +127,24 @@ def coverage_pair(request, declaration, alignment, *, source):
         for claim in (first, second):
             owned = _hard_codes(claim.text_value or "")
             contextual_codes.append(_hard_codes(claim.source_context or "") - owned)
+        # With explicitly identical CIELAB units, "CIE L*a*b*" describes the
+        # recorded metric, not an extra instrument/setup identifier. Preserve
+        # every other code and formula qualifier. Reference: CIE e-ILV 17-23-077.
+        if (
+            first.parameter_id == second.parameter_id == "color_difference"
+            and first.unit == second.unit == "ΔE*ab"
+        ):
+            for index, claim in enumerate((first, second)):
+                if "CIE" in contextual_codes[index] and _CIE_LAB_CAPTION.search(
+                    claim.source_context or ""
+                ):
+                    contextual_codes[index].discard("CIE")
+                    actions.append({
+                        "rule": "explicit_cielab_metric_caption",
+                        "side": "requirement" if index == 0 else "declaration",
+                        "unit": "ΔE*ab",
+                        "semantic_inference": False,
+                    })
         if any(contextual_codes) and contextual_codes[0] != contextual_codes[1]:
             raise SemanticEquivalenceError(
                 "Semantic scope cannot supply a missing setup identifier."
