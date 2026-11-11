@@ -22,6 +22,8 @@ from scione.api.body_limits import UploadBodyLimitMiddleware
 from scione.api.contracts import (
     AnalysisRequest,
     AssessmentReview,
+    CapabilityRemoval,
+    CapabilityWrite,
     ExclusionReview,
     LabExample,
     LibraryMetadata,
@@ -39,6 +41,7 @@ from scione.api.contracts import (
 )
 from scione.api.inference_activity import create_inference_activity_router
 from scione.api.inference_gate import InferenceBusyError, InferenceGate
+from scione.api.lab_capabilities import remove_capability, save_capability
 from scione.api.method_bank import router as method_bank_router
 from scione.api.monitoring import create_monitoring_router
 from scione.api.public_views import (
@@ -384,6 +387,18 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         workspace.labs.save(body)
         return workspace.labs.load_or_create()
 
+    @app.post("/api/lab/capabilities")
+    def add_capability(body: CapabilityWrite):
+        return save_capability(workspace, body)
+
+    @app.put("/api/lab/capabilities/{capability_id}")
+    def edit_capability(capability_id: str, body: CapabilityWrite):
+        return save_capability(workspace, body, capability_id=capability_id)
+
+    @app.delete("/api/lab/capabilities/{capability_id}")
+    def delete_capability(capability_id: str, body: CapabilityRemoval):
+        return remove_capability(workspace, capability_id, body.version)
+
     @app.post("/api/lab/example")
     def example_lab(body: LabExample):
         lab = workspace.labs.load_or_create()
@@ -409,7 +424,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
 
     @app.get("/api/catalog")
     def catalog():
-        return workspace.catalog
+        return workspace.catalog_for_lab()
 
     @app.get("/api/library")
     def library():

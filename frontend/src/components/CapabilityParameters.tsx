@@ -128,7 +128,18 @@ export default function CapabilityParameters({
           ? "Acceptance criteria / reporting"
           : "Conditions";
         return (
-          <Box key={title} component="section" aria-label={title}>
+          <Box
+            key={title}
+            component="section"
+            aria-label={title}
+            sx={{
+              p: 2.25,
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 2,
+              bgcolor: "background.paper",
+            }}
+          >
             <Stack
               direction="row"
               justifyContent="space-between"
@@ -136,8 +147,10 @@ export default function CapabilityParameters({
               spacing={1}
               sx={{ mb: 0.75 }}
             >
-              <Typography variant="h6" fontWeight={650}>
-                {title}
+              <Typography variant="subtitle1" fontWeight={650}>
+                {reporting
+                  ? "Measurements & reporting"
+                  : "Operating conditions"}
               </Typography>
               <Button
                 startIcon={<AddRoundedIcon />}
@@ -150,7 +163,7 @@ export default function CapabilityParameters({
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               {reporting
                 ? "What your lab can measure and report. This does not promise that a specimen will pass."
-                : "Record the ranges, settings, materials and resources your lab supports."}
+                : "Settings, ranges, materials and resources available for this test."}
             </Typography>
             {!group.length && (
               <Box
@@ -166,7 +179,7 @@ export default function CapabilityParameters({
                   {reporting
                     ? "No measurements recorded yet."
                     : "No individual conditions recorded yet."}{" "}
-                  Missing information will remain unknown during comparison.
+                  Add a field when you have the information available.
                 </Typography>
               </Box>
             )}
@@ -194,6 +207,7 @@ export default function CapabilityParameters({
                       border: "1px solid",
                       borderColor: "divider",
                       borderRadius: 1.5,
+                      bgcolor: "grey.50",
                     }}
                   >
                     <Stack spacing={1.5}>

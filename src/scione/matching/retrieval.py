@@ -178,6 +178,17 @@ def retrieve_identity_candidates(
                 # Source-extracted quantity identities provide a language-neutral
                 # ranking hint, not proof that test procedures are equivalent.
                 add(test.id, output_score * 40, "source_output_parameter_candidate")
+            if test.id.startswith("labtest_"):
+                descriptions = [
+                    test.description,
+                    *(method.name for method in catalog.methods if method.id in test.method_ids),
+                ]
+                hint = max(
+                    (_lexical_score(requirement.original_test_name, text) for text in descriptions),
+                    default=0,
+                )
+                if hint >= 0.3:
+                    add(test.id, hint * 35, "lab_private_description_candidate")
     for index, identifier in enumerate(preferred_test_ids):
         add(identifier, max(20, 70 - index * 0.1), "upstream_rule_candidate")
 

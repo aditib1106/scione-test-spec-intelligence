@@ -33,7 +33,7 @@ from scione.library.store import LibraryStore, LibraryStoreError, digest, now, s
 from scione.structured import normalize_capability
 from scione.structured.models import NORMALIZER_VERSION
 
-LAB_SCHEMA_VERSION = 1
+LAB_SCHEMA_VERSION = 2
 lab_metadata = MetaData()
 lab_workspaces = Table(
     "lab_workspaces",
@@ -95,10 +95,36 @@ lab_claims = Table(
         ["lab_capability_entries.workspace_id", "lab_capability_entries.capability_id"],
     ),
 )
+lab_custom_tests = Table(
+    "lab_custom_tests",
+    lab_metadata,
+    Column("workspace_id", String(100), primary_key=True),
+    Column("lab_version", Integer, primary_key=True),
+    Column("test_id", String(100), primary_key=True),
+    Column("position", Integer, nullable=False),
+    Column("name", Text, nullable=False),
+    Column("description", Text, nullable=False),
+    Column("aliases", JSON, nullable=False),
+    Column("method_ids", JSON, nullable=False),
+    ForeignKeyConstraint(["workspace_id"], ["lab_workspaces.workspace_id"]),
+)
+lab_custom_methods = Table(
+    "lab_custom_methods",
+    lab_metadata,
+    Column("workspace_id", String(100), primary_key=True),
+    Column("lab_version", Integer, primary_key=True),
+    Column("method_id", String(100), primary_key=True),
+    Column("position", Integer, nullable=False),
+    Column("identifier", Text, nullable=False),
+    Column("name", Text, nullable=False),
+    Column("edition", Text),
+    Column("aliases", JSON, nullable=False),
+    ForeignKeyConstraint(["workspace_id"], ["lab_workspaces.workspace_id"]),
+)
 
 
 def upgrade_lab_schema(library: LibraryStore) -> None:
-    """Apply the first additive lab migration; never rewrite existing archive tables.
+    """Apply additive lab migrations without rewriting existing archive tables.
 
     Deployment will run migrations before starting workers. Lazy application is
     retained for the existing offline/local workflow. The marker is written only
@@ -113,16 +139,28 @@ def _upgrade_lab_schema(engine) -> None:
         version = connection.execute(
             select(schema_versions.c.version).where(schema_versions.c.component == "lab_storage")
         ).scalar_one_or_none()
-    if version not in (None, LAB_SCHEMA_VERSION):
+    if version not in (None, 1, LAB_SCHEMA_VERSION):
         raise LibraryStoreError("The lab database needs a compatible application version.")
-    if version is not None:
+    if version == LAB_SCHEMA_VERSION:
         return
     lab_metadata.create_all(engine)
     try:
         with engine.begin() as connection:
-            connection.execute(
-                insert(schema_versions).values(component="lab_storage", version=LAB_SCHEMA_VERSION)
-            )
+            if version is None:
+                connection.execute(
+                    insert(schema_versions).values(
+                        component="lab_storage", version=LAB_SCHEMA_VERSION
+                    )
+                )
+            else:
+                connection.execute(
+                    update(schema_versions)
+                    .where(
+                        schema_versions.c.component == "lab_storage",
+                        schema_versions.c.version == version,
+                    )
+                    .values(version=LAB_SCHEMA_VERSION)
+                )
     except IntegrityError:
         # Another initializer may have completed this same additive migration.
         with engine.connect() as connection:
@@ -276,12 +314,56 @@ class SQLLabStore:
         # readers whose driver may not begin a read transaction for SELECT.
         row = records[0]
         entries = [entry for entry in records if entry["capability_id"] is not None]
+        private_tests = (
+            connection.execute(
+                select(lab_custom_tests)
+                .where(
+                    lab_custom_tests.c.workspace_id == self.workspace_id,
+                    lab_custom_tests.c.lab_version == row["version"],
+                )
+                .order_by(lab_custom_tests.c.position)
+            )
+            .mappings()
+            .all()
+        )
+        private_methods = (
+            connection.execute(
+                select(lab_custom_methods)
+                .where(
+                    lab_custom_methods.c.workspace_id == self.workspace_id,
+                    lab_custom_methods.c.lab_version == row["version"],
+                )
+                .order_by(lab_custom_methods.c.position)
+            )
+            .mappings()
+            .all()
+        )
         return self._validate(
             LabProfile(
                 id=row["profile_id"],
                 name=row["name"],
                 description=row["description"],
                 version=row["version"],
+                custom_tests=[
+                    {
+                        "id": item["test_id"],
+                        "name": item["name"],
+                        "description": item["description"],
+                        "aliases": item["aliases"],
+                        "method_ids": item["method_ids"],
+                    }
+                    for item in private_tests
+                ],
+                custom_methods=[
+                    {
+                        "id": item["method_id"],
+                        "identifier": item["identifier"],
+                        "name": item["name"],
+                        "edition": item["edition"],
+                        "aliases": item["aliases"],
+                    }
+                    for item in private_methods
+                ],
                 capabilities=[
                     {
                         "id": entry["capability_id"],
@@ -301,6 +383,32 @@ class SQLLabStore:
         )
 
     def _write_entries(self, connection, lab: LabProfile) -> None:
+        for position, test in enumerate(lab.custom_tests):
+            connection.execute(
+                insert(lab_custom_tests).values(
+                    workspace_id=self.workspace_id,
+                    lab_version=lab.version,
+                    test_id=test.id,
+                    position=position,
+                    name=test.name,
+                    description=test.description,
+                    aliases=[alias.model_dump(mode="json") for alias in test.aliases],
+                    method_ids=test.method_ids,
+                )
+            )
+        for position, method in enumerate(lab.custom_methods):
+            connection.execute(
+                insert(lab_custom_methods).values(
+                    workspace_id=self.workspace_id,
+                    lab_version=lab.version,
+                    method_id=method.id,
+                    position=position,
+                    identifier=method.identifier,
+                    name=method.name,
+                    edition=method.edition,
+                    aliases=[alias.model_dump(mode="json") for alias in method.aliases],
+                )
+            )
         connection.execute(delete(lab_claims).where(lab_claims.c.workspace_id == self.workspace_id))
         connection.execute(
             delete(lab_entries).where(lab_entries.c.workspace_id == self.workspace_id)

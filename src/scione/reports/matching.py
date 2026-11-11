@@ -17,6 +17,7 @@ from decimal import Decimal
 from difflib import SequenceMatcher
 from uuid import uuid4
 
+from scione.catalogs.identity_keys import private_method_key
 from scione.catalogs.models import (
     LabCapability,
     LabProfile,
@@ -104,14 +105,23 @@ def _method_resolution(
     identity = _parse_method(requested.code)
     if identity is None:
         # Nonstandard source procedures have their own explicit identifiers.
-        # Only exact curated strings are accepted; no phrase is stripped until
-        # a standard happens to appear, and no equipment implies equivalence.
+        # Exact strings remain primary. A lab's own private codes additionally
+        # allow narrow letter/digit formatting changes, never method equivalence.
         exact = [
             method
             for method in catalog.methods
             if _name(requested.code)
             in {_name(method.identifier), *(_name(alias.text) for alias in method.aliases)}
         ]
+        if not exact and (key := private_method_key(requested.code)) is not None:
+            exact = [
+                method for method in catalog.methods
+                if method.id.startswith("labmethod_")
+                and any(
+                    private_method_key(value) == key
+                    for value in [method.identifier, *(alias.text for alias in method.aliases)]
+                )
+            ]
         if len(exact) == 1:
             if requested.revision and _revision(requested.revision) != _revision(exact[0].edition):
                 return exact[0].id, (

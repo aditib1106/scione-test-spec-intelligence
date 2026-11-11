@@ -81,12 +81,35 @@ export interface Capability {
   currency: string | null;
   pricing_basis: string | null;
 }
+export interface CustomLabTest {
+  id?: string;
+  name: string;
+  description?: string;
+  aliases?: string[];
+}
+export interface CustomLabMethod {
+  id?: string;
+  name: string;
+  identifier?: string;
+  aliases?: string[];
+}
+export interface CapabilitySubmission {
+  capability: Capability;
+  custom_test?: CustomLabTest;
+  custom_methods?: CustomLabMethod[];
+}
+export interface CapabilitySaveResponse {
+  lab: LabProfile;
+  catalog: Catalog;
+}
 export interface LabProfile {
   id: string;
   name: string;
   description: string;
   version: number;
   capabilities: Capability[];
+  custom_tests?: CatalogTest[];
+  custom_methods?: CatalogMethod[];
 }
 export interface DocumentSummary {
   document_id: string;

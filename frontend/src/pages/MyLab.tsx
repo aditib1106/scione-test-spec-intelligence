@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Accordion,
@@ -10,7 +10,6 @@ import {
   Card,
   CardContent,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -18,6 +17,7 @@ import {
   Divider,
   IconButton,
   InputAdornment,
+  MenuItem,
   Stack,
   Table,
   TableBody,
@@ -26,6 +26,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
@@ -33,24 +34,27 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import { ApiError, request, useResource } from "../api";
 import type {
   AtomicClaim,
   Capability,
+  CapabilitySubmission,
+  CapabilitySaveResponse,
   LabRecords,
   LabProfile,
-  OperatingLimit,
   PageProps,
 } from "../types";
 import CapabilityEditor from "./CapabilityEditor";
+import LabCapabilityDetails, {
+  capabilityDetailSx,
+  labClaimValue as claimValue,
+} from "../components/LabCapabilityDetails";
 import {
   serviceClaims,
   sharedDeclarationKey,
   sharedDeclarations,
 } from "../components/labCapabilityPresentation";
-
-const labelFor = (value: string) =>
-  value.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
 
 const money = (capability: Capability) =>
   capability.price
@@ -71,17 +75,6 @@ const measurements = (capability: Capability, sharedKeys: Set<string>) =>
         .replace(/^Reportable outputs:\s*/i, "")
         .split(/\nSource:/i)[0]
         .trim());
-const claimValue = (claim: AtomicClaim) => {
-  if (claim.availability === "unknown") return "Not yet assessed";
-  if (claim.availability === "unsupported") return "Not available";
-  let text = claim.text_value ?? claim.raw_text;
-  if (claim.operator === "range")
-    text = `${claim.minimum ?? "…"}–${claim.maximum ?? "…"}`;
-  else if (claim.operator === "one_of") text = claim.values.join(" / ");
-  else if (claim.value !== null)
-    text = `${claim.operator === "=" ? "" : `${claim.operator} `}${claim.value}${claim.tolerance !== null ? ` ± ${claim.tolerance}` : ""}`;
-  return `${text}${claim.unit ? ` ${claim.unit}` : ""}`;
-};
 const claimSummary = (
   capability: Capability,
   kind: AtomicClaim["kind"],
@@ -109,45 +102,32 @@ const claimSummary = (
     (claims.length > 2 ? `; +${claims.length - 2} more` : "")
   );
 };
-const limitText = (limit: OperatingLimit) => {
-  if (limit.supported_values.length) return limit.supported_values.join("; ");
-  const value = limit.values.length
-    ? limit.values.join(" / ")
-    : `${limit.minimum ?? "…"}–${limit.maximum ?? "…"}`;
-  return `${value}${limit.unit ? ` ${limit.unit}` : ""}`;
-};
-
 function SharedLabDeclarations({
   claims,
   count,
+  editControls,
 }: {
   claims: AtomicClaim[];
   count: number;
+  editControls?: ReactNode;
 }) {
   if (!claims.length) return null;
   return (
-    <Accordion
-      disableGutters
-      elevation={0}
-      sx={{
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: "10px !important",
-        "&:before": { display: "none" },
-      }}
-    >
+    <Accordion disableGutters elevation={0} sx={capabilityDetailSx}>
       <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
         <Box>
-          <Typography variant="subtitle2">
-            Shared lab services ({claims.length})
+          <Typography variant="subtitle1" fontWeight={650}>
+            Common entries ({claims.length})
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Recorded for all {count} services · shown once here
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+            Identical entries recorded on all {count} tests.
           </Typography>
         </Box>
       </AccordionSummary>
-      <AccordionDetails>
-        <Stack spacing={1.75}>
+      <AccordionDetails
+        sx={{ borderTop: "1px solid", borderColor: "divider", p: 2.25 }}
+      >
+        <Stack spacing={2} divider={<Divider />}>
           {claims.map((claim) => (
             <Box key={claim.id}>
               <Typography variant="body2" fontWeight={600}>
@@ -158,6 +138,18 @@ function SharedLabDeclarations({
               </Typography>
             </Box>
           ))}
+          <Box>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mb: editControls ? 1.25 : 0 }}
+            >
+              {editControls
+                ? "Choose a test to edit these entries. Changes apply to that test only."
+                : "Use Edit capability to update these entries for this test only."}
+            </Typography>
+            {editControls}
+          </Box>
         </Stack>
       </AccordionDetails>
     </Accordion>
@@ -181,6 +173,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
     [sharedClaims],
   );
   const [query, setQuery] = useState("");
+  const [commonEditingId, setCommonEditingId] = useState("");
   const [editingCapability, setEditingCapability] = useState<
     Capability | undefined
   >();
@@ -191,6 +184,10 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [deletingCapability, setDeletingCapability] =
+    useState<Capability | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [parametersOpen, setParametersOpen] = useState(false);
   useEffect(() => setParametersOpen(false), [viewingId]);
@@ -239,21 +236,47 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
     });
   }, [lab.capabilities, methods, query, tests]);
 
-  async function saveCapability(capability: Capability) {
+  async function saveCapability(submission: CapabilitySubmission) {
     setSaveError("");
-    const capabilities = editingCapability
-      ? lab.capabilities.map((item) =>
-          item.id === editingCapability.id ? capability : item,
-        )
-      : [...lab.capabilities, capability];
-    const updated = await request<LabProfile>("/api/lab", {
-      method: "PUT",
-      body: JSON.stringify({ ...lab, capabilities }),
-    });
+    const updated = await request<CapabilitySaveResponse>(
+      editingCapability
+        ? `/api/lab/capabilities/${encodeURIComponent(editingCapability.id)}`
+        : "/api/lab/capabilities",
+      {
+        method: editingCapability ? "PUT" : "POST",
+        body: JSON.stringify({ version: lab.version, ...submission }),
+      },
+    );
     setCapabilityOpen(false);
     setEditingCapability(undefined);
     if (!updated) return;
     onRefresh();
+  }
+
+  async function deleteCapability() {
+    if (!deletingCapability || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await request<CapabilitySaveResponse>(
+        `/api/lab/capabilities/${encodeURIComponent(deletingCapability.id)}`,
+        {
+          method: "DELETE",
+          body: JSON.stringify({ version: lab.version }),
+        },
+      );
+      if (viewingId === deletingCapability.id) setViewingId(null);
+      setDeletingCapability(null);
+      onRefresh();
+    } catch (reason) {
+      setDeleteError(
+        reason instanceof Error
+          ? reason.message
+          : "The capability could not be deleted.",
+      );
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function saveProfile() {
@@ -294,7 +317,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
           ),
           sharedKeys,
         )
-      : [];
+      : serviceClaims(viewed?.atomic_claims ?? [], sharedKeys);
   const editCapability = (capability?: Capability) => {
     setViewingId(null);
     setEditingCapability(capability);
@@ -482,11 +505,11 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                   <TableCell sx={{ width: "17%" }}>Test</TableCell>
                   <TableCell sx={{ width: "15%" }}>Method</TableCell>
                   <TableCell sx={{ width: "23%" }}>Conditions</TableCell>
-                  <TableCell sx={{ width: "25%" }}>
+                  <TableCell sx={{ width: "22%" }}>
                     Acceptance criteria / reporting
                   </TableCell>
                   <TableCell sx={{ width: "13%" }}>Rate</TableCell>
-                  <TableCell sx={{ width: "7%" }} align="right">
+                  <TableCell sx={{ width: "10%" }} align="right">
                     Action
                   </TableCell>
                 </TableRow>
@@ -522,6 +545,14 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                         >
                           {test?.name ?? "Unrecognized test"}
                         </Button>
+                        {test?.id.startsWith("labtest_") && (
+                          <Typography
+                            variant="caption"
+                            sx={{ display: "block", mt: 0.5, color: "#6b46a5" }}
+                          >
+                            Private test
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" sx={previewSx}>
@@ -562,16 +593,43 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        <Button
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            editCapability(capability);
-                          }}
-                          sx={{ minWidth: 0, px: 0.5 }}
+                        <Stack
+                          direction="row"
+                          justifyContent="flex-end"
+                          alignItems="center"
+                          gap={0.25}
                         >
-                          Edit
-                        </Button>
+                          <Button
+                            size="small"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              editCapability(capability);
+                            }}
+                            sx={{ minWidth: 0, px: 0.5 }}
+                          >
+                            Edit
+                          </Button>
+                          <Tooltip title="Delete capability">
+                            <IconButton
+                              size="small"
+                              aria-label={`Delete capability for ${test?.name ?? "this test"}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setDeleteError("");
+                                setDeletingCapability(capability);
+                              }}
+                              sx={{
+                                color: "text.secondary",
+                                "&:hover": {
+                                  color: "error.main",
+                                  bgcolor: "action.hover",
+                                },
+                              }}
+                            >
+                              <DeleteOutlineRoundedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
                       </TableCell>
                     </TableRow>
                   );
@@ -586,6 +644,54 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
           <SharedLabDeclarations
             claims={sharedClaims}
             count={lab.capabilities.length}
+            editControls={
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                gap={1}
+                alignItems={{ sm: "center" }}
+              >
+                <TextField
+                  select
+                  fullWidth
+                  label="Test to edit"
+                  value={commonEditingId}
+                  onChange={(event) => setCommonEditingId(event.target.value)}
+                  sx={{ flex: 1, minWidth: 0 }}
+                >
+                  <MenuItem value="" disabled>
+                    Select a test
+                  </MenuItem>
+                  {lab.capabilities.map((capability) => (
+                    <MenuItem key={capability.id} value={capability.id}>
+                      {tests.get(capability.canonical_test_id)?.name ?? "Test"}
+                      {capability.method_ids.length > 0 &&
+                        ` · ${capability.method_ids
+                          .map((id) => methods.get(id)?.identifier)
+                          .filter(Boolean)
+                          .join(" / ")}`}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Button
+                  variant="outlined"
+                  startIcon={<EditOutlinedIcon />}
+                  disabled={
+                    !lab.capabilities.some(
+                      (capability) => capability.id === commonEditingId,
+                    )
+                  }
+                  onClick={() => {
+                    const capability = lab.capabilities.find(
+                      (item) => item.id === commonEditingId,
+                    );
+                    if (capability) editCapability(capability);
+                  }}
+                  sx={{ flexShrink: 0 }}
+                >
+                  Edit selected test
+                </Button>
+              </Stack>
+            }
           />
         </Box>
       )}
@@ -604,270 +710,130 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>
+        <DialogTitle sx={{ pb: 2 }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: "block", mb: 0.5 }}
+          >
+            Capability · Private to this lab
+          </Typography>
           {viewed
             ? (tests.get(viewed.canonical_test_id)?.name ?? "Lab capability")
             : "Lab capability"}
         </DialogTitle>
-        <DialogContent dividers>
+        <DialogContent dividers sx={{ bgcolor: "grey.50", py: 2.5 }}>
           {viewed && (
-            <Stack spacing={2.5}>
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
-                  Declared methods
-                </Typography>
-                <Stack direction="row" flexWrap="wrap" gap={0.75}>
-                  {viewed.method_ids
-                    .map((id) => methods.get(id))
-                    .filter(Boolean)
-                    .map((method) => (
-                      <Chip
-                        key={method!.id}
-                        size="small"
-                        variant="outlined"
-                        label={method!.identifier}
-                      />
-                    ))}
-                  {!viewed.method_ids.length && (
-                    <Typography color="text.secondary">
-                      No method recorded.
-                    </Typography>
-                  )}
-                </Stack>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
-                  Conditions and scope
-                </Typography>
-                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                  {claimSummary(viewed, "condition", sharedKeys) ||
-                    (!(viewed.atomic_claims ?? []).length &&
-                      viewed.declared_constraints) ||
-                    "Not specified"}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
-                  Acceptance criteria / reporting
-                </Typography>
-                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                  {measurements(viewed, sharedKeys) || "Not specified"}
-                </Typography>
-              </Box>
+            <Stack spacing={1.75}>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={2}
+                sx={{
+                  p: 2.25,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 2,
+                  bgcolor: "background.paper",
+                }}
+              >
+                <Box sx={{ flex: 1 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", mb: 1 }}
+                  >
+                    Supported methods
+                  </Typography>
+                  <Stack direction="row" flexWrap="wrap" gap={0.75}>
+                    {viewed.method_ids
+                      .map((id) => methods.get(id))
+                      .filter(Boolean)
+                      .map((method) => (
+                        <Chip
+                          key={method!.id}
+                          size="small"
+                          variant="outlined"
+                          label={
+                            method!.id.startsWith("labmethod_")
+                              ? `${method!.identifier} · Private`
+                              : method!.identifier
+                          }
+                        />
+                      ))}
+                    {!viewed.method_ids.length && (
+                      <Typography variant="body2" color="text.secondary">
+                        No method recorded.
+                      </Typography>
+                    )}
+                  </Stack>
+                </Box>
+                <Box sx={{ minWidth: 150 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", mb: 1 }}
+                  >
+                    Reference price
+                  </Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {money(viewed) === "—" ? "Not priced" : money(viewed)}
+                  </Typography>
+                </Box>
+              </Stack>
+              {savedParameters.error && (
+                <Alert
+                  severity="error"
+                  action={
+                    <Button color="inherit" onClick={savedParameters.refresh}>
+                      Retry
+                    </Button>
+                  }
+                >
+                  {savedParameters.error}
+                </Alert>
+              )}
+              {savedParameters.data &&
+                savedParameters.data.lab_version !== lab.version && (
+                  <Alert
+                    severity="info"
+                    action={
+                      <Button color="inherit" onClick={onRefresh}>
+                        Reload lab
+                      </Button>
+                    }
+                  >
+                    Your lab information changed. Reload to see its latest
+                    details.
+                  </Alert>
+                )}
+              <LabCapabilityDetails
+                key={`${viewed.id}-conditions`}
+                title="Operating conditions"
+                description="Supported settings, materials and test preparation."
+                claims={viewedClaims.filter(
+                  (claim) => !["reporting", "criterion"].includes(claim.kind),
+                )}
+                wording={viewed.declared_constraints}
+                limits={viewed.structured_limits}
+                onExpand={() => setParametersOpen(true)}
+              />
+              <LabCapabilityDetails
+                key={`${viewed.id}-reporting`}
+                title="Measurements & reporting"
+                description="What your lab can measure and include in its results."
+                claims={viewedClaims.filter((claim) =>
+                  ["reporting", "criterion"].includes(claim.kind),
+                )}
+                wording={viewed.notes
+                  ?.replace(/^Reportable outputs:\s*/i, "")
+                  .split(/\nSource:/i)[0]
+                  .trim()}
+                onExpand={() => setParametersOpen(true)}
+              />
               <SharedLabDeclarations
                 claims={sharedClaims}
                 count={lab.capabilities.length}
               />
-              <Accordion
-                expanded={parametersOpen}
-                onChange={(_, expanded) => setParametersOpen(expanded)}
-                disableGutters
-                elevation={0}
-                sx={{
-                  border: "1px solid",
-                  borderColor: "divider",
-                  "&:before": { display: "none" },
-                }}
-              >
-                <AccordionSummary
-                  id="saved-capability-parameters-heading"
-                  aria-controls="saved-capability-parameters-content"
-                  expandIcon={<ExpandMoreRoundedIcon />}
-                >
-                  <Box>
-                    <Typography variant="subtitle2">
-                      Detailed parameters
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      View saved operating conditions and reportable
-                      measurements.
-                    </Typography>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Stack spacing={2}>
-                    {savedParameters.loading && (
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <CircularProgress size={18} />
-                        <Typography variant="body2">
-                          Loading saved parameters…
-                        </Typography>
-                      </Stack>
-                    )}
-                    {savedParameters.error && (
-                      <Alert
-                        severity="error"
-                        action={
-                          <Button
-                            color="inherit"
-                            onClick={savedParameters.refresh}
-                          >
-                            Retry
-                          </Button>
-                        }
-                      >
-                        {savedParameters.error}
-                      </Alert>
-                    )}
-                    {savedParameters.data &&
-                      savedParameters.data.lab_version !== lab.version && (
-                        <Alert
-                          severity="info"
-                          action={
-                            <Button color="inherit" onClick={onRefresh}>
-                              Reload lab
-                            </Button>
-                          }
-                        >
-                          Your lab information changed. Reload to see its latest
-                          parameters.
-                        </Alert>
-                      )}
-                    {viewedClaims.length > 0 && (
-                      <TableContainer>
-                        <Table
-                          size="small"
-                          aria-label="Saved capability parameters"
-                          sx={{ minWidth: 640 }}
-                        >
-                          <TableHead>
-                            <TableRow>
-                              <TableCell>Parameter</TableCell>
-                              <TableCell>Declared capability</TableCell>
-                              <TableCell>Stage / context</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {viewedClaims.map((claim) => (
-                              <TableRow key={claim.id}>
-                                <TableCell sx={{ verticalAlign: "top" }}>
-                                  <Typography variant="body2" fontWeight={600}>
-                                    {claim.label}
-                                  </Typography>
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
-                                    {claim.kind === "reporting"
-                                      ? "Measurement / reporting"
-                                      : labelFor(claim.kind)}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell
-                                  sx={{ verticalAlign: "top", maxWidth: 300 }}
-                                >
-                                  <Typography
-                                    variant="body2"
-                                    sx={{ overflowWrap: "anywhere" }}
-                                  >
-                                    {claimValue(claim)}
-                                  </Typography>
-                                  {claim.availability === "unsupported" ? (
-                                    <Chip
-                                      size="small"
-                                      label="Not available"
-                                      color="error"
-                                      variant="outlined"
-                                    />
-                                  ) : claim.availability === "unknown" ||
-                                    claim.normalization_state ===
-                                      "unresolved" ? (
-                                    <Typography
-                                      variant="caption"
-                                      color="warning.main"
-                                    >
-                                      Needs clarification
-                                    </Typography>
-                                  ) : null}
-                                </TableCell>
-                                <TableCell sx={{ verticalAlign: "top" }}>
-                                  <Typography variant="body2">
-                                    {labelFor(claim.stage)}
-                                  </Typography>
-                                  {claim.source_context && (
-                                    <Typography
-                                      variant="caption"
-                                      color="text.secondary"
-                                      sx={{ display: "block" }}
-                                    >
-                                      {claim.source_context}
-                                    </Typography>
-                                  )}
-                                  {claim.configuration && (
-                                    <Typography
-                                      variant="caption"
-                                      sx={{ display: "block" }}
-                                    >
-                                      Setup: {claim.configuration}
-                                    </Typography>
-                                  )}
-                                  {claim.sequence !== null && (
-                                    <Typography
-                                      variant="caption"
-                                      sx={{ display: "block" }}
-                                    >
-                                      Step {claim.sequence}
-                                    </Typography>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                    )}
-                    {!savedParameters.loading &&
-                      !savedParameters.error &&
-                      savedParameters.data?.lab_version === lab.version &&
-                      viewedClaims.length === 0 && (
-                        <Typography variant="body2" color="text.secondary">
-                          No detailed parameters have been recorded for this
-                          test. Edit the capability to add them.
-                        </Typography>
-                      )}
-                    {viewed.structured_limits.length > 0 && (
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
-                          General operating limits
-                        </Typography>
-                        <TableContainer>
-                          <Table
-                            size="small"
-                            aria-label="Declared operating limits"
-                          >
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Parameter</TableCell>
-                                <TableCell>Declared support</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {viewed.structured_limits.map((limit, index) => (
-                                <TableRow key={`${limit.parameter}-${index}`}>
-                                  <TableCell
-                                    sx={{ textTransform: "capitalize" }}
-                                  >
-                                    {limit.parameter.replaceAll("_", " ")}
-                                  </TableCell>
-                                  <TableCell>{limitText(limit)}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                      </Box>
-                    )}
-                  </Stack>
-                </AccordionDetails>
-              </Accordion>
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
-                  Reference rate
-                </Typography>
-                <Typography variant="body2">
-                  {money(viewed) === "—" ? "Not priced" : money(viewed)}
-                </Typography>
-              </Box>
               {viewed.notes?.match(/\nSource:\s*(.*)/i)?.[1] && (
                 <Typography variant="caption" color="text.secondary">
                   Source: {viewed.notes.match(/\nSource:\s*(.*)/i)?.[1]}
@@ -876,7 +842,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
             </Stack>
           )}
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
           <Button onClick={() => setViewingId(null)}>Close</Button>
           <Button
             variant="contained"
@@ -916,6 +882,65 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
           }
         }}
       />
+      <Dialog
+        open={Boolean(deletingCapability)}
+        onClose={deleting ? undefined : () => setDeletingCapability(null)}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby="delete-capability-title"
+      >
+        <DialogTitle id="delete-capability-title">
+          Delete this capability?
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5}>
+            {deleteError && (
+              <Alert
+                severity="error"
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => {
+                      setDeletingCapability(null);
+                      onRefresh();
+                    }}
+                  >
+                    Reload lab
+                  </Button>
+                }
+              >
+                {deleteError}
+              </Alert>
+            )}
+            <Typography fontWeight={600}>
+              {deletingCapability
+                ? tests.get(deletingCapability.canonical_test_id)?.name
+                : ""}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              This removes the test from your current lab capability. Previously
+              saved reports will be kept.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            onClick={() => setDeletingCapability(null)}
+            disabled={deleting}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={deleteCapability}
+            disabled={deleting}
+          >
+            {deleting ? "Deleting…" : "Delete capability"}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Dialog
         open={profileOpen}
         onClose={savingProfile ? undefined : () => setProfileOpen(false)}

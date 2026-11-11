@@ -19,7 +19,6 @@ import {
   TableRow,
   Tab,
   Tabs,
-  Tooltip,
   TextField,
   Typography,
 } from "@mui/material";
@@ -32,6 +31,37 @@ const previewSx = {
   WebkitBoxOrient: "vertical",
   overflow: "hidden",
 } as const;
+const privateTest = (id: string) => id.startsWith("labtest_");
+const privateMethod = (id: string) => id.startsWith("labmethod_");
+function VisibilityBadge({
+  isPrivate,
+  compact = false,
+}: {
+  isPrivate: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <Chip
+      size="small"
+      label={
+        isPrivate
+          ? compact
+            ? "Private"
+            : "Private to this lab"
+          : "Shared reference"
+      }
+      title={isPrivate ? "Visible only within your lab" : undefined}
+      sx={{
+        bgcolor: isPrivate ? "#f2ecfb" : "#eaf0fc",
+        color: isPrivate ? "#68449a" : "#315c9f",
+        fontWeight: 600,
+        height: 21,
+        fontSize: 10.5,
+        "& .MuiChip-label": { px: 0.9 },
+      }}
+    />
+  );
+}
 
 export default function TestCatalog({ workspace }: PageProps) {
   const { catalog } = workspace;
@@ -47,8 +77,13 @@ export default function TestCatalog({ workspace }: PageProps) {
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     return catalog.tests.filter((test) => {
-      if (view === "method" && !test.method_ids.length) return false;
-      if (view === "custom" && test.method_ids.length) return false;
+      if (view === "shared" && privateTest(test.id)) return false;
+      if (
+        view === "private" &&
+        !privateTest(test.id) &&
+        !test.method_ids.some(privateMethod)
+      )
+        return false;
       const methods = test.method_ids
         .map((id) => methodById.get(id))
         .filter(Boolean);
@@ -107,15 +142,6 @@ export default function TestCatalog({ workspace }: PageProps) {
             variant="outlined"
             label={`${catalog.methods.length} methods`}
           />
-          {catalog.synthetic && (
-            <Tooltip title="The catalog uses project reference data. Your lab's own declarations determine what you can offer.">
-              <Chip
-                size="small"
-                label="Project reference"
-                sx={{ color: "text.secondary", bgcolor: "#f0f3f7" }}
-              />
-            </Tooltip>
-          )}
         </Stack>
       </Stack>
       <Paper variant="outlined" sx={{ overflow: "hidden", borderRadius: 3 }}>
@@ -126,6 +152,9 @@ export default function TestCatalog({ workspace }: PageProps) {
             setPage(0);
           }}
           aria-label="Catalog categories"
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{
             px: 2,
             borderBottom: "1px solid",
@@ -134,8 +163,8 @@ export default function TestCatalog({ workspace }: PageProps) {
           }}
         >
           <Tab value="all" label="All tests" />
-          <Tab value="method" label="Method references" />
-          <Tab value="custom" label="Customer-defined procedures" />
+          <Tab value="shared" label="Shared reference" />
+          <Tab value="private" label="Private to this lab" />
         </Tabs>
         <Stack
           direction={{ xs: "column", sm: "row" }}
@@ -169,7 +198,7 @@ export default function TestCatalog({ workspace }: PageProps) {
         <TableContainer>
           <Table
             size="small"
-            aria-label="Shared test catalog"
+            aria-label="Test catalog"
             sx={{
               minWidth: 720,
               tableLayout: "fixed",
@@ -193,7 +222,13 @@ export default function TestCatalog({ workspace }: PageProps) {
               {visible.map((test) => {
                 const methods = test.method_ids
                   .map((id) => methodById.get(id))
-                  .filter(Boolean);
+                  .filter(Boolean)
+                  .sort((left, right) =>
+                    view === "private"
+                      ? Number(privateMethod(right!.id)) -
+                        Number(privateMethod(left!.id))
+                      : 0,
+                  );
                 const aliases = [
                   ...new Set(test.aliases.map((alias) => alias.text)),
                 ].filter((text) => text !== test.name);
@@ -204,53 +239,64 @@ export default function TestCatalog({ workspace }: PageProps) {
                     onClick={() => setSelectedId(test.id)}
                     sx={{
                       cursor: "pointer",
-                      "& td": { py: 2, verticalAlign: "top" },
+                      "& td": { py: 1.5, verticalAlign: "top" },
                     }}
                   >
                     <TableCell>
-                      <Button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedId(test.id);
-                        }}
-                        sx={{
-                          p: 0,
-                          minWidth: 0,
-                          textAlign: "left",
-                          justifyContent: "flex-start",
-                        }}
-                      >
-                        {test.name}
-                      </Button>
+                      <Stack alignItems="flex-start" spacing={0.75}>
+                        <Button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedId(test.id);
+                          }}
+                          sx={{
+                            p: 0,
+                            minWidth: 0,
+                            textAlign: "left",
+                            justifyContent: "flex-start",
+                          }}
+                        >
+                          {test.name}
+                        </Button>
+                        {privateTest(test.id) && (
+                          <VisibilityBadge isPrivate compact />
+                        )}
+                      </Stack>
                     </TableCell>
                     <TableCell>
-                      <Stack direction="row" gap={0.75} flexWrap="wrap">
+                      <Stack gap={0.5}>
                         {methods.slice(0, 3).map((method) => (
-                          <Chip
+                          <Stack
                             key={method!.id}
-                            size="small"
-                            label={method!.identifier}
-                            sx={{
-                              bgcolor: "#f0f4fa",
-                              color: "#3b526f",
-                              fontSize: 12,
-                              borderRadius: 1,
-                              height: 25,
-                            }}
-                          />
+                            direction="row"
+                            gap={0.75}
+                            alignItems="center"
+                            flexWrap="wrap"
+                          >
+                            <Typography
+                              variant="body2"
+                              sx={{ overflowWrap: "anywhere" }}
+                            >
+                              {method!.identifier || method!.name}
+                            </Typography>
+                            {privateMethod(method!.id) &&
+                              !privateTest(test.id) && (
+                                <VisibilityBadge isPrivate compact />
+                              )}
+                          </Stack>
                         ))}
                         {methods.length > 3 && (
                           <Typography
                             variant="caption"
                             color="primary.main"
-                            sx={{ alignSelf: "center", fontWeight: 600 }}
+                            sx={{ fontWeight: 600 }}
                           >
                             +{methods.length - 3} more
                           </Typography>
                         )}
                         {!methods.length && (
                           <Typography variant="body2" color="text.secondary">
-                            Customer-defined procedure
+                            No method recorded
                           </Typography>
                         )}
                       </Stack>
@@ -323,6 +369,22 @@ export default function TestCatalog({ workspace }: PageProps) {
           </Typography>
         </DialogTitle>
         <DialogContent dividers>
+          {selected && (
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              flexWrap="wrap"
+              sx={{ mb: 2 }}
+            >
+              <VisibilityBadge isPrivate={privateTest(selected.id)} />
+              <Typography variant="body2" color="text.secondary">
+                {privateTest(selected.id)
+                  ? "This test is visible only within your lab."
+                  : "A shared reference test. Private methods are visible only within your lab."}
+              </Typography>
+            </Stack>
+          )}
           {selected?.description && (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
               {selected.description}
@@ -366,8 +428,13 @@ export default function TestCatalog({ workspace }: PageProps) {
                   <TableRow key={method!.id}>
                     <TableCell sx={{ verticalAlign: "top", minWidth: 165 }}>
                       <Typography variant="body2" fontWeight={600}>
-                        {method!.identifier}
+                        {method!.identifier || method!.name}
                       </Typography>
+                      <Box sx={{ mt: 0.75 }}>
+                        <VisibilityBadge
+                          isPrivate={privateMethod(method!.id)}
+                        />
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">{method!.name}</Typography>
@@ -386,8 +453,7 @@ export default function TestCatalog({ workspace }: PageProps) {
                 {!selectedMethods.length && (
                   <TableRow>
                     <TableCell colSpan={2}>
-                      This is a customer-defined procedure. Its method is
-                      supplied in the customer specification.
+                      No method is recorded for this test.
                     </TableCell>
                   </TableRow>
                 )}

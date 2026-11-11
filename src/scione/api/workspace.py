@@ -18,6 +18,7 @@ from scione.api.contracts import (
 )
 from scione.api.public_views import current_actor
 from scione.catalogs import load_reference_catalog
+from scione.catalogs.private import compose_lab_catalog
 from scione.catalogs.sql_lab_store import SQLLabStore
 from scione.config import Settings
 from scione.ingestion import IngestionError
@@ -82,6 +83,13 @@ class Workspace:
         self.matching = MatchingWorkspace(self)
         self.facts = SQLFactsStore(self.library.store, self.labs.workspace_id)
         self.specs.added_requirement_ids = self._added_requirement_ids
+
+    def catalog_for_lab(self, lab=None):
+        """Compose only this lab's declared identities, without editing the shared bank."""
+        captured = lab or self.labs.load_or_create()
+        if not captured.custom_tests and not captured.custom_methods:
+            return self.catalog
+        return compose_lab_catalog(self.catalog, captured)
 
     def current_document(self, document_id: str):
         """Use a versioned readable view; the originally ingested file stays saved."""
@@ -281,9 +289,10 @@ class Workspace:
                     ),
                 }
             )
+        lab = self.labs.load_or_create()
         return {
-            "lab": self.labs.load_or_create(),
-            "catalog": self.catalog,
+            "lab": lab,
+            "catalog": self.catalog_for_lab(lab),
             "documents": [asdict(item) for item in self.active_documents()],
             "providers": providers,
         }
@@ -319,6 +328,7 @@ class Workspace:
             if run
             else ({}, {})
         )
+        catalog = self.catalog_for_lab()
         return {
             "document_id": document_id,
             "original_name": stored.original_name,
@@ -332,7 +342,7 @@ class Workspace:
                 item.id: parameter_review_view(
                     views[item.id],
                     self.library.present_claim,
-                    self.catalog,
+                    catalog,
                     source_unit_proofs=unit_proofs[item.id],
                 )
                 for item in run.extraction.requirements
@@ -400,7 +410,7 @@ class Workspace:
     def captured_draft_fingerprint(self, inputs: dict) -> str:
         fingerprint = report_input_fingerprint(
             inputs["stored"], inputs["run"], inputs["review"], inputs["lab"],
-            self.catalog, inputs["workspace"],
+            self.catalog_for_lab(inputs["lab"]), inputs["workspace"],
         )
         revision = inputs["revision"]
         return digest([fingerprint, revision.revision_id]) if revision else fingerprint
@@ -408,7 +418,7 @@ class Workspace:
     def draft_from_inputs(self, inputs: dict) -> ReportSnapshot:
         report = build_report(
             inputs["stored"], inputs["run"], inputs["review"], inputs["lab"],
-            self.catalog, inputs["workspace"],
+            self.catalog_for_lab(inputs["lab"]), inputs["workspace"],
             pdf_bytes=self.specs.read_pdf(inputs["stored"].document_id),
         )
         revision = inputs["revision"]
@@ -551,7 +561,7 @@ class Workspace:
             raise HTTPException(400, "Restore the source requirement before changing its match.")
         choice = body.mapping
         if choice.canonical_test_id:
-            self.catalog.test_by_id(choice.canonical_test_id)
+            report.catalog.test_by_id(choice.canonical_test_id)
         original = {method.code for method in line.requirement.requested_methods}
         selected = (
             set(choice.selected_method_codes)

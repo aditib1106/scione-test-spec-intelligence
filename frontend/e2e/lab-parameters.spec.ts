@@ -19,6 +19,12 @@ test("lab enters typed conditions, reporting and unknown custom facts without te
     .click();
   const dialog = page.getByRole("dialog");
   await dialog
+    .getByRole("combobox", { name: "Test name", exact: true })
+    .fill("Pressure water jet adhesion");
+  await page
+    .getByRole("option", { name: "Pressure water jet adhesion", exact: true })
+    .click();
+  await dialog
     .getByRole("button", { name: "Add condition", exact: true })
     .click();
   const condition = dialog.getByRole("group", { name: "Conditions field 1" });
@@ -152,7 +158,7 @@ test("lab enters typed conditions, reporting and unknown custom facts without te
 test("lab parameter edits persist and unrelated edits preserve declared facts", async ({
   page,
   request,
-}) => {
+}, testInfo) => {
   const reset = await request.post("/api/workspace/reset", {
     data: { acknowledged: true },
   });
@@ -189,6 +195,9 @@ test("lab parameter edits persist and unrelated edits preserve declared facts", 
     sequence: null,
   };
   selected.atomic_claims = [declaration];
+  selected.declared_constraints =
+    "Steel panels only; customer-supplied samples.";
+  selected.notes = "Record individual panel results.";
   const seeded = await request.put("/api/lab", { data: lab });
   expect(seeded.ok()).toBeTruthy();
   await page.goto("/my-lab");
@@ -252,13 +261,38 @@ test("lab parameter edits persist and unrelated edits preserve declared facts", 
     .getByRole("button", { name: "Cross-cut adhesion", exact: true })
     .click();
   dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: /Detailed parameters/ }).click();
+  await expect(
+    dialog.getByRole("button", { name: /Operating conditions/ }),
+  ).toHaveAttribute("aria-expanded", "false");
+  await expect(
+    dialog.getByRole("button", { name: /Measurements & reporting/ }),
+  ).toHaveAttribute("aria-expanded", "false");
+  await expect(dialog.getByText("1–7 mm", { exact: true })).not.toBeVisible();
+  await dialog.getByRole("button", { name: /Operating conditions/ }).click();
   const table = dialog.getByRole("table", {
-    name: "Saved capability parameters",
+    name: "Operating conditions saved fields",
   });
   await expect(table.getByText("Cut spacing", { exact: true })).toBeVisible();
   await expect(table.getByText("1–7 mm", { exact: true })).toBeVisible();
   await expect(table.getByText("Steel panels", { exact: true })).toBeVisible();
+  await expect(
+    dialog.getByText(selected.declared_constraints, { exact: true }),
+  ).not.toBeVisible();
+  await dialog
+    .getByText("Additional description", { exact: true })
+    .first()
+    .click();
+  await expect(
+    dialog.getByText(selected.declared_constraints, { exact: true }),
+  ).toBeVisible();
+  await dialog
+    .getByRole("button", { name: /Measurements & reporting/ })
+    .click();
+  await expect(dialog.getByText(selected.notes, { exact: true })).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("lab-capability-details.png"),
+    animations: "disabled",
+  });
   await dialog
     .getByRole("button", { name: "Edit capability", exact: true })
     .click();
@@ -271,11 +305,11 @@ test("lab parameter edits persist and unrelated edits preserve declared facts", 
     .fill("Updated declaration: steel panels only.");
   await dialog.getByRole("button", { name: "Save capability" }).click();
   await expect(dialog.getByRole("alert").first()).toContainText(
-    "Review the detailed parameters",
+    "Check the saved conditions and measurements",
   );
   await dialog
     .getByLabel(
-      "I reviewed the detailed parameters for this updated capability.",
+      "I checked the conditions and measurements for this capability.",
     )
     .check();
   await dialog.getByRole("button", { name: "Save capability" }).click();

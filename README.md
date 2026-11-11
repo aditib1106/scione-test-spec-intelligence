@@ -65,6 +65,16 @@ changes and Secure cookies in production. Login, logout and workspace changes cl
 previous browser state, including other open tabs. Ordinary lab users cannot access
 developer routes or modify the shared catalog.
 
+Lab users can add, edit and delete their own capabilities. Choose a searchable
+reference test or create a private test with optional private method codes; enter
+conditions and reportable measurements as structured fields. Private identities
+remain in that lab's SQL storage and participate in its matching candidates.
+Formatting differences such as `TEST-123` and `test123` are recognized for private
+codes; distinct methods and standard editions are not treated as equivalent.
+Deleting a capability updates future comparisons while retaining saved reports
+and versioned declarations. Existing installations receive an additive lab-storage
+migration; no shared catalog or previous report is rewritten.
+
 Each lab has a separate source/artifact directory and SQL storage: independent MySQL
 schemas when configured, or separate embedded databases in the preview. Accounts and
 sessions are stored centrally. This supports separate lab workspaces; multi-lab
@@ -109,6 +119,12 @@ Corrections save a reviewed-facts revision used by Library and matching, preserv
 original model output. Changed source rows require fresh confirmation. Detailed source
 notes, sample plans and applicability are available on demand. The disabled OCR entry
 marks the future scanned-document adapter and makes no API call.
+
+**View extraction evidence** above the selected test opens saved PDF passages and
+sample instructions. In a gap report, the information icon beside a result opens
+**Why this result?** with the customer requirement, recorded lab capability, saved
+assessment reason and available source evidence. Recorded provenance identifies AI
+assistance or a field comparison when available. Opening these details does not run AI.
 
 In Gap report, **Accept assessment** records the lab's review of the current findings.
 **Edit decision** records a follow-up plan and note, such as customer clarification,

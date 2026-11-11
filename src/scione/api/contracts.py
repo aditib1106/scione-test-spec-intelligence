@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from scione.catalogs.models import LabCapability
 from scione.specifications.models import CustomerRequirement
 
 ProviderName = Literal["groq", "gemini", "fireworks", "sail"]
@@ -21,6 +22,31 @@ class LabExample(WriteModel):
     )
     replace_existing: bool = False
     acknowledged: bool = False
+
+
+class PrivateTestInput(WriteModel):
+    id: str | None = Field(default=None, pattern=r"^labtest_[a-f0-9]{32}$")
+    name: str = Field(min_length=1, max_length=300)
+    description: str = Field(default="", max_length=4000)
+    aliases: list[str] = Field(default_factory=list, max_length=20)
+
+
+class PrivateMethodInput(WriteModel):
+    id: str | None = Field(default=None, pattern=r"^labmethod_[a-f0-9]{32}$")
+    name: str = Field(min_length=1, max_length=300)
+    identifier: str = Field(default="", max_length=200)
+    aliases: list[str] = Field(default_factory=list, max_length=20)
+
+
+class CapabilityWrite(WriteModel):
+    version: int = Field(ge=1)
+    capability: LabCapability
+    custom_test: PrivateTestInput | None = None
+    custom_methods: list[PrivateMethodInput] = Field(default_factory=list, max_length=30)
+
+
+class CapabilityRemoval(WriteModel):
+    version: int = Field(ge=1)
 
 
 class LibraryMetadata(WriteModel):

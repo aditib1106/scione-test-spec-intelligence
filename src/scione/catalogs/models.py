@@ -6,10 +6,18 @@ that different methods are interchangeable or that a lab meets a customer spec.
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from scione.structured.models import AtomicClaim
 
@@ -197,17 +205,48 @@ class LabProfile(CatalogModel):
     description: str = ""
     version: int = Field(default=1, ge=1)
     capabilities: list[LabCapability] = Field(default_factory=list)
+    custom_tests: list[CanonicalTest] = Field(default_factory=list)
+    custom_methods: list[TestMethod] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def unique_capability_ids(self) -> Self:
         ids = [item.id for item in self.capabilities]
         if len(ids) != len(set(ids)):
             raise ValueError("Lab capability IDs must be unique.")
+        for entries, prefix in (
+            (self.custom_tests, "labtest_"),
+            (self.custom_methods, "labmethod_"),
+        ):
+            identifiers = [item.id for item in entries]
+            if len(identifiers) != len(set(identifiers)):
+                raise ValueError("Private lab identity IDs must be unique.")
+            if any(
+                not re.fullmatch(prefix + r"[a-f0-9]{32}", identifier) for identifier in identifiers
+            ):
+                raise ValueError("Private lab identities require a server-generated identifier.")
         return self
+
+    @model_serializer(mode="wrap")
+    def retain_existing_profile_shape(self, handler):
+        data = handler(self)
+        if not self.custom_tests:
+            data.pop("custom_tests", None)
+        if not self.custom_methods:
+            data.pop("custom_methods", None)
+        return data
 
 
 def validate_lab_references(lab: LabProfile, catalog: ReferenceCatalog) -> None:
     """Check identity references without inferring support or method equivalence."""
+
+    from scione.catalogs.private import compose_lab_catalog
+
+    if (
+        lab.custom_tests or lab.custom_methods
+        or any(item.id.startswith("labtest_") for item in catalog.tests)
+        or any(item.id.startswith("labmethod_") for item in catalog.methods)
+    ):
+        catalog = compose_lab_catalog(catalog, lab)
 
     for capability in lab.capabilities:
         test = catalog.test_by_id(capability.canonical_test_id)
