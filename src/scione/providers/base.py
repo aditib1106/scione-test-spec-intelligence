@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+ProviderFailureKind = Literal["timeout", "network", "http", "invalid_request", "invalid_response"]
+_FAILURE_KINDS = {"timeout", "network", "http", "invalid_request", "invalid_response"}
 
 
 class ProviderError(RuntimeError):
@@ -29,6 +32,8 @@ class ProviderError(RuntimeError):
         model: str | None = None,
         provider_request_id: str | None = None,
         generation_settings: dict[str, Any] | None = None,
+        failure_kind: ProviderFailureKind | None = None,
+        http_status: int | None = None,
     ) -> None:
         super().__init__(message)
         self.raw_text = raw_text
@@ -38,6 +43,15 @@ class ProviderError(RuntimeError):
         self.model = model
         self.provider_request_id = provider_request_id
         self.generation_settings = dict(generation_settings or {})
+        # Categories and numeric status codes are safe diagnostics. Never infer
+        # them from arbitrary SDK/exception prose that could contain secrets.
+        self.failure_kind = (
+            failure_kind if isinstance(failure_kind, str) and failure_kind in _FAILURE_KINDS
+            else None
+        )
+        self.http_status = (
+            http_status if type(http_status) is int and 100 <= http_status <= 599 else None
+        )
 
 
 class StructuredGenerationRequest(BaseModel):

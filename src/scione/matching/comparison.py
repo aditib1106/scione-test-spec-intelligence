@@ -250,6 +250,11 @@ def compile_matching_run(
             if alignment.capability_id is not None
             else {}
         )
+        selected_capability = capabilities.get(alignment.capability_id)
+        declared_method_codes = tuple(
+            run.input_snapshot.catalog.method_by_id(identifier).identifier
+            for identifier in selected_capability.capability.method_ids
+        ) if selected_capability else ()
         claim_links = {row.requirement_claim_id: row for row in alignment.claim_alignments}
         for claim in normalized.claims:
             link = claim_links[claim.id]
@@ -348,6 +353,7 @@ def compile_matching_run(
                     list(declared.values()),
                     wording_bridge=bool(link.context_equivalence or link.joint_scope_equivalence),
                     owner_test_labels=owner_test_labels,
+                    declared_method_codes=declared_method_codes,
                 )
                 for request, lab in policy_pairs
             ]

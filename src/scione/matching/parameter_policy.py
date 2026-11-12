@@ -57,13 +57,30 @@ def source_proved_humidity_unit(
     }
     if not set(claim.source_pages) <= owned_pages:
         return claim, None
+    span = _literal_humidity_expression(claim)
+    if span is None:
+        return claim, None
+    action = {
+        "field": "unit",
+        "source": claim.unit,
+        "canonical": "% RH",
+        "rule": "source_proved_relative_humidity_unit",
+        "source_pages": sorted(set(claim.source_pages)),
+        "source_quote": claim.raw_text,
+        "source_expression": claim.raw_text[slice(*span)],
+    }
+    return claim.model_copy(deep=True, update={"unit": "% RH"}), action
+
+
+def _literal_humidity_expression(claim: AtomicClaim) -> tuple[int, int] | None:
+    """Find one explicit RH expression retaining the entire typed numeric shape."""
     numbers = {
         value
         for value in (claim.value, claim.minimum, claim.maximum, *claim.values)
         if value is not None
     }
     if not numbers:
-        return claim, None
+        return None
     groups = {}
     for quantity in source_quantities(claim.raw_text):
         groups.setdefault(quantity.expression_span, []).append(quantity)
@@ -87,17 +104,44 @@ def source_proved_humidity_unit(
             continue
         if not source_operators and claim.operator != "=":
             continue
-        action = {
-            "field": "unit",
-            "source": claim.unit,
-            "canonical": "% RH",
-            "rule": "source_proved_relative_humidity_unit",
-            "source_pages": sorted(set(claim.source_pages)),
-            "source_quote": claim.raw_text,
-            "source_expression": claim.raw_text[slice(*span)],
-        }
-        return claim.model_copy(deep=True, update={"unit": "% RH"}), action
-    return claim, None
+        return span
+    return None
+
+
+def source_proved_humidity_dimensions(
+    requested: AtomicClaim, declared: AtomicClaim, source: CustomerRequirement
+) -> bool:
+    """Allow typed lab '%' as RH only beside literal proof on both sides.
+
+    The customer side must pass the existing owned-source RH proof. A lab's
+    structured field must independently name relative humidity and retain its
+    complete literal RH quantity. This changes only unit-dimension checking;
+    neither claim nor any value/unit in the source snapshot is edited.
+    """
+    definition = resolve_definition(declared.parameter_id)
+    label = resolve_definition(declared.label)
+    if not (
+        canonical_unit_name(requested.unit) == "% RH"
+        and canonical_unit_name(declared.unit) == "%"
+        and definition and definition.id == "relative_humidity"
+        and (
+            (label and label.id == "relative_humidity")
+            or _HUMIDITY_PREFIX.search(declared.label)
+        )
+        and declared.kind == "condition"
+        and declared.normalization_state != "unresolved"
+        and declared.availability == "supported"
+        and not _NEGATED_OR_QUALIFIED.search(declared.label + " " + declared.raw_text)
+        and _literal_humidity_expression(declared) is not None
+    ):
+        return False
+    # Reuse the owned-expression proof, including parameter, label, page,
+    # operator, values and tolerance checks. '%' here is a temporary proof
+    # probe, not a replacement for the requested claim or its stored unit.
+    _copy, proof = source_proved_humidity_unit(
+        requested.model_copy(update={"unit": "%"}), source
+    )
+    return proof is not None
 
 
 class ParameterPolicyConflict(ValueError):

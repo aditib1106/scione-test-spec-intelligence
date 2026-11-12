@@ -239,11 +239,19 @@ class OpenAICompatibleModelProvider(ModelProvider):
                 # deadline without a background retry/thread surviving the call.
                 response = asyncio.run(self._post_with_deadline(arguments))
         except (httpx.TimeoutException, TimeoutError):
-            raise fail(f"{label} request timed out; no automatic retry was made.") from None
+            raise fail(
+                f"{label} request timed out; no automatic retry was made.", failure_kind="timeout"
+            ) from None
         except httpx.RequestError:
-            raise fail(f"{label} request failed because of a network connection error.") from None
+            raise fail(
+                f"{label} request failed because of a network connection error.",
+                failure_kind="network",
+            ) from None
         except (TypeError, ValueError):
-            raise fail(f"{label} could not prepare a valid structured request.") from None
+            raise fail(
+                f"{label} could not prepare a valid structured request.",
+                failure_kind="invalid_request",
+            ) from None
 
         # Do not surface arbitrary remote errors; they can echo source text,
         # credentials or URLs. HTTP 3xx is rejected without forwarding auth.
@@ -266,11 +274,15 @@ class OpenAICompatibleModelProvider(ModelProvider):
                 f"{label} API request failed (HTTP {response.status_code}). {detail}",
                 raw_text=generated if isinstance(generated, str) else None,
                 usage=_usage(failure.get("usage")) if isinstance(failure, dict) else TokenUsage(),
+                failure_kind="http",
+                http_status=response.status_code,
             )
         try:
             payload = response.json()
         except ValueError:
-            raise fail(f"{label} returned an unusable API response.") from None
+            raise fail(
+                f"{label} returned an unusable API response.", failure_kind="invalid_response"
+            ) from None
         if not isinstance(payload, dict):
             raise fail(f"{label} returned an unusable API response.")
         model = payload.get("model")

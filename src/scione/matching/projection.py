@@ -26,6 +26,25 @@ def _retains_source_fact(
 ) -> bool:
     # Grounding may intentionally change identity/state/availability, or attach
     # a more specific context/stage. It must not change the quoted source facts.
+    if requirement is not None and normalization_actions:
+        from scione.structured.normalization import _typed_literal_projection
+
+        # The normalizer can represent one complete, source-quoted numeric
+        # literal (for example text "60°") as typed value 60/unit °. Recompute
+        # its existing closed proof instead of treating that lossless repair
+        # as a changed fact. A claimed audit action alone is insufficient.
+        literal = _typed_literal_projection(source)
+        if literal is not None and any(
+            action.get("rule") == "source_proved_numeric_text_literal"
+            and action.get("source_claim_id") == source.id
+            and action.get("original_operator") == source.operator
+            and action.get("original_text_value") == source.text_value
+            and action.get("original_quote_preserved") is True
+            and action.get("canonical_operator") == literal.operator
+            and action.get("canonical_unit") == literal.unit
+            for action in normalization_actions
+        ):
+            source = literal
     fields = (
         "kind",
         "operator",

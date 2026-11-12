@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 
+from scione.matching.exposure_mode_proof import reviewed_exposure_mode_pair
 from scione.matching.metadata_rules import (
     count_basis_pair,
     initial_phase_pair,
@@ -138,12 +139,17 @@ def canonical_alignment_pair(
     *,
     wording_bridge: bool = False,
     owner_test_labels: tuple[str, ...] = (),
+    declared_method_codes: tuple[str, ...] = (),
 ) -> tuple[AtomicClaim, AtomicClaim, list[dict]]:
     """Project only explicit existing axes, with evidence for every change."""
     first, second, actions = owner_context_pair(requested, declared, source, owner_test_labels)
     first, humidity_proof = source_proved_humidity_unit(first, source)
     if humidity_proof:
         actions.append(humidity_proof)
+    first, second, mode_actions = reviewed_exposure_mode_pair(
+        first, second, source, declarations, declared_method_codes=declared_method_codes,
+    )
+    actions.extend(mode_actions)
     cycle = ordered_thermal_cycle_proof(first, source)
     if (
         cycle

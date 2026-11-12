@@ -13,13 +13,13 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from scione.catalogs.models import LabCapability, ReferenceCatalog
-from scione.providers.base import StructuredGenerationRequest, TokenUsage
+from scione.providers.base import ProviderFailureKind, StructuredGenerationRequest, TokenUsage
 from scione.specifications.models import CustomerRequirement
 from scione.structured.models import AtomicClaim, NormalizedRequirement, StructuredComparison
 
 MATCHING_SCHEMA_VERSION = "0.1"
 MATCHING_PROMPT_VERSION = "semantic_matching_v0_11"
-MATCHING_VALIDATION_VERSION = "semantic_alignment_guards_v0_24"
+MATCHING_VALIDATION_VERSION = "semantic_alignment_guards_v0_26"
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 Identifier = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
@@ -261,6 +261,8 @@ class SemanticMatchingRun(MatchingModel):
     child_attempts: list[SemanticMatchingRun] = Field(default_factory=list)
     error_code: Identifier | None = None
     error_message: Text | None = None
+    provider_failure_kind: ProviderFailureKind | None = None
+    provider_http_status: int | None = Field(default=None, ge=100, le=599)
 
     @model_validator(mode="after")
     def consistent_status(self) -> Self:

@@ -311,3 +311,78 @@ def test_projection_accepts_only_source_proved_exposure_to_cycle_stage(valid):
     else:
         with pytest.raises(MatchingProjectionError):
             project_matching_input(original)
+
+
+def numeric_literal_snapshot(parameter="measurement_angle", literal="60°"):
+    from scione.structured.normalization import normalize_requirement
+
+    original = snapshot()
+    row = original.requirements[0]
+    source = row.requirement.atomic_claims[0].model_copy(update={
+        "parameter_id": parameter,
+        "operator": "text", "value": None, "unit": None,
+        "text_value": literal, "raw_text": literal,
+    })
+    row.requirement.atomic_claims = [source]
+    row.requirement.conditions = [RequirementValue(name="Reading", raw_value=literal)]
+    row.requirement.evidence = [RequirementEvidence(page=1, quote=literal)]
+    row.normalized = normalize_requirement(row.requirement, native_first=True)
+    return original
+
+
+@pytest.mark.parametrize("parameter,literal", [
+    ("measurement_angle", "60°"), ("temperature", "25 °C"),
+    ("temperature", "20-70 °C"),
+])
+def test_projection_accepts_existing_lossless_numeric_literal_normalization(parameter, literal):
+    original = numeric_literal_snapshot(parameter, literal)
+    before = original.model_dump_json()
+    projected = project_matching_input(original)
+    normalized = projected.requirements[0].normalized.claims[0]
+    assert normalized.operator in {"=", "range"}
+    assert normalized.text_value == literal
+    assert normalized.raw_text == literal
+    assert original.model_dump_json() == before
+    assert not projected.requirements[0].requirement.atomic_claims
+    assert normalized.model_dump() == original.requirements[0].normalized.claims[0].model_dump()
+
+
+@pytest.mark.parametrize("change", [
+    "value", "unit", "operator", "raw_text", "source_context", "tolerance", "source_pages",
+    "no_action", "wrong_action_owner", "wrong_action_unit", "no_quoted_literal", "qualified_text",
+])
+def test_numeric_literal_projection_still_rejects_changed_facts_and_unproved_actions(change):
+    original = numeric_literal_snapshot()
+    row = original.requirements[0]
+    source = row.requirement.atomic_claims[0]
+    target = row.normalized.claims[0]
+    changes = {
+        "value": {"value": Decimal("90")}, "unit": {"unit": "°C"},
+        "operator": {"operator": ">="}, "raw_text": {"raw_text": "Different quote"},
+        "source_context": {"source_context": "Different context"},
+        "tolerance": {"tolerance": Decimal("1")}, "source_pages": {"source_pages": [2]},
+    }
+    if change == "source_context":
+        source.source_context = "Original context"
+    if change in changes:
+        row.normalized.claims[0] = target.model_copy(update=changes[change])
+    elif change == "no_action":
+        row.normalized.normalization_actions = []
+    elif change in {"wrong_action_owner", "wrong_action_unit"}:
+        for action in row.normalized.normalization_actions:
+            if action.get("rule") == "source_proved_numeric_text_literal":
+                key = "source_claim_id" if change == "wrong_action_owner" else "canonical_unit"
+                action[key] = (
+                    "another_claim" if change == "wrong_action_owner" else "°C"
+                )
+    elif change == "no_quoted_literal":
+        source.raw_text = "90°"
+        target.raw_text = "90°"
+    else:
+        source.text_value = target.text_value = "60° except for the north side"
+        source.raw_text = target.raw_text = source.text_value
+        for action in row.normalized.normalization_actions:
+            if action.get("rule") == "source_proved_numeric_text_literal":
+                action["original_text_value"] = source.text_value
+    with pytest.raises(MatchingProjectionError):
+        project_matching_input(original)

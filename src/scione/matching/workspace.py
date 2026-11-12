@@ -2,9 +2,15 @@
 
 from fastapi import HTTPException
 
+from scione.inference_progress import ProgressReporter
 from scione.library.store import digest
 from scione.matching import build_matching_input, compile_matching_run
-from scione.matching.batching import MATCHING_BATCH_POLICY_VERSION, run_bounded_matching
+from scione.matching.batching import (
+    MATCHING_BATCH_POLICY_VERSION,
+    MAX_LONG_DOCUMENT_MATCHING_BATCH_CALLS,
+    MAX_MATCHING_BATCH_CALLS,
+    run_bounded_matching,
+)
 from scione.matching.projection import MATCHING_PROJECTION_VERSION
 from scione.matching.retrieval import (
     DEFAULT_REQUEST_METHOD_LIMIT,
@@ -204,7 +210,9 @@ class MatchingWorkspace:
             ],
         }
 
-    def run(self, document_id: str, body, provider) -> dict:
+    def run(self, document_id: str, body, provider, *, on_progress=None) -> dict:
+        activity = ProgressReporter(on_progress)
+        activity.emit("planning")
         report = self.workspace.draft(document_id)
         if (
             report.source_run.run_id != body.run_id
@@ -251,16 +259,29 @@ class MatchingWorkspace:
             generation_settings=provider.generation_settings,
         )
         if cached is not None and not body.rerun:
+            activity.emit("validating")
             return {"run_id": cached.run_id, "status": cached.status, "cached": True}
         try:
             attempt = run_bounded_matching(
                 provider,
                 snapshot,
                 max_input_characters=self.workspace.settings.scione_matching_input_character_limit,
+                max_concurrent_batches=(
+                    self.workspace.settings.scione_long_document_parallelism
+                    if self.workspace.current_document(document_id).document.page_count > 10
+                    else 2
+                ),
+                max_calls=(
+                    MAX_LONG_DOCUMENT_MATCHING_BATCH_CALLS
+                    if self.workspace.current_document(document_id).document.page_count > 10
+                    else MAX_MATCHING_BATCH_CALLS
+                ),
+                on_progress=activity.forward if on_progress is not None else None,
             )
         except SemanticMatchingError as exc:
             exc.run.review_snapshot = reviews
             exc.run.policy_snapshot = {**exc.run.policy_snapshot, **policies}
+            activity.emit("saving")
             self.store.save(document_id, exc.run)
             raise HTTPException(
                 502,
@@ -268,12 +289,16 @@ class MatchingWorkspace:
                     "message": str(exc),
                     "run_id": exc.run.run_id,
                     "error_code": exc.run.error_code,
+                    "provider_failure_kind": exc.run.provider_failure_kind,
+                    "provider_http_status": exc.run.provider_http_status,
                 },
             ) from exc
         attempt.review_snapshot = reviews
         attempt.policy_snapshot = {**attempt.policy_snapshot, **policies}
+        activity.emit("validating")
         comparisons, _selected = self._compile(report, attempt)
         attempt.validated_comparison = comparisons
+        activity.emit("saving")
         self.store.save(document_id, attempt)
         if self.workspace.draft(document_id).input_fingerprint != report.input_fingerprint:
             raise HTTPException(

@@ -39,7 +39,11 @@ from scione.matching.models import (
     SemanticMatchingOutput,
     SemanticMatchingRun,
 )
-from scione.matching.parameter_policy import ParameterPolicyConflict, comparison_pair
+from scione.matching.parameter_policy import (
+    ParameterPolicyConflict,
+    comparison_pair,
+    source_proved_humidity_dimensions,
+)
 from scione.matching.projection import (
     MATCHING_PROJECTION_VERSION,
     MatchingProjectionError,
@@ -209,7 +213,9 @@ def _unit_dimension(unit: str | None) -> str | None:
     return next((name for name, units in groups.items() if value in units), None)
 
 
-def _compatible_context(request: AtomicClaim, declaration: AtomicClaim) -> str | None:
+def _compatible_context(
+    request: AtomicClaim, declaration: AtomicClaim, *, humidity_dimensions: bool = False
+) -> str | None:
     """Reject explicit contradictions; this does not prove semantic correctness."""
 
     from scione.parameters import contexts_match, normalize_claim, resolve_definition
@@ -227,7 +233,9 @@ def _compatible_context(request: AtomicClaim, declaration: AtomicClaim) -> str |
         return "The two claims identify different known parameters."
     if not contexts_match(request, declaration):
         return "The stage, subject, source context, sequence or configuration is not equivalent."
-    first_unit, second_unit = resolve_unit(request.unit), resolve_unit(declaration.unit)
+    dimension = "humidity" if humidity_dimensions else None
+    first_unit = resolve_unit(request.unit, dimension=dimension)
+    second_unit = resolve_unit(declaration.unit, dimension=dimension)
     first = first_unit.dimension if first_unit else _unit_dimension(request.unit)
     second = second_unit.dimension if second_unit else _unit_dimension(declaration.unit)
     if first is not None and second is not None and first != second:
@@ -453,8 +461,6 @@ def validate_matching_output(
             if row.capability_id not in source.capability_ids:
                 raise MatchingReferenceError("A capability selection is outside the candidates.")
             capability = capabilities[row.capability_id]
-            if capability.capability.canonical_test_id != row.canonical_test_id:
-                raise MatchingReferenceError("The capability belongs to another catalog test.")
         requested = {claim.id: claim for claim in source.normalized.claims}
         aligned = [claim.requirement_claim_id for claim in row.claim_alignments]
         if len(aligned) != len(set(aligned)) or set(aligned) != requested.keys():
@@ -474,6 +480,40 @@ def validate_matching_output(
                 configuration = declared[identifier].configuration
                 if configuration:
                     used_configurations.add(configuration)
+        if capability and capability.capability.canonical_test_id != row.canonical_test_id:
+            # Both IDs can be legitimate candidates while their proposed pair
+            # is incompatible. Check every reference before downgrading this
+            # row; a forged or missing link must still reject the whole output.
+            native_ids = {claim.id for claim in source.requirement.atomic_claims}
+            if any(set(alignment.represented_by_source_ids) - native_ids
+                   for alignment in row.claim_alignments):
+                raise MatchingReferenceError("A source context reference is outside the input.")
+            reason = (
+                "The selected lab capability belongs to another test item. "
+                "This proposed correspondence was not accepted as lab support; "
+                "the test identity and capability need review."
+            )
+            issues.append(AlignmentValidationIssue(
+                requirement_id=row.requirement_id,
+                code="incompatible_test_capability_owner",
+                reason=reason,
+            ))
+            row.identity_status = "unknown"
+            row.canonical_test_id = None
+            row.capability_id = None
+            row.reason = reason
+            for alignment in row.claim_alignments:
+                alignment.relation = "unknown"
+                alignment.capability_claim_ids = []
+                alignment.context_equivalence = None
+                alignment.value_equivalence = None
+                alignment.joint_scope_equivalence = None
+                alignment.scope_relation = None
+                alignment.value_relation = None
+                alignment.context_role = None
+                alignment.represented_by_source_ids = []
+                alignment.reason = reason
+            continue
         for alignment in row.claim_alignments:
             reason = None
             metadata_actions = []
@@ -544,6 +584,10 @@ def validate_matching_output(
                                     list(declared.values()),
                                     metadata_actions,
                                     owner_test_labels=owner_test_labels,
+                                    declared_method_codes=tuple(
+                                        snapshot.catalog.method_by_id(identifier).identifier
+                                        for identifier in capability.capability.method_ids
+                                    ),
                                 )
                             )
                         ),
@@ -579,7 +623,8 @@ def validate_matching_output(
 
 
 def _alignment_problem(
-    request, declaration, alignment, source, declarations, actions, *, owner_test_labels=()
+    request, declaration, alignment, source, declarations, actions, *, owner_test_labels=(),
+    declared_method_codes=(),
 ) -> str | None:
     try:
         literal = literal_comparison_claim(request, source)
@@ -600,6 +645,7 @@ def _alignment_problem(
             declarations,
             wording_bridge=bool(alignment.context_equivalence or alignment.joint_scope_equivalence),
             owner_test_labels=owner_test_labels,
+            declared_method_codes=declared_method_codes,
         )
         actions.extend(proved)
         if (
@@ -625,7 +671,10 @@ def _alignment_problem(
         pair = semantic_pair(request, declaration, alignment, source=source)
     except (ParameterPolicyConflict, SemanticEquivalenceError) as exc:
         return str(exc)
-    return _compatible_context(request, pair.declaration)
+    return _compatible_context(
+        request, pair.declaration,
+        humidity_dimensions=source_proved_humidity_dimensions(request, pair.declaration, source),
+    )
 
 
 def _strict_schema(value: Any) -> Any:
@@ -846,10 +895,18 @@ def prepare_matching_request(
         ]
         for row in snapshot.requirements
     }
+    wire_payload = pool_matching_text(payload)
+    if "claim_body_table" in wire_payload:
+        prompt += (
+            "\nINPUT SERIALIZATION: A lab claim {id,claim_body_ref} keeps its own ID "
+            "and uses the EXACT fields in claim_body_table[claim_body_ref]. Read those "
+            "fields in place, including any text_ref. This is lossless storage reuse, "
+            "not permission to mix capabilities or assume equivalent services."
+        )
     return StructuredGenerationRequest(
         system_prompt=prompt,
         user_prompt=json.dumps(
-            pool_matching_text(payload), ensure_ascii=False, separators=(",", ":")
+            wire_payload, ensure_ascii=False, separators=(",", ":")
         ),
         schema_name="semantic_matching_keyed_v0_1" if keyed else "semantic_matching_v0_1",
         json_schema=keyed_output_schema(snapshot, schema) if keyed else schema,
@@ -948,15 +1005,23 @@ class SemanticMatchingRunner:
                 latency_ms=exc.latency_ms,
                 provider_request_id=exc.provider_request_id,
                 generation_settings=exc.generation_settings or self.provider.generation_settings,
+                provider_failure_kind=exc.failure_kind,
+                provider_http_status=exc.http_status,
             )
             if exc.provider:
                 fields["provider"] = exc.provider
             if exc.model:
                 fields["model"] = exc.model
+            cause = {
+                "timeout": "The AI service timed out while comparing these requirements. ",
+                "network": "The connection to the AI service was interrupted. ",
+                "http": "The AI service returned an error while comparing these requirements. ",
+                "invalid_request": "The comparison request could not be prepared. ",
+                "invalid_response": "The AI service returned an unreadable response. ",
+            }.get(exc.failure_kind, "The matching provider did not return a usable response. ")
             raise fail(
-                "provider_error",
-                "The matching provider did not return a usable response. "
-                "The failed attempt is retained; retry must be requested explicitly.",
+                "provider_error", cause
+                + "The failed attempt is retained; retry must be requested explicitly.",
             ) from exc
         fields.update(
             provider=response.provider,

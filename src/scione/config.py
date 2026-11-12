@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     scione_customer_input_character_limit: int = Field(default=60_000, gt=0)
     scione_customer_gemini_output_tokens: int = Field(default=16_000, gt=0)
     scione_matching_input_character_limit: int = Field(default=120_000, gt=0)
+    scione_long_document_parallelism: int = Field(default=4, ge=1, le=4)
     scione_environment: Literal["development", "production"] = "development"
     scione_public_url: str | None = None
     scione_allowed_hosts: list[str] = Field(

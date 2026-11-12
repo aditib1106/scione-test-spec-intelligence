@@ -9,6 +9,7 @@ from scione.evaluation.generated_matching import build_batch
 from scione.library.store import LibraryStore
 from scione.matching.batching import (
     MATCHING_BATCH_POLICY_VERSION,
+    MAX_LONG_DOCUMENT_MATCHING_BATCH_CALLS,
     MatchingBatchPlanningError,
     plan_matching_batches,
     provider_claim_budget,
@@ -249,7 +250,65 @@ def test_more_than_eight_calls_is_rejected_before_first_call(source):
     assert not provider.requests
     assert caught.value.run.planned_count == 9
     assert caught.value.run.error_code == "batch_call_limit_exceeded"
+    assert caught.value.run.policy_snapshot["batching"]["maximum_calls"] == 8
     assert len(caught.value.run.policy_snapshot["batching"]["batches"]) == 9
+
+
+def repeated_requirements(source, count):
+    data = source.model_dump(mode="json")
+    originals = data["requirements"]
+    data["requirements"] = []
+    for index in range(count):
+        row = json.loads(json.dumps(originals[index % len(originals)]))
+        row["requirement"]["id"] = f"req_long_{index}"
+        row["normalized"]["requirement_id"] = f"req_long_{index}"
+        data["requirements"].append(row)
+    return MatchingInput.model_validate(data)
+
+
+@pytest.mark.parametrize("count", [9, 16])
+def test_explicit_long_document_budget_preserves_every_row_and_executes_only_planned_calls(
+    source, count,
+):
+    source = repeated_requirements(source, count)
+    original = source.model_dump(mode="json")
+    plan = plan_matching_batches(source, max_claims_per_batch=1, max_calls=16)
+    assert len(plan.snapshots) == count
+    assert plan.manifest["maximum_calls"] == MAX_LONG_DOCUMENT_MATCHING_BATCH_CALLS == 16
+    assert [row for child in plan.snapshots for row in child.requirements] == source.requirements
+    assert all(request_character_count(request) <= 120_000 for request in plan.requests)
+    provider = RecordingProvider()
+    run = run_bounded_matching(provider, source, max_claims_per_batch=1, max_calls=16)
+    assert run.status == "completed"
+    assert len(provider.requests) == len(run.child_attempts) == run.planned_count == count
+    assert run.policy_snapshot["batching"]["maximum_calls"] == 16
+    assert [item.requirement_id for item in run.output.items] == [
+        row.requirement.id for row in source.requirements
+    ]
+    assert run.input_snapshot.model_dump(mode="json") == original
+    assert source.model_dump(mode="json") == original
+
+
+def test_seventeen_batches_exceed_even_explicit_long_document_budget_before_any_call(source):
+    provider = RecordingProvider()
+    with pytest.raises(SemanticMatchingError) as captured:
+        run_bounded_matching(
+            provider, repeated_requirements(source, 17), max_claims_per_batch=1, max_calls=16,
+        )
+    assert provider.requests == []
+    assert captured.value.run.error_code == "batch_call_limit_exceeded"
+    assert captured.value.run.planned_count == 17
+    assert captured.value.run.policy_snapshot["batching"]["maximum_calls"] == 16
+
+
+@pytest.mark.parametrize("limit", [False, True, 0, -1, 1.5, "16", None, 17])
+def test_call_budget_is_strictly_bounded_before_any_provider_call(source, limit):
+    provider = RecordingProvider()
+    with pytest.raises(ValueError, match="max_calls must be an integer between 1 and 16"):
+        plan_matching_batches(source, max_calls=limit)
+    with pytest.raises(ValueError, match="max_calls must be an integer between 1 and 16"):
+        run_bounded_matching(provider, source, max_calls=limit)
+    assert provider.requests == []
 
 
 def test_a_large_indivisible_requirement_keeps_every_atom(source):

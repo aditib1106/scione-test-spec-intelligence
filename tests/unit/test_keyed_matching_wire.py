@@ -175,3 +175,43 @@ def test_no_candidate_row_uses_null_choices_and_only_empty_claim_links(source):
     link = item["claim_alignments"][first.normalized.claims[0].id]
     link.update(relation="same_parameter", capability_claim_ids=["invented_lab_claim"])
     assert list(Draft202012Validator(request.json_schema).iter_errors(payload))
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_four_matching_workers_keep_order_and_collect_every_admitted_response(source, fail):
+    class FourProvider(PaidProvider):
+        def __init__(self):
+            super().__init__(fail=fail)
+            self.admission_lock = threading.Lock()
+            self.admissions = 0
+            self.first_wave = threading.Barrier(4)
+
+        def generate_structured(self, request):
+            with self.admission_lock:
+                self.admissions += 1
+                position = self.admissions
+            if position <= 4:
+                self.first_wave.wait(timeout=3)
+            return super().generate_structured(request)
+
+    provider = FourProvider()
+    if fail:
+        with pytest.raises(SemanticMatchingError) as caught:
+            run_bounded_matching(
+                provider, source, max_claims_per_batch=1, max_concurrent_batches=4,
+            )
+        run = caught.value.run
+        assert len(provider.requests) == len(run.child_attempts) == 4
+        assert sum(child.status == "failed" for child in run.child_attempts) == 1
+        assert sum(child.status == "completed" for child in run.child_attempts) == 3
+    else:
+        run = run_bounded_matching(
+            provider, source, max_claims_per_batch=1, max_concurrent_batches=4,
+        )
+        assert len(run.child_attempts) == len(provider.requests) == 6
+        assert run.status == "completed"
+    assert run.policy_snapshot["batching"]["max_concurrent_batches"] == 4
+    assert [c.input_snapshot.requirements[0].requirement.id for c in run.child_attempts] == [
+        r.requirement.id for r in source.requirements[:len(run.child_attempts)]
+    ]
+    assert not any(thread.name.startswith("matching_") for thread in threading.enumerate())

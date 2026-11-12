@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from scione.inference_progress import ProgressProvider, ProgressReporter
 from scione.matching.keyed_wire import KEYED_WIRE_VERSION
 from scione.matching.models import MatchingInput, SemanticMatchingOutput, SemanticMatchingRun
 from scione.matching.projection import MATCHING_PROJECTION_VERSION, MatchingProjectionError
@@ -29,6 +30,7 @@ from scione.providers.base import ModelProvider, StructuredGenerationRequest, To
 
 MATCHING_BATCH_POLICY_VERSION = "whole_requirement_batches_v7"
 MAX_MATCHING_BATCH_CALLS = 8
+MAX_LONG_DOCUMENT_MATCHING_BATCH_CALLS = 16
 MATCHING_BATCH_SOFT_CLAIM_LIMIT = 40
 
 
@@ -106,6 +108,7 @@ def plan_matching_batches(
     max_input_characters: int = DEFAULT_MATCHING_INPUT_CHARACTER_LIMIT,
     max_claims_per_batch: int = MATCHING_BATCH_SOFT_CLAIM_LIMIT,
     keyed: bool = False,
+    max_calls: int = MAX_MATCHING_BATCH_CALLS,
 ) -> MatchingBatchPlan:
     """Prepare every child before any network call; whole rows remain unchanged.
 
@@ -118,13 +121,20 @@ def plan_matching_batches(
     ):
         if isinstance(value, bool) or not isinstance(value, int) or value < 1:
             raise ValueError(f"{name} must be a positive integer.")
+    if (
+        isinstance(max_calls, bool) or not isinstance(max_calls, int)
+        or not 1 <= max_calls <= MAX_LONG_DOCUMENT_MATCHING_BATCH_CALLS
+    ):
+        raise ValueError(
+            f"max_calls must be an integer between 1 and {MAX_LONG_DOCUMENT_MATCHING_BATCH_CALLS}."
+        )
     snapshot = MatchingInput.model_validate(snapshot.model_dump(mode="json"))
     manifest: dict[str, Any] = {
         "policy_version": MATCHING_BATCH_POLICY_VERSION,
         "kind": "local_execution_plan_not_a_provider_request",
         "max_input_characters": max_input_characters,
         "soft_claim_limit": max_claims_per_batch,
-        "maximum_calls": MAX_MATCHING_BATCH_CALLS,
+        "maximum_calls": max_calls,
         "wire_format": KEYED_WIRE_VERSION if keyed else "matching_array_v1",
         "preflight_complete": False,
         "batches": [],
@@ -174,11 +184,11 @@ def plan_matching_batches(
     if indices:
         append_current()
     manifest["preflight_complete"] = True
-    if len(snapshots) > MAX_MATCHING_BATCH_CALLS:
+    if len(snapshots) > max_calls:
         raise MatchingBatchPlanningError(
             "batch_call_limit_exceeded",
             f"This input needs {len(snapshots)} whole-test matching calls; the limit is "
-            f"{MAX_MATCHING_BATCH_CALLS}. No model call was made. Reduce the selected scope.",
+            f"{max_calls}. No model call was made. Reduce the selected scope.",
             manifest,
         )
     return MatchingBatchPlan(tuple(snapshots), tuple(requests), manifest, False)
@@ -257,8 +267,15 @@ def run_bounded_matching(
     *,
     max_input_characters: int = DEFAULT_MATCHING_INPUT_CHARACTER_LIMIT,
     max_claims_per_batch: int | None = None,
+    max_calls: int = MAX_MATCHING_BATCH_CALLS,
+    max_concurrent_batches: int = 2,
+    on_progress=None,
 ) -> SemanticMatchingRun:
     """Execute one explicit bounded plan, with no retries or accepted partial output."""
+    activity = ProgressReporter(on_progress)
+    activity.emit("planning")
+    if type(max_concurrent_batches) is not int or not 1 <= max_concurrent_batches <= 4:
+        raise ValueError("max_concurrent_batches must be an integer between 1 and 4.")
     snapshot = MatchingInput.model_validate(snapshot.model_dump(mode="json"))
     started = datetime.now(UTC)
     if max_claims_per_batch is None:
@@ -269,6 +286,7 @@ def run_bounded_matching(
             max_input_characters=max_input_characters,
             max_claims_per_batch=max_claims_per_batch,
             keyed=provider.provider_name in {"sail", "fireworks"},
+            max_calls=max_calls,
         )
     except MatchingProjectionError:
         # Preserve the existing single-call projection failure artifact semantics.
@@ -281,24 +299,36 @@ def run_bounded_matching(
             **fields, status="failed", error_code=exc.code, error_message=str(exc)
         )
         raise SemanticMatchingError(str(exc), run=run) from exc
+    activity.plan(len(plan.snapshots), stage="matching")
+    observed_provider = (
+        ProgressProvider(provider, activity, stage="matching")
+        if on_progress is not None else provider
+    )
     if plan.single_call:
-        return SemanticMatchingRunner(provider, max_input_characters=max_input_characters).run(
+        result = SemanticMatchingRunner(
+            observed_provider, max_input_characters=max_input_characters
+        ).run(
             snapshot
         )
+        activity.emit("validating")
+        return result
 
     children: list[SemanticMatchingRun] = []
-    concurrency = 2 if provider.provider_name in {"sail", "fireworks"} else 1
+    concurrency = max_concurrent_batches if provider.provider_name in {"sail", "fireworks"} else 1
     plan.manifest["max_concurrent_batches"] = concurrency
     plan.manifest["latency_semantics"] = "wall_time_ms" if concurrency > 1 else "sum_child_ms"
     failure = None
     with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="matching") as executor:
         for offset in range(0, len(plan.snapshots), concurrency):
-            # A wave starts at most two independent preflighted whole-test
+            activity.emit("matching")
+            # A wave starts only the configured bounded set of preflighted whole-test
             # requests. No later wave starts after a known failure. Both
             # in-flight attempts finish and are retained before returning.
             futures = [
                 executor.submit(
-                    SemanticMatchingRunner(provider, max_input_characters=max_input_characters).run,
+                    SemanticMatchingRunner(
+                        observed_provider, max_input_characters=max_input_characters
+                    ).run,
                     child_snapshot,
                 )
                 for child_snapshot in plan.snapshots[offset : offset + concurrency]
@@ -312,8 +342,16 @@ def run_bounded_matching(
             if failure is not None:
                 break
     if failure is not None:
+        failed_kinds = {
+            child.provider_failure_kind for child in children if child.status == "failed"
+        }
+        cause = (
+            "The AI service timed out in a comparison batch. "
+            if "timeout" in failed_kinds else ""
+        )
         message = (
-            f"Matching stopped after {len(children)} attempted batches of {len(plan.snapshots)}. "
+            cause
+            + f"Matching stopped after {len(children)} attempted batches of {len(plan.snapshots)}. "
             "No partial result was accepted. Completed and failed attempts are retained; "
             "previous saved results remain available. Retry must be requested explicitly."
         )
@@ -322,8 +360,13 @@ def run_bounded_matching(
             status="failed",
             error_code="batch_child_failed",
             error_message=message,
+            provider_failure_kind=(
+                "timeout" if "timeout" in failed_kinds
+                else next((kind for kind in sorted(failed_kinds - {None})), None)
+            ),
         )
         raise SemanticMatchingError(message, run=run) from failure
+    activity.emit("validating")
     proposal = SemanticMatchingOutput(
         items=[item for child in children for item in child.proposal.items],
         review_issues=[issue for child in children for issue in child.proposal.review_issues],
