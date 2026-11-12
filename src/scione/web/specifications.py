@@ -340,6 +340,11 @@ def _render_extraction_controls(
                     run = CustomerRequirementRunner(
                         adapter,
                         max_input_characters=settings.scione_customer_input_character_limit,
+                        max_concurrent_chunks=(
+                            settings.scione_long_document_parallelism
+                            if stored.document.page_count > 10 else 2
+                        ),
+                        source_pdf_bytes=store.read_pdf(stored.document_id),
                     ).run(stored.document, strategy=strategy)
                     store.save_extraction(stored.document_id, run)
             except CustomerExtractionError as exc:

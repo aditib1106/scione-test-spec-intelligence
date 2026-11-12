@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 
 from scione.schemas import IngestedDocument
 from scione.source_text import citation_contains
@@ -76,6 +76,81 @@ class CustomerTestInventory(CustomerModel):
             if any(index < 1 or index > len(self.tests) for index in attachment.applies_to):
                 raise ValueError("Inventory attachments must target existing tests.")
         return self
+
+
+@dataclass(frozen=True)
+class ParsedInventory:
+    """Independently valid tests with whole invalid attachments explicitly unused.
+
+    Attachment indices are one-based positions in the original provider payload.
+    No target list, source quotation or test index is repaired by this parser.
+    """
+
+    inventory: CustomerTestInventory
+    unused_attachment_indices: tuple[int, ...] = ()
+    issues: tuple[str, ...] = ()
+    kept_attachment_original_indices: tuple[int, ...] = ()
+
+
+def parse_inventory_payload(payload: object) -> ParsedInventory:
+    """Keep valid tests when only individual attachment proposals are invalid.
+
+    Invalid root fields, test entries, or attachment-list shape/size still fail
+    the entire schema. An invalid/dangling attachment is unused in its entirety,
+    including any applicability exception; its original raw payload remains the
+    caller's audit artifact. The surviving tests retain their original order.
+    """
+    try:
+        inventory = CustomerTestInventory.model_validate(payload)
+    except ValidationError as failure:
+        allowed_global_errors = {
+            "Value error, Inventory attachment targets must be distinct.",
+            "Value error, Inventory attachments must target existing tests.",
+        }
+        for error in failure.errors(include_url=False, include_input=False):
+            location = error["loc"]
+            individual_attachment = (
+                len(location) >= 2 and location[0] == "attachments"
+                and isinstance(location[1], int)
+            )
+            known_target_error = not location and error["msg"] in allowed_global_errors
+            if not individual_attachment and not known_target_error:
+                raise
+        if not isinstance(payload, dict) or not isinstance(payload.get("attachments"), list):
+            raise
+        # Revalidate every independent root/test field, without changing tests.
+        base = CustomerTestInventory.model_validate({**payload, "attachments": []})
+        kept = []
+        unused = []
+        issues = []
+        original_indices = []
+        for index, raw in enumerate(payload["attachments"], 1):
+            try:
+                attachment = InventoryAttachment.model_validate(raw)
+            except ValidationError as attachment_failure:
+                details = "; ".join(
+                    f"{'.'.join(map(str, error['loc'])) or 'attachment'}: {error['msg']}"
+                    for error in attachment_failure.errors(include_url=False, include_input=False)
+                )
+                reason = f"invalid attachment schema ({details})"
+            else:
+                if len(set(attachment.applies_to)) != len(attachment.applies_to):
+                    reason = "attachment targets are not distinct"
+                elif any(target < 1 or target > len(base.tests)
+                         for target in attachment.applies_to):
+                    reason = "attachment targets do not all refer to existing tests"
+                else:
+                    kept.append(attachment)
+                    original_indices.append(index)
+                    continue
+            unused.append(index)
+            issues.append(f"Inventory attachment {index} was unused: {reason}.")
+        inventory = CustomerTestInventory.model_validate({**payload, "attachments": kept})
+        return ParsedInventory(inventory, tuple(unused), tuple(issues), tuple(original_indices))
+    return ParsedInventory(
+        inventory,
+        kept_attachment_original_indices=tuple(range(1, len(inventory.attachments) + 1)),
+    )
 
 
 def has_applicability_exception(text: str) -> bool:

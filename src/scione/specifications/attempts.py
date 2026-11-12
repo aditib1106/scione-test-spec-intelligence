@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from scione.providers.base import (
     ProviderError,
+    ProviderFailureKind,
     StructuredGenerationRequest,
     StructuredGenerationResponse,
     TokenUsage,
@@ -32,6 +33,8 @@ class GenerationFailure(AttemptModel):
     model: str | None = None
     provider_request_id: str | None = None
     generation_settings: dict = Field(default_factory=dict)
+    failure_kind: ProviderFailureKind | None = None
+    http_status: int | None = Field(default=None, ge=100, le=599)
 
     @classmethod
     def from_provider_error(cls, error: ProviderError) -> "GenerationFailure":
@@ -44,6 +47,8 @@ class GenerationFailure(AttemptModel):
             model=error.model,
             provider_request_id=error.provider_request_id,
             generation_settings=error.generation_settings,
+            failure_kind=error.failure_kind,
+            http_status=error.http_status,
         )
 
 

@@ -30,10 +30,16 @@ class UploadNameSpecStore(FileSpecStore):
     """Use the most recently uploaded name without rewriting original evidence."""
 
     def import_pdf(self, filename: str, data: bytes) -> StoredSpecification:
-        stored = super().import_pdf(filename, data)
+        stored, _ = self.import_pdf_with_status(filename, data)
+        return stored
+
+    def import_pdf_with_status(
+        self, filename: str, data: bytes
+    ) -> tuple[StoredSpecification, bool]:
+        stored, created = super().import_pdf_with_status(filename, data)
         if stored.original_name == filename:
-            return stored
-        # The source write lock has been released by import_pdf. Name updates
+            return stored, created
+        # The source write lock has been released by the import. Name updates
         # share that same guard with review/source writes and are independently
         # atomic. Existing immutable source/model records are never renamed.
         with self._locked():
@@ -54,7 +60,7 @@ class UploadNameSpecStore(FileSpecStore):
                 history.mkdir(exist_ok=True, mode=0o700)
                 self._write_model(history / f"{event.event_id}.json", event)
                 self._write_model(directory / "current_upload_name.json", event)
-        return self.load_document(stored.document_id)
+        return self.load_document(stored.document_id), created
 
     def _name_event(self, stored: StoredSpecification) -> UploadNameEvent | None:
         directory = self._document_directory(stored.document_id)

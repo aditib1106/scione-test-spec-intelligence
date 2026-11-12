@@ -27,9 +27,36 @@ def load_compact_customer_requirements_system_prompt() -> str:
 
 
 def build_customer_requirements_user_prompt(
-    document: IngestedDocument, *, focus_pages: tuple[int, ...] | None = None
+    document: IngestedDocument, *, focus_pages: tuple[int, ...] | None = None,
+    chunk_index: int | None = None, chunk_count: int | None = None,
+    context_pages: tuple[int, ...] = (),
+    fragment_pages: tuple[int, ...] = (),
+    section_context: str = "",
 ) -> str:
     focus_instruction = (
+        (
+            f"<SOURCE_CHUNK index='{chunk_index}' total='{chunk_count}'>\n"
+            f"primary_pages: {','.join(map(str, focus_pages or ()))}\n"
+            f"context_pages: {','.join(map(str, context_pages))}\n"
+            "This request contains ONLY the physical pages listed below, not the complete PDF. "
+            "Physical page numbers and the original document page_count are unchanged. "
+            "Emit a test only when its substantive test row or procedure request occurs on "
+            "a primary page. A section heading, index, cross-reference or shared clause does "
+            "not own separate rows printed on context pages. Context pages may complete "
+            "the same continued primary row, never introduce other rows. An annex may "
+            "own explicitly additional tests; package summaries are not new tests. "
+            "PAGE_ROLE labels are orchestration metadata, not customer text. "
+            "Context pages provide shared preparation, exceptions and continued tables; "
+            "do not emit a separate test solely because it appears on a context page or index. "
+            "Use the supplied original wording, preserve applicability and exceptions, and "
+            "cite only supplied physical pages. A primary range containing only document "
+            "control, shared conditions or an index may return no requirements. "
+            "When work continues across pages, retain the full relevant supplied conditions "
+            "with the same test rather than inventing a separate test. Never infer missing "
+            "details from remembered standards.\n</SOURCE_CHUNK>"
+        )
+        if chunk_index is not None
+        else (
         "WHOLE-DOCUMENT PASS: cover every test-related section of every physical page."
         if focus_pages is None
         else (
@@ -41,7 +68,20 @@ def build_customer_requirements_user_prompt(
             "Do not duplicate an index-only mention when the detailed requirement is on "
             "another page. A genuinely empty focus range may return no requirements."
         )
+        )
     )
+    source_text = document.as_prompt_text()
+    if chunk_index is not None:
+        parts = []
+        for page in document.pages:
+            role = "PRIMARY" if page.page_number in (focus_pages or ()) else "CONTEXT_ONLY"
+            parts.append(
+                f"=== PAGE {page.page_number} ===\nPAGE_ROLE: {role}\n"
+                + ("SOURCE_VIEW: exact referenced subsection excerpts, not the whole page.\n"
+                   if page.page_number in fragment_pages else "")
+                + page.text.rstrip()
+            )
+        source_text = "\n\n".join(parts)
     return "\n".join(
         [
             "Extract customer-stated test requirements from the source below.",
@@ -49,7 +89,11 @@ def build_customer_requirements_user_prompt(
             focus_instruction,
             f"<PARAMETER_VOCABULARY version='{REGISTRY_VERSION}'>",
             "Naming hints only; source evidence determines whether any parameter exists.",
-            *[f"{item.id}: {item.label}; {item.description}" for item in definitions()],
+            *[
+                f"{item.id}: {item.label}"
+                + (f"; {item.description}" if chunk_index is None else "")
+                for item in definitions()
+            ],
             "</PARAMETER_VOCABULARY>",
             "<SOURCE_METHOD_MENTIONS>",
             "Literal, non-exhaustive source checklist, NOT a list of requested tests. "
@@ -61,6 +105,7 @@ def build_customer_requirements_user_prompt(
             ],
             "</SOURCE_METHOD_MENTIONS>",
             source_context_guidance(document),
+            section_context,
             extraction_catalog_guidance(document),
             "<SOURCE_DOCUMENT>",
             f"document_id: {document.document_id}",
@@ -68,7 +113,7 @@ def build_customer_requirements_user_prompt(
             f"page_count: {document.page_count}",
             f"text_reading_order: {document.text_reading_order.value}",
             "<DOCUMENT_TEXT>",
-            document.as_prompt_text(),
+            source_text,
             "</DOCUMENT_TEXT>",
             "</SOURCE_DOCUMENT>",
         ]

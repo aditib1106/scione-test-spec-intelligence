@@ -225,3 +225,48 @@ def test_historical_demo_notice_error_is_reprojected_without_changing_raw_output
     assert assess_requirements(run, source)["req_001"].state == "ready"
     assert run.extraction.review_issues == [issue]
     assert json.loads(run.raw_response) == raw
+
+
+REPRESENTATIVE_NOTICE = "No real company or person is named; all limits are representative."
+
+
+def test_literal_representative_entity_disclaimer_is_metadata_and_reprojects_historical_warning():
+    source = document(REPRESENTATIVE_NOTICE)
+    raw = payload(REPRESENTATIVE_NOTICE)
+    run = CustomerRequirementRunner(StaticModelProvider(raw)).run(
+        source, strategy="compact_document"
+    )
+    assert run.notice_audits[0].status == "source_verified"
+    issue = (
+        "Document notice needs review: Provenance notice contains other content that "
+        "still requires review. " + REPRESENTATIVE_NOTICE
+    )
+    run.extraction.review_issues.append(issue)
+    before = run.model_dump_json()
+    assert nonblocking_notice_issues(run, source) == {issue}
+    assert assess_requirements(run, source)["req_001"].state == "ready"
+    assert run.model_dump_json() == before
+    assert json.loads(run.raw_response) == raw
+
+
+@pytest.mark.parametrize("suffix", [
+    " Test at 30 °C.", " The acceptance limit is unclear.", " 2026.",
+])
+def test_representative_disclaimer_does_not_hide_appended_science_or_numbers(suffix):
+    quote = REPRESENTATIVE_NOTICE + suffix
+    assert not metadata_only_synthetic_quote(quote)
+    run = CustomerRequirementRunner(StaticModelProvider(payload(quote))).run(
+        document(quote), strategy="compact_document"
+    )
+    assert run.notice_audits[0].status == "needs_review"
+    assert assess_requirements(run, document(quote))["req_001"].state == "needs_attention"
+
+
+def test_representative_disclaimer_requires_its_literal_physical_source():
+    source = document("No entity disclaimer was supplied.")
+    run = CustomerRequirementRunner(StaticModelProvider(payload(REPRESENTATIVE_NOTICE))).run(
+        source, strategy="compact_document"
+    )
+    assert run.notice_audits[0].status == "needs_review"
+    assert nonblocking_notice_issues(run, source) == set()
+    assert assess_requirements(run, source)["req_001"].state == "needs_attention"

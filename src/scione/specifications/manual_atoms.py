@@ -10,10 +10,16 @@ from scione.structured.lexical_grounding import (
     source_unit_name,
 )
 from scione.structured.normalization import known_source_fact_problem
+from scione.structured.planning import planning_context_is_source_grounded
+from scione.structured.source_clauses import context_is_source_grounded
 
 
 def validate_parameter_edits(
-    previous: CustomerRequirement | None, edited: CustomerRequirement, *, source_unit_proofs=None
+    previous: CustomerRequirement | None,
+    edited: CustomerRequirement,
+    *,
+    source_unit_proofs=None,
+    verified_source_evidence=None,
 ) -> None:
     """Check only changed atoms; an unrelated edit cannot certify old errors.
 
@@ -25,6 +31,9 @@ def validate_parameter_edits(
     if len(identifiers) != len(set(identifiers)):
         raise ValueError("Each detailed parameter needs its own identifier.")
     original = {claim.id: claim for claim in previous.atomic_claims} if previous else {}
+    evidence_rows = (
+        edited.evidence if verified_source_evidence is None else verified_source_evidence
+    )
     for claim in edited.atomic_claims:
         if claim == original.get(claim.id):
             continue
@@ -32,13 +41,36 @@ def validate_parameter_edits(
         if not pages or any(
             not any(
                 evidence.page == page and citation_contains(evidence.quote, claim.raw_text)
-                for evidence in edited.evidence
+                for evidence in evidence_rows
             )
             for page in pages
         ):
             raise ValueError(
                 f"{claim.label}: keep a source quotation and page belonging to this test. "
                 "Update the test's source evidence if its quotation is missing."
+            )
+        old = original.get(claim.id)
+        if old and claim.model_dump(exclude={"source_context"}) == old.model_dump(
+            exclude={"source_context"}
+        ):
+            # Editing an owned context does not certify an existing model value.
+            # Every scientific field stays identical and normalization still
+            # rechecks the entire atom. Unrelated old unit errors remain visible.
+            if claim.source_context and any(
+                evidence.page in pages
+                and citation_contains(evidence.quote, claim.raw_text)
+                and (
+                    context_is_source_grounded(
+                        claim.source_context, evidence.quote, claim.stage
+                    )
+                    or planning_context_is_source_grounded(claim, evidence.quote)
+                )
+                for evidence in evidence_rows
+            ):
+                continue
+            raise ValueError(
+                f"{claim.label}: keep context wording supported by this parameter's "
+                "source quotation."
             )
         numbers = {
             value

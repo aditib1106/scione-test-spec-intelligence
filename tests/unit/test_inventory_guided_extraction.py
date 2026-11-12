@@ -156,7 +156,6 @@ def test_both_source_readers_receive_the_same_bounded_reference_context():
     ("invented_quote", "unused_invalid_source"),
     ("wrong_page", "unused_invalid_source"),
     ("invalid_shape", "unused_invalid_schema"),
-    ("bad_attachment_target", "unused_invalid_schema"),
     ("empty", "unused_empty_inventory"),
 ])
 def test_untrusted_inventory_is_unused_but_full_source_extraction_still_runs(mutation, status):
@@ -167,8 +166,6 @@ def test_untrusted_inventory_is_unused_but_full_source_extraction_still_runs(mut
         plan["tests"][0]["evidence"][0]["page"] = 9
     elif mutation == "invalid_shape":
         plan = {"unexpected": True}
-    elif mutation == "bad_attachment_target":
-        plan["attachments"][0]["applies_to"] = [2]
     else:
         plan = {"tests": [], "attachments": [], "uncertainties": []}
     provider = SequenceProvider([plan, extraction()])
@@ -181,6 +178,85 @@ def test_untrusted_inventory_is_unused_but_full_source_extraction_still_runs(mut
     assert "INVENTED_SOURCE_999_DEGREES" not in provider.requests[1].user_prompt
     assert len(result.extraction.requirements) == 1
     assert json.loads(result.calls[0].raw_response) == plan
+
+
+def test_dangling_attachment_is_unused_but_independently_valid_test_guidance_survives():
+    plan = inventory()
+    # One valid and one dangling target must discard the entire attachment,
+    # rather than silently trimming its applicability to the remaining test.
+    plan["attachments"][0]["applies_to"] = [1, 2]
+    original = copy.deepcopy(plan)
+    source = document()
+    source_before = source.model_dump_json()
+    provider = SequenceProvider([plan, extraction()])
+
+    result = CustomerRequirementRunner(provider).run(
+        source, strategy="inventory_compact_document"
+    )
+
+    assert len(provider.requests) == 2
+    assert result.inventory_audit.status == "source_verified_partial_guidance"
+    assert result.inventory_audit.guidance_sha256
+    assert result.inventory_audit.omitted_test_indexes == []
+    assert result.inventory_audit.omitted_attachment_indexes == [1]
+    assert any("attachment 1" in issue and "existing tests" in issue
+               for issue in result.inventory_audit.issues)
+    prompt = provider.requests[1].user_prompt
+    assert "inventory guide is incomplete" in prompt
+    guide = json.loads(prompt.split("<SOURCE_INVENTORY_DRAFT>\n", 1)[1].split(
+        "\n</SOURCE_INVENTORY_DRAFT>", 1
+    )[0])
+    assert guide["tests"] == original["tests"]
+    assert guide["attachments"] == []
+    assert SOURCE in prompt
+    assert len(result.extraction.requirements) == 1
+    assert json.loads(result.calls[0].raw_response) == original
+    assert plan == original
+    assert source.model_dump_json() == source_before
+
+
+def test_salvage_and_grounding_audits_both_use_original_raw_attachment_positions():
+    plan = inventory()
+    plan["tests"].append({
+        "test": "Unlocated work", "evidence": [{"page": 1, "quote": "UNLOCATED TEST"}],
+    })
+    attachment = plan["attachments"][0]
+    plan["attachments"] = [
+        {**copy.deepcopy(attachment), "applies_to": [1, 3]},
+        {**copy.deepcopy(attachment), "evidence": [{"page": 1, "quote": "UNLOCATED NOTE"}]},
+        {**copy.deepcopy(attachment), "applies_to": [2]},
+        copy.deepcopy(attachment),
+    ]
+    original = copy.deepcopy(plan)
+    provider = SequenceProvider([plan, extraction()])
+
+    result = run(provider)
+
+    audit = result.inventory_audit
+    assert audit.status == "source_verified_partial_guidance"
+    assert audit.omitted_test_indexes == [2]
+    assert audit.omitted_attachment_indexes == [1, 2, 3]
+    assert any(issue.startswith("Inventory attachment 1 was unused:") for issue in audit.issues)
+    assert (
+        "Inventory attachment 2 evidence 1 is not a literal fragment on physical page 1."
+        in audit.issues
+    )
+    assert (
+        "Inventory attachment 3 was unused because not all target tests had "
+        "independently located evidence." in audit.issues
+    )
+    assert not any(issue.startswith("Inventory attachment 1 evidence") for issue in audit.issues)
+    assert not any(issue.startswith("Inventory attachment 2 was unused because")
+                   for issue in audit.issues)
+    prompt = provider.requests[1].user_prompt
+    assert SOURCE in prompt and "inventory guide is incomplete" in prompt
+    guide = json.loads(prompt.split("<SOURCE_INVENTORY_DRAFT>\n", 1)[1].split(
+        "\n</SOURCE_INVENTORY_DRAFT>", 1
+    )[0])
+    assert guide["tests"] == original["tests"][:1]
+    assert guide["attachments"] == [original["attachments"][3]]
+    assert json.loads(result.calls[0].raw_response) == original
+    assert plan == original
 
 
 def test_guide_is_not_a_whitelist_and_a_real_test_missed_by_inventory_survives():

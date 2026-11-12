@@ -161,7 +161,10 @@ def test_unsafe_names_do_not_create_store(tmp_path: Path, name: str) -> None:
     assert not store.root.exists()
 
 
-@pytest.mark.parametrize("data", [b"", b"not a PDF", b"%PDF-malformed", b"x" * (MAX_PDF_BYTES + 1)])
+@pytest.mark.parametrize(
+    "data", [b"", b"not a PDF", b"%PDF-malformed", b"x" * (MAX_PDF_BYTES + 1)],
+    ids=["empty", "not-pdf", "malformed", "oversized"],
+)
 def test_invalid_or_oversized_pdf_rejected_without_artifacts(tmp_path: Path, data: bytes) -> None:
     store = FileSpecStore(tmp_path)
     with pytest.raises(SpecStoreError):

@@ -133,6 +133,18 @@ class FileSpecStore:
     def import_pdf(self, filename: str, data: bytes) -> StoredSpecification:
         """Validate, preserve, and parse a PDF; identical bytes reuse the first upload."""
 
+        saved, _ = self.import_pdf_with_status(filename, data)
+        return saved
+
+    def import_pdf_with_status(
+        self, filename: str, data: bytes
+    ) -> tuple[StoredSpecification, bool]:
+        """Import a PDF and atomically report whether this upload created its record.
+
+        A duplicate retains the original filename, metadata and saved analysis.
+        The decision is made while holding the same lock as the import itself.
+        """
+
         self._validate_filename(filename)
         self._validate_pdf(data)
         digest = hashlib.sha256(data).hexdigest()
@@ -144,7 +156,7 @@ class FileSpecStore:
                     existing = self.load_document(document_id)
                     if existing.document.sha256 != digest:
                         raise SpecStoreError("Document ID collision; no file was replaced.")
-                    return existing
+                    return existing, False
                 with tempfile.TemporaryDirectory(prefix=".import-", dir=self.root) as temporary:
                     staging = Path(temporary)
                     pdf_path = staging / "original.pdf"
@@ -165,7 +177,7 @@ class FileSpecStore:
                     self._write_model(staging / "metadata.json", metadata)
                     self._check_directory(directory)
                     os.rename(staging, directory)
-                return self.load_document(document_id)
+                return self.load_document(document_id), True
         except (OSError, ValueError, IngestionError) as exc:
             raise SpecStoreError(f"Unable to import specification: {exc}") from exc
 

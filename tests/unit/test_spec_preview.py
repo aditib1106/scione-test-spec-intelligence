@@ -9,6 +9,8 @@ import pytest
 from scione.specifications.pdf_preview import (
     PDFPreviewError,
     inspect_pdf_highlights,
+    matched_geometric_table_row,
+    pdf_quote_tokens,
     render_pdf_page,
 )
 
@@ -318,3 +320,97 @@ def test_unavailable_table_inspection_cannot_clear_reconstructed_quotes(monkeypa
         quotes=["Cross-cut adhesion | ISO 2409, 2 mm spacing, all bake conditions, all substrates"],
     )
     assert result.matches[0].status != "matched"
+
+
+def test_exact_geometric_row_locates_no_pipe_quote_in_column_drawn_pdf() -> None:
+    data = ruled_table_pdf_bytes(column_order=True)
+    quote = "Adhesion ISO 2409 GT <= 1 3.2"
+
+    match = inspect_pdf_highlights(data, quotes=[quote]).matches[0]
+
+    assert match.status == "matched"
+    assert match.matched_segments == match.total_segments == 1
+    assert len(match.rectangles) == 4
+    assert all(80 < rectangle[1] < rectangle[3] < 120 for rectangle in match.rectangles)
+    assert matched_geometric_table_row(data, 1, quote, expected_label="ADHESION") == (
+        ("adhesion",), ("iso", "2409"), ("gt", "<=", "1"), ("3.2",),
+    )
+    assert matched_geometric_table_row(data, 1, quote, expected_label="Hardness") is None
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        "Adhesion ISO 2409 GT <= 2 3.2",  # Changed numeric value.
+        "Adhesion ISO 2409 GT >= 1 3.2",  # Changed inequality.
+        "Adhesion ISO 15184 GT <= 1 3.2",  # Method from another row.
+        "ISO 2409 Adhesion GT <= 1 3.2",  # Same token bag, different order.
+        "Adhesion ISO 2409 3.2",  # Missing one source cell.
+        "GT <= 1 3.2 Hardness ISO 15184",  # Cross-row fragments.
+        "Adhesion | ISO 2409 | GT <= 1 | 3.2",  # Legacy pipe path stays separate.
+    ],
+)
+def test_geometric_row_proof_rejects_changed_missing_or_cross_row_text(quote: str) -> None:
+    data = ruled_table_pdf_bytes(column_order=True)
+    assert matched_geometric_table_row(data, 1, quote) is None
+    if "|" not in quote:
+        assert inspect_pdf_highlights(data, quotes=[quote]).matches[0].status != "matched"
+
+
+def test_duplicate_geometric_rows_cannot_prove_identity() -> None:
+    data = ruled_table_pdf_bytes(duplicate_row=True, column_order=True)
+    quote = "Adhesion ISO 2409 GT <= 1 3.2"
+    assert matched_geometric_table_row(data, 1, quote) is None
+    assert inspect_pdf_highlights(data, quotes=[quote]).matches[0].status != "matched"
+
+
+def test_plain_contiguous_quote_does_not_invoke_geometric_table_detection(monkeypatch) -> None:
+    def unexpected_table_inspection(*args, **kwargs):
+        raise AssertionError("A native contiguous quote needs no table fallback.")
+
+    monkeypatch.setattr(pymupdf.Page, "find_tables", unexpected_table_inspection)
+    assert inspect_pdf_highlights(pdf_bytes(), quotes=["First page"]).matched_count == 1
+
+
+def test_geometric_detection_is_lazy_and_runs_once_for_multiple_unmatched_quotes(monkeypatch):
+    import scione.specifications.pdf_preview as preview
+
+    original = preview._detected_geometric_table_rows
+    calls = []
+
+    def counted(page):
+        calls.append(page.number)
+        return original(page)
+
+    monkeypatch.setattr(preview, "_detected_geometric_table_rows", counted)
+    data = ruled_table_pdf_bytes(column_order=True)
+    result = inspect_pdf_highlights(data, quotes=[
+        "Adhesion ISO 2409 GT <= 1 3.2", "Hardness ISO 15184 GT <= 1 3.2",
+    ])
+    assert result.matched_count == 2
+    assert calls == [0]
+
+
+def test_evidence_tokens_keep_numbers_signs_and_units() -> None:
+    assert pdf_quote_tokens("140 ± 3 °C; −20; ≤ 5 mm") == (
+        "140", "±", "3", "°", "c", "-", "20", "<=", "5", "mm",
+    )
+
+
+def test_vertically_merged_cell_cannot_anchor_text_from_two_logical_rows() -> None:
+    with pymupdf.open() as document:
+        page = document.new_page(width=600, height=300)
+        for x in (30, 180, 330, 550):
+            page.draw_line((x, 40), (x, 160))
+        for y in (40, 80, 160):
+            page.draw_line((30, y), (550, y))
+        page.draw_line((180, 120), (550, 120))
+        for position, text in (
+            ((35, 65), "Test"), ((185, 65), "Method"), ((335, 65), "Limit"),
+            ((35, 105), "Adhesion"), ((185, 105), "ISO 2409"), ((335, 105), "GT <= 1"),
+            ((185, 145), "ISO 15184"), ((335, 145), "GT <= 2"),
+        ):
+            page.insert_text(position, text)
+        data = document.tobytes()
+    quote = "Adhesion ISO 2409 GT <= 1 ISO 15184 GT <= 2"
+    assert matched_geometric_table_row(data, 1, quote, expected_label="Adhesion") is None

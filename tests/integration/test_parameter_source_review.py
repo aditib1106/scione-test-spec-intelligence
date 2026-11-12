@@ -4,9 +4,13 @@ from copy import deepcopy
 from decimal import Decimal
 from uuid import uuid4
 
-from test_semantic_matching_api import SOURCE, setup  # noqa: F401
+from sqlalchemy import select
+from test_semantic_matching_api import SOURCE, make_pdf, setup  # noqa: F401
 
-from scione.structured.models import AtomicClaim
+from scione.library.store import runs
+from scione.specifications.models import RequirementEvidence
+from scione.structured import normalize_requirement
+from scione.structured.models import NORMALIZER_VERSION, AtomicClaim
 
 __all__ = ["setup"]
 
@@ -128,6 +132,130 @@ def test_rejecting_new_bad_atom_does_not_prevent_unrelated_correction_of_an_old_
     corrected = edit_parameters(client, doc, lambda row: row.update(atomic_claims=[source_atom()]))
     assert corrected.status_code == 200, corrected.text
     assert corrected.json()["facts_version"] >= 1
+
+
+def test_unchanged_unlocated_model_quote_does_not_block_valid_edit_or_certify_new_facts(setup):
+    client, workspace, doc, _provider, _settings = setup
+    run = workspace.specs.load_latest_extraction(doc).model_copy(deep=True)
+    run.run_id = str(uuid4())
+    run.extraction.requirements[0].evidence.append(
+        RequirementEvidence(page=1, quote="This invented model quotation says 999 degrees C.")
+    )
+    workspace.specs.save_extraction(doc, run)
+    result = edit_parameters(
+        client, doc, lambda row: row.update(original_test_name="Pencil hardness (checked)")
+    )
+    assert result.status_code == 200, result.text
+    evidence = result.json()["run"]["extraction"]["requirements"][0]["evidence"]
+    assert any("invented" in entry["quote"] for entry in evidence)
+    invalid = edit_parameters(
+        client, doc, lambda row: row.update(atomic_claims=[source_atom(
+            value=999, raw_text="This invented model quotation says 999 degrees C."
+        )])
+    )
+    assert invalid.status_code == 400
+    assert "belonging to this test" in invalid.json()["detail"]
+
+
+def test_changed_or_new_unlocated_quote_is_still_rejected(setup):
+    client, _workspace, doc, _provider, _settings = setup
+    result = edit_parameters(
+        client, doc, lambda row: row["evidence"].append(
+            {"page": 1, "quote": "Not physically present in the PDF."}
+        )
+    )
+    assert result.status_code == 400
+    assert "Locate each test's quotation" in result.json()["detail"]
+
+
+def test_owned_context_only_edit_cannot_certify_an_old_model_unit_error(setup):
+    client, workspace, doc, _provider, _settings = setup
+    run = workspace.specs.load_latest_extraction(doc).model_copy(deep=True)
+    run.run_id = str(uuid4())
+    run.extraction.requirements[0].atomic_claims = [
+        AtomicClaim.model_validate(source_atom(unit="panels"))
+    ]
+    workspace.specs.save_extraction(doc, run)
+
+    def change(row):
+        row["atomic_claims"][0]["source_context"] = "operating temperature"
+
+    result = edit_parameters(client, doc, change)
+    assert result.status_code == 200, result.text
+    atom = next(
+        claim for claim in result.json()["normalized_requirements"]["req_pencil"]["claims"]
+        if "human_atom_temperature" in claim["source_atom_ids"]
+    )
+    assert atom["normalization_state"] == "unresolved"
+    assert atom["availability"] == "unknown"
+    # A number or unit change is not a context-only correction.
+    result = edit_parameters(
+        client, doc,
+        lambda row: row["atomic_claims"][0].update(value="999", source_context="temperature"),
+    )
+    assert result.status_code == 400
+
+    result = edit_parameters(
+        client, doc,
+        lambda row: row["atomic_claims"][0].update(stage="curing", source_context="temperature"),
+    )
+    assert result.status_code == 400
+
+
+def test_context_only_edit_cannot_insert_unstated_parameter_scope(setup):
+    client, workspace, doc, _provider, _settings = setup
+    run = workspace.specs.load_latest_extraction(doc).model_copy(deep=True)
+    run.run_id = str(uuid4())
+    run.extraction.requirements[0].atomic_claims = [AtomicClaim.model_validate(source_atom())]
+    workspace.specs.save_extraction(doc, run)
+    result = edit_parameters(
+        client, doc,
+        lambda row: row["atomic_claims"][0].update(source_context="curing of aluminium panels"),
+    )
+    assert result.status_code == 400
+    assert "keep context wording supported" in result.json()["detail"]
+
+
+def test_library_read_reprojects_old_planning_index_without_rewriting_machine_extraction(setup):
+    client, workspace, fixture_doc, provider, _settings = setup
+    raw = "Assign three to baseline checks and three to thermal cycling."
+    stored = workspace.specs.import_pdf("planning.pdf", make_pdf(raw))
+    run = workspace.specs.load_latest_extraction(fixture_doc).model_copy(deep=True)
+    run.run_id, run.document_id = str(uuid4()), stored.document_id
+    row = run.extraction.requirements[0]
+    row.conditions = []
+    row.evidence = [RequirementEvidence(page=1, quote=raw)]
+    row.atomic_claims = [AtomicClaim(
+        id="allocation", parameter_id="panel_count", label="Panel count", operator="=",
+        value=3, unit="panels", raw_text=raw,
+        source_context="to baseline checks, from each lot", source_pages=[1],
+    )]
+    workspace.specs.save_extraction(stored.document_id, run)
+    before = run.model_dump_json()
+    current = normalize_requirement(row, native_first=True)
+    legacy = current.model_copy(deep=True, update={
+        "normalizer_version": "atomic_requirements_v0_39_native_first",
+    })
+    legacy.claims[0] = legacy.claims[0].model_copy(update={
+        "parameter_id": None, "normalization_state": "unresolved", "availability": "unknown",
+    })
+    workspace.library.store.ensure_document(stored, run.extraction.document)
+    workspace.library.store.save_requirements(run, [legacy])
+    original_source = run.extraction.model_dump(mode="json")
+    response = client.get(f"/api/library/{stored.document_id}")
+    assert response.status_code == 200, response.text
+    claims = workspace.library.store.load_requirements(run.run_id)[0]["claims"]
+    assert claims[0]["parameter_id"] == "sample_allocation"
+    assert claims[0]["normalization_state"] == "parsed"
+    with workspace.library.store.engine.connect() as connection:
+        saved = connection.execute(
+            select(runs.c.source, runs.c.normalizer_version).where(runs.c.run_id == run.run_id)
+        ).one()
+    assert saved.source == original_source
+    assert saved.normalizer_version == f"{NORMALIZER_VERSION}_native_first"
+    original = workspace.specs.load_extraction(stored.document_id, run.run_id)
+    assert original.model_dump_json() == before
+    assert provider.calls == 0
 
 
 def test_oversized_analysis_has_clear_error_without_calling_provider_or_replacing_source(setup):

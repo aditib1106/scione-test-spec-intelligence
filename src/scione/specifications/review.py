@@ -19,10 +19,16 @@ from scione.catalogs.seed import load_reference_catalog
 from scione.ingestion.method_inventory import literal_method_designations
 from scione.schemas import IngestedDocument
 from scione.source_text import citation_contains
+from scione.specifications.chunk_review_projection import source_chunk_review_projection
 from scione.specifications.conditional_notes import conditional_source_notices
 from scione.specifications.extraction import validate_customer_sources
 from scione.specifications.models import CustomerExtractionRun, CustomerRequirement
-from scione.specifications.pdf_preview import PDFPreviewError, inspect_pdf_highlights
+from scione.specifications.pdf_preview import (
+    PDFPreviewError,
+    inspect_pdf_highlights,
+    matched_geometric_table_row,
+    pdf_quote_tokens,
+)
 from scione.specifications.provenance import nonblocking_notice_issues, provenance_source_issues
 from scione.specifications.review_audits import (
     has_explicit_measurement_request,
@@ -38,7 +44,7 @@ from scione.specifications.revision_notes import source_revision_notes
 from scione.specifications.store import RequirementReviewSet
 from scione.specifications.summary_reconciliation import source_summary_reconciliation
 
-REVIEW_POLICY_VERSION = "0.16"
+REVIEW_POLICY_VERSION = "0.21"
 
 RequirementState = Literal["needs_attention", "ready", "confirmed", "excluded"]
 _REQUIREMENT_ID = re.compile(
@@ -88,16 +94,19 @@ def _catalogued_name_issue_targets(
     Generic one-word quantities and explicit multi-row/document concerns stay
     conservative. Unknown method designations are handled by the caller first.
     """
+    # A quoted source clause may itself say "other tests" while the model's
+    # concern explicitly names only one row. Scope the concern, not the quote.
+    outside = re.sub(r"'[^']+'|\"[^\"]+\"|«[^»]+»", " ", issue)
     if re.search(
         r"\b(?:all|every|multiple|several|remaining|other)\s+(?:test|requirement|row|method)|"
-        r"\brevision\b|\bmetadata\b|(?:整份|所有测试|全部测试|版本冲突)", issue, re.I,
+        r"\brevision\b|\bmetadata\b|(?:整份|所有测试|全部测试|版本冲突)", outside, re.I,
     ):
         return None
 
     def contains(text: str, phrase: str) -> bool:
         return bool(re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", text))
 
-    normalized_issue = normalized_name(issue)
+    normalized_issue = normalized_name(outside)
     titles = {row.id: normalized_name(row.original_test_name) for row in requirements}
     targets = set()
     for test in load_reference_catalog().tests:
@@ -143,7 +152,41 @@ def document_review_issues(
                     for part in fragments)
         ):
             result.append(issue)
-    return tuple(dict.fromkeys(result))
+    return tuple(dict.fromkeys((
+        *result, *source_chunk_review_projection(run, document).document_issues,
+    )))
+
+
+def _literal_title_issue_targets(issue, requirements, document):
+    """Locate every word of a multiword row title in an explicit concern.
+
+    Word order can differ in a heading and a sentence. All title words must be
+    present both in the unquoted concern and on that row's physical source page;
+    generic quantities and partial subject overlaps cannot identify an owner.
+    This never resolves the scientific question or changes the saved warning.
+    """
+    outside = re.sub(r"'[^']+'|\"[^\"]+\"|«[^»]+»", " ", issue)
+    if re.search(
+        r"\b(?:all|every|multiple|several|remaining|other)\s+(?:test|requirement|row|method)|"
+        r"\brevision\b|\bmetadata\b", outside, re.I,
+    ):
+        return None
+
+    def words(text):
+        return set(re.findall(r"[^\W_]+", re.sub(
+            r"\bexposures\b", "exposure", normalized_name(text),
+        )))
+
+    concern = words(outside)
+    physical = {page.page_number: words(page.text) for page in document.pages}
+    targets = set()
+    for row in requirements:
+        title = words(row.original_test_name)
+        if len(title) < 3 or not title <= concern:
+            continue
+        if any(title <= physical.get(item.page, set()) for item in row.evidence):
+            targets.add(row.id)
+    return targets or None
 
 
 def _quoted_source_issue_targets(
@@ -280,6 +323,8 @@ def assess_requirements(
     metadata_diagnostics = nonblocking_notice_issues(run, document)
     shared_diagnostics = nonblocking_shared_clause_issues(run)
     metadata_questions = set(document_review_issues(run, document))
+    chunk_projection = source_chunk_review_projection(run, document)
+    metadata_questions.difference_update(chunk_projection.row_targets)
     conditional_notes = conditional_source_notices(run, document)
     reference_notes: dict[str, list[str]] = {}
     for audit in method_reference_comment_audits(run, document):
@@ -318,14 +363,17 @@ def assess_requirements(
             continue
         named = set(_REQUIREMENT_ID.findall(issue))
         # Unknown IDs cannot safely be routed. Do not silently discard such issues.
-        if named:
+        if issue in chunk_projection.row_targets:
+            targets = chunk_projection.row_targets[issue]
+        elif named:
             targets = named if named <= reasons.keys() else reasons.keys()
         else:
             targets = _method_issue_targets(issue, requirements)
             if targets is None and not literal_method_designations(issue):
                 targets = (
-                    _quoted_source_issue_targets(issue, requirements, document)
-                    or _catalogued_name_issue_targets(issue, requirements)
+                    _catalogued_name_issue_targets(issue, requirements)
+                    or _literal_title_issue_targets(issue, requirements, document)
+                    or _quoted_source_issue_targets(issue, requirements, document)
                 )
             targets = targets or reasons.keys()
         for requirement_id in targets:
@@ -338,15 +386,31 @@ def assess_requirements(
 
     assessed: dict[str, RequirementAssessment] = {}
     source_defined = _proved_source_procedures(run, pdf_bytes)
-    scoped_conditions = scoped_specimen_review_reasons(requirements, document)
-    from scione.specifications.parameter_views import physical_normalized_requirements
+    from scione.specifications.parameter_views import physical_parameter_views
+    from scione.structured import normalize_requirement
+
+    views, proofs = physical_parameter_views(requirements, document, pdf_bytes=pdf_bytes)
+    scoped_conditions = scoped_specimen_review_reasons(list(views.values()), document)
 
     coverage_issues = {
-        row.requirement_id: row.review_issues
-        for row in physical_normalized_requirements(requirements, document)
+        requirement.id: normalize_requirement(
+            views[requirement.id], source_unit_proofs=proofs[requirement.id], native_first=True
+        ).review_issues
+        for requirement in requirements
     }
     for requirement in requirements:
+        requirement = views[requirement.id]
         row_reasons = reasons[requirement.id]
+        if any(
+            action.get("requires_review")
+            for action in proofs[requirement.id].get(
+                "__source_derivations__", {}
+            ).get("actions", [])
+        ):
+            row_reasons.append(
+                "A manually reviewed condition conflicts with its source section; "
+                "check its applicability."
+            )
         # Omission audits are source-review work, not invented lab demands.
         # Preserve their stable audit IDs and original clauses in the derived
         # normalization artifact while showing the actionable issue once here.
@@ -400,6 +464,9 @@ def _proved_source_procedures(run: CustomerExtractionRun, pdf_bytes: bytes | Non
     proved = set()
     standard = re.compile(r"\b(?:ISO|ASTM|SAE|VDMA|VDA|DIN|GB\s*/?\s*T?)\s*[A-Z]?\s*\d", re.I)
     for requirement in run.extraction.requirements:
+        if _proved_customer_table_method(requirement, catalog, pdf_bytes):
+            proved.add(requirement.id)
+            continue
         if not is_source_defined_procedure(requirement, catalog):
             continue
         if any(
@@ -440,6 +507,46 @@ def _proved_source_procedures(run: CustomerExtractionRun, pdf_bytes: bytes | Non
         except PDFPreviewError:
             continue
     return proved
+
+
+def _proved_customer_table_method(requirement, catalog, pdf_bytes: bytes) -> bool:
+    """Locate a printed custom procedure without inventing a standard reference.
+
+    A unique complete physical row must own the exact test label and an exact
+    curated customer-procedure phrase in its method column. Shared conditions,
+    source-quantity audits and all other concerns are still checked separately.
+    This only removes the missing-method review prompt; it establishes no lab
+    capability and never changes the machine extraction or requested methods.
+    """
+    if requirement.requested_methods or not requirement.conditions:
+        return False
+    name = normalized_name(requirement.original_test_name)
+    tests = [test for test in catalog.tests if name in {
+        normalized_name(test.name), *(normalized_name(alias.text) for alias in test.aliases)
+    }]
+    if len(tests) != 1:
+        return False
+    methods = [
+        catalog.method_by_id(identifier) for identifier in tests[0].method_ids
+        if identifier.startswith("customer_")
+    ]
+    if not methods:
+        return False
+    phrases = {
+        pdf_quote_tokens(text.removeprefix("Customer procedure: "))
+        for method in methods for text in [method.identifier, *(a.text for a in method.aliases)]
+    }
+    for evidence in requirement.evidence:
+        try:
+            cells = matched_geometric_table_row(
+                pdf_bytes, evidence.page, evidence.quote,
+                expected_label=requirement.original_test_name,
+            )
+        except PDFPreviewError:
+            continue
+        if cells is not None and len(cells) >= 2 and cells[1] in phrases:
+            return True
+    return False
 
 
 def _located_source_issues(

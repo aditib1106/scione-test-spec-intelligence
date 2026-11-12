@@ -54,6 +54,13 @@ _AFFIRMATIVE_ERROR = (
 )
 _CONTENT_ERROR = "Provenance notice contains other content that still requires review."
 _SOFTWARE_NOTICE_ERRORS = (_SOURCE_ERROR, _AFFIRMATIVE_ERROR, _CONTENT_ERROR)
+_REPRESENTATIVE_NOTICE = re.compile(
+    r"No real company or person is named; all limits are representative[.]?", re.I
+)
+
+
+def _representative_notice(quote: str) -> bool:
+    return bool(_REPRESENTATIVE_NOTICE.fullmatch(" ".join(quote.split())))
 
 # Match whole metadata sentences, not words that could also occur in a real
 # requirement. In particular, "no standard procedure text is reproduced" is a
@@ -76,6 +83,8 @@ def metadata_only_synthetic_quote(quote: str, file_name: str = "") -> bool:
     proposal is unused and audited; it cannot become a verified source notice.
     Unknown scientific words, numbers, operators and real concerns fail closed.
     """
+    if _representative_notice(quote):
+        return True
     text = quote
     # A filename-matching document ID in a literal provenance footer is metadata,
     # not a scientific number. Other numbers remain disallowed below.
@@ -149,6 +158,8 @@ def filter_document_notices(
     for index, notice in enumerate(extraction.document_notices, 1):
         issues = provenance_source_issues(notice, document)
         metadata = metadata_only_synthetic_quote(notice.quote, document.file_name)
+        if _representative_notice(notice.quote) and issues:
+            metadata = False  # This additional closed template requires its actual source.
         status = (
             "source_verified" if not issues else
             "unused_unverified_metadata" if metadata else "needs_review"
@@ -188,6 +199,8 @@ def nonblocking_notice_issues(
             try:
                 notice = CustomerDocumentNotice.model_validate(proposed)
             except ValidationError:
+                continue
+            if _representative_notice(notice.quote) and provenance_source_issues(notice, document):
                 continue
             if metadata_only_synthetic_quote(notice.quote, document.file_name):
                 for error in _SOFTWARE_NOTICE_ERRORS:
