@@ -31,14 +31,16 @@ def test_cloud_variables_do_not_copy_local_database_or_other_provider_keys():
 def test_preparation_retains_strong_passwords_in_private_files(tmp_path):
     path = tmp_path / "private/accounts.json"
     accounts = SCRIPT["deployment_accounts"](path)
-    assert len(accounts) == 4
-    assert len({entry["password"] for entry in accounts}) == 4
+    assert len(accounts) == 5
+    assert {row["username"] for row in accounts} == {"admin", "lab1", "lab2", "lab3", "lab4"}
+    assert len({row["lab_name"] for row in accounts}) == 4
+    assert len({entry["password"] for entry in accounts}) == 5
     assert all(len(entry["password"]) >= 32 for entry in accounts)
     assert sum(entry["role"] == "maintainer" for entry in accounts) == 1
     assert SCRIPT["deployment_accounts"](path) == accounts
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
-    assert sum(entry["seed_development_lab"] for entry in accounts) == 1
+    assert sum(entry["seed_development_lab"] for entry in accounts) == 4
 
 
 def test_private_outputs_refuse_symlinks(tmp_path):

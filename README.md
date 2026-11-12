@@ -176,9 +176,20 @@ credit and valid JSON do not establish accuracy or guarantee zero cost. A provid
 may finish and bill an accepted request after the browser closes or local waiting
 ends. Idle pages never call a model.
 
+The same GLM-5.3 baseline can also use Fireworks serverless inference. Set
+`MODEL_PROVIDER=fireworks`, `FIREWORKS_MODEL=accounts/fireworks/models/glm-5p3`,
+`FIREWORKS_REASONING_EFFORT=low`, `FIREWORKS_MAX_OUTPUT_TOKENS=12288` and
+`FIREWORKS_TIMEOUT_SECONDS=300`, with a private Fireworks key. This is an explicit
+operator choice, not automatic failover or a retry. Stored runs record the actual
+provider and model; a provider change still requires evaluation of its outputs.
+
 Default guided extraction makes two planned requests; compact extraction makes one.
 Complex matching preflights complete-test batches, with at most eight requests and
-waves of at most two concurrent Sail/Fireworks calls. Other providers are sequential.
+up to sixteen for workspace PDFs longer than ten pages. Sail/Fireworks long-document
+waves default to four concurrent calls; `SCIONE_LONG_DOCUMENT_PARALLELISM` accepts
+1–4 and can be lowered to 1 or 2 for tighter provider quotas. Fitting-source inventory
+and extraction remain serial, shorter matching batches retain their existing
+two-call wave limit, and other providers remain sequential.
 There is no automatic repair call, retry loop, provider fallback or durable job queue.
 Failed analysis preserves the previous accepted result; maintainer artifacts retain
 the failed attempt. A retry is a new explicit action.
@@ -189,17 +200,59 @@ server's status rather than starting another model request. Closing a browser do
 not cancel work already admitted by the server. This is still a single-worker pilot,
 not a durable queue: a server restart can interrupt work. An unfinished saved status
 then asks the user to check retained results before explicitly trying again.
+The browser submits each analysis once with `Prefer: respond-async`, receives a
+202 operation receipt, then reads progress and the saved outcome through short GETs.
+It does not keep a single HTTP connection open for the whole model run. Submission
+IDs are bound to the lab, document, action and managed settings. At most two jobs
+run at once, with one per lab and no waiting queue. Finished receipts are retained
+in memory for up to an hour (at most 128); saved business results remain in storage.
+Connection loss triggers read-only reconciliation, never an automatic inference retry.
+If observation cannot recover, the UI reports completion unknown rather than claiming
+that the model failed. A confirmed saved success clears older transport errors.
+The progress bar counts returned AI steps against the planned total; it is not a
+time estimate. Checking and saving remain visible before the accepted result appears.
+Separate timing references use completed runs with comparable workloads.
 
 Repeated library reads reuse bounded, per-lab source derivations. Source, review,
 facts and policy changes invalidate them; SQL metadata and edit versions remain live.
+An additional process-local source-proof cache retains at most eight small-PDF
+derivations, keyed by the complete requirement JSON, document JSON and PDF bytes.
+It has no lab capability, account or session inputs, returns detached copies, and
+writes nothing to disk. Changed source facts cannot reuse an older key.
 The browser also keeps a small, session-only navigation cache while revalidating
 against the server. Writes invalidate it, and login, logout or lab switching clear
 it. Customer contents are not added to persistent browser storage.
 
 Input guards are 60,000 characters for extraction and 120,000 for matching, including
-prompts/context/schema. Oversized inputs fail before inference without silent truncation.
-Focused extraction repeats the full source; it is not input chunking. Scanned and
-handwritten PDFs require the separate OCR integration. See the
+prompts/context/schema. Oversized compact extraction automatically plans bounded
+source-page chunks, retaining original page numbers and raw shared conditions/annexes.
+Dense multi-page windows are made smaller to reduce completion-token pressure.
+Explicit subsection references add exact raw section excerpts when uniquely located.
+Primary/shared pages remain whole, and every original page is supplied whole in its
+primary window. `SOURCE_VIEW` marks excerpted context; the manifest records original
+page numbers and zero-based, half-open character offsets for each unchanged fragment.
+Chunk prompts retain every parameter ID/label without repeating vocabulary descriptions.
+`PAGE_ROLE` labels distinguish primary from context pages; the prompt requires a
+substantive primary test row/request, rather than assigning context rows to a primary
+section heading. Continued rows can use context, and explicit additional annex tests
+remain eligible. Individual invalid inventory attachments are unused as whole entries
+with their original indexes audited; independently valid, source-located tests survive.
+If full chunk guidance cannot fit, it tries source-located primary/context names, then
+primary names only, then no guide. Guidance evidence must occur in the supplied view,
+including its exact excerpts. A requirement quotation located only in omitted context
+text fails the chunk's scope check. These hints never alter the planned source view.
+For PDFs longer than ten pages, Sail/Fireworks extraction uses the configured
+long-document wave width (default four, maximum four); fitting short analysis stays serial.
+Every page is covered, and every request is checked before inference. There are at most
+eight extraction chunks plus one optional whole-source inventory call. All chunks must
+succeed before replacing a saved extraction; failed attempts retain their artifacts.
+Matching keeps its 120,000-character request guard and all candidate facts. Repeated
+lab claim bodies use lossless references with a verified full round trip. The workspace
+allows up to sixteen matching batches for PDFs longer than ten pages; other inputs keep
+the eight-batch cap. All batches are preflighted before any matching request is sent.
+An indivisible page/shared-context block or a plan exceeding the call budget fails
+without silently truncating source. Legacy focused extraction still repeats the full
+source. Scanned and handwritten PDFs require the separate OCR integration. See the
 [inference policy](docs/architecture/inference_policy.md) for settings, validation,
 recovery and shutdown behavior.
 
@@ -231,7 +284,7 @@ Changing a connection URL does not migrate existing records.
 
 ## Data, extraction and matching
 
-The shared catalog loads automatically: 99 synthetic test identities, 153 active
+The shared catalog loads automatically: 99 synthetic test identities, 154 active
 methods and a separate searchable index retaining all 32,000 synthetic method-bank
 rows. Matching receives bounded, relevant candidates; the bank is not a source of
 lab capability or proof that different test methods are interchangeable.
@@ -240,6 +293,12 @@ AI extracts atomic requirements with source evidence, preserving parameter ident
 role, stage, operator, values/ranges/tolerances, units, source wording and page. The
 source-reading guide is partial, never a hard whitelist or replacement for the PDF.
 Older runs can use conservative local parsing; unresolved wording stays available.
+Document-verified derived views can exclude an exactly proved foreign-section
+inheritance, add a uniquely owned physical table-cell citation, or complete the
+three explicit facts in a closed conditioning sentence (duration, temperature and
+relative humidity). These steps preserve original records and retain the complete
+source/proof actions. Reviewed conflicts, exceptions, ambiguous rows and unproved
+quantities remain reviewable; no test-specific value is guessed.
 A cached geometric text view can improve legacy PDF reading order without changing
 original bytes, saved documents or provider responses. It is not OCR or a guarantee
 that every PDF layout is read correctly.
@@ -251,6 +310,12 @@ comparisons; the model does not supply the final numeric verdict. Missing declar
 remain unknown, explicit limitations are gaps, and unfamiliar fields are not certified
 from label similarity alone. Sample planning and workflow tasks remain distinct from
 capability evidence. AI wording judgments remain fallible and require evaluation.
+
+One narrow comparison proof can reuse a selected capability's unique reviewed CH
+exposure mode for its own duration field. It requires the same explicit ISO 6270-2
+method, original customer context and matching exposure stage/configuration/sequence.
+Only a comparison copy receives the already declared context; durations are unchanged
+and remain subject to numeric comparison. A method code alone supplies no setup.
 
 Per-lab SQL stores companies, specification families/versions, extraction records,
 requirements, atomic claims, lab revisions, comparisons and assessment reviews. Fixed
@@ -277,6 +342,19 @@ preserves prior SQL revisions. The frozen development lab has 70 exact-method se
 1,681 structured fields and explicit unavailable outputs. Its limits are independently
 authored synthetic capability data, not customer acceptance values copied into the lab.
 There are no sample-loading buttons in the user workflow.
+
+For the original MS-PNT-410 PDF, a separate fixed profile contains twelve fictional
+coatings services with intentional matches, range gaps and unknown declarations.
+In an accounts-enabled local workspace, an operator can add them to a test lab:
+
+```bash
+.venv/bin/python scripts/initialize_lab.py --profile ms-pnt-410 --lab-user lab1 --merge-existing
+```
+
+The command uses the configured workspace/database. `--merge-existing` appends missing
+capability IDs and preserves existing services, including CSP-EN-301 declarations and
+user edits. Nothing is seeded automatically or copied into another lab. The profile's
+capabilities and prices are synthetic, not client data or validated evaluation truth.
 
 Upload the team's readable PDFs when available under `docs/Generated Customer Spec/`,
 or use the bundled `docs/samples/CSP-EN-301_demo_spec.pdf` and

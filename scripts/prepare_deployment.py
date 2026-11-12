@@ -45,10 +45,11 @@ def deployment_accounts(path: Path) -> list[dict]:
             BootstrapAccount.model_validate(account)
         return accounts
     definitions = [
-        ("admin", "Platform administrator", "maintainer", "Demo Coatings Lab", True),
-        ("lab1", "Lab 1 user", "lab", "Demo Coatings Lab", False),
-        ("lab1staff", "Lab 1 colleague", "lab", "Demo Coatings Lab", False),
-        ("lab2", "Lab 2 user", "lab", "Demo Materials Lab", False),
+        ("admin", "Platform administrator", "maintainer", "Lab 1", True),
+        ("lab1", "Lab 1 user", "lab", "Lab 1", False),
+        ("lab2", "Lab 2 user", "lab", "Lab 2", True),
+        ("lab3", "Lab 3 user", "lab", "Lab 3", True),
+        ("lab4", "Lab 4 user", "lab", "Lab 4", True),
     ]
     accounts = [
         {

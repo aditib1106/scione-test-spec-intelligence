@@ -12,7 +12,8 @@ of optimal model choice or production accuracy.
 | Reasoning / completion window                     | low / ASAP                                                                                                          |
 | Completion ceiling                                | 12,288 tokens, including provider-counted reasoning                                                                 |
 | Owned HTTP client deadline                        | 300 seconds per local HTTP operation                                                                                |
-| Guided extraction / semantic matching             | Two planned extraction calls; at most eight preflighted matching calls, with Sail/Fireworks concurrency at most two |
+| Guided extraction / semantic matching             | Two serial extraction calls for fitting sources; oversized sources use the bounded chunk plan below. Matching defaults to eight calls; workspace PDFs longer than ten pages allow sixteen |
+| Long-document parallelism                        | `SCIONE_LONG_DOCUMENT_PARALLELISM=4`, allowed 1–4; applies to Sail/Fireworks chunk/batch waves for workspace PDFs longer than ten pages |
 | Automatic retries, repair calls or model fallback | None                                                                                                                |
 
 Other models remain selectable. A new model needs validation of its schema and
@@ -60,12 +61,17 @@ The original provider response remains untouched in `run.calls[].raw_response`.
 
 ## Source representation and candidate boundaries
 
-Guided extraction first proposes a short test inventory, then reads the full source
-with only source-located inventory guidance. Unlocated fragments are omitted from
+Guided extraction first proposes a short test inventory, then reads the source
+directly with only source-located inventory guidance. Fitting documents remain whole;
+oversized documents use the raw views described below. Unlocated fragments are omitted from
 guidance with an explicit audit; they are never repaired or substituted for source
-facts. Tests without any locatable evidence cannot guide the second pass. Attachments
-are retained only when their targets survive verification. The guide is not a whitelist:
-the second pass still receives the complete source. Both actual requests, responses,
+facts. Tests without any locatable evidence cannot guide the second pass. An invalid
+individual attachment is unused as a whole, with its original one-based index and
+reason audited; independently valid tests survive. Target links are not repaired or
+partially accepted. Invalid root/test entries or attachment-list structure still make
+the inventory unusable. Otherwise, attachments are retained only when their targets
+survive verification. The guide is not a whitelist:
+it never replaces the planned source input. Both actual requests, responses,
 purposes, prompt versions and usage are saved. This adds latency; it is not a retry or
 a claim that two model outputs establish correctness. The original one-call compact
 strategy remains selectable for comparison.
@@ -87,10 +93,80 @@ correct. These hints neither infer missing targets nor establish semantic omissi
 or document completeness, and unresolved warnings remain visible for review.
 
 The default source input guard is 60,000 characters including prompt, schema, guide
-and source, rather than a provider token/context guarantee. Advanced focused passes
-repeat the complete source and only focus the output; they do not implement input
-chunking. A long source that exceeds the guard is rejected before inference without
-silently removing pages. Shared-clause-aware source chunking remains separate work.
+and source, rather than a provider token/context guarantee. Oversized compact/default
+extraction uses `shared_source_pages_v1`: every original physical page belongs to one
+primary window, with raw shared-condition/annex pages and fitting neighboring pages
+supplied as context. Heading detection is a conservative English heuristic, not proof
+that a shared clause applies to every test. The model must preserve exceptions and
+scope. Original page numbers, document identity and total page count remain unchanged.
+Explicit subsection references on primary pages also retrieve exact raw section spans
+when the numbered heading is unique. Referenced-only pages include the section's
+original character ranges, including its continuation pages, rather than unrelated
+sections on the same page. Multiple references use the ordered span union without
+summarizing or rewriting text. Such a page remains excerpted even when selected as an
+optional neighbor; primary/shared pages remain whole. Every original page is still
+supplied whole in its own primary window. This is one hop, not recursive;
+unknown/ambiguous references remain unresolved rather than selecting an arbitrary
+section, and the complete request is remeasured.
+Chunk requests retain every parameter ID and label but omit repeated vocabulary
+descriptions; unchunked whole/focused requests retain the full descriptions.
+Trusted `PAGE_ROLE` metadata labels primary and context-only pages without changing
+their source text. `SOURCE_VIEW` identifies a page containing exact referenced-section
+excerpts. Manifest `context_source_spans` entries record `page_number`, `start` and
+`end`: zero-based, half-open character offsets into the original `DocumentPage.text`,
+not byte offsets or positions in the concatenated view. The prompt requires a substantive
+primary test row or procedure
+request: a section heading, index or cross-reference does not own separate context
+rows. Context can complete the same continued row; an explicitly additional annex
+test remains eligible, while a package summary alone is not a new test. These are
+model instructions, not proof of correct ownership.
+When original PDF bytes are available, physically located section introductions
+also travel with a section's continuation pages. Their exact heading-to-introduction
+spans are mandatory context, separately listed in `section_context_pages` and the
+ordinary context span audit. `SOURCE_SECTION_CONTEXT` labels only introductions
+whose complete quote is actually supplied; it cannot restore an unrelated omitted
+table. This keeps a continued chemical table's local judging conditions available
+without supplying neighboring tests as new primary work.
+Primary windows contain at most three pages. A 4,800-character soft cap on non-shared
+primary text reduces output pressure on dense multi-page windows; it never splits or
+truncates a primary physical page and is not a guarantee against completion-token exhaustion.
+All extraction windows are preflighted against the complete-request guard before any
+model call. The maximum is eight extraction calls plus one optional full-source
+inventory call; an inventory that cannot fit is explicitly skipped in the run manifest.
+Per chunk, guidance is budgeted in this order: full source-located inventory guidance,
+source-located names including primary/context roles, primary names only, then no
+guide. Names-only guidance conveys no attachment or applicability decision and is
+not a whitelist. Guide evidence must also occur literally in the supplied view; an
+original page number alone cannot authorize text outside its supplied fragment.
+Every option retains the same planned raw source view, including audited excerpts.
+Source text is never silently truncated. If an indivisible page or required shared
+block cannot fit, or complete page coverage exceeds the call cap, no call is made.
+
+Each extraction window emits work supported by its primary pages. Context-only rows
+are audited and omitted; any primary-page evidence retains the row, even when it also
+cites earlier preparation. Quotes and atomic citations must reference pages actually
+supplied to that call. Requirement evidence found in an original context page but only
+outside its supplied excerpts fails with `chunk_source_scope_error`; original-page
+location cannot authorize text the call did not receive. Compact shared clauses are expanded within their original
+response before merging. Exact duplicates ignore only local requirement/claim IDs and
+evidence ordering; differing scopes, stages, values and sequences remain separate.
+Global IDs and row-scoped review issues are remapped before final source grounding.
+An exact, unique test-name prefix can scope an issue to that row. Expected statements
+that another window's context-only work was not emitted stay in the chunk audit instead
+of creating whole-document uncertainty; row-specific and scientific warnings remain.
+All windows must complete before saving a new run. Any provider/schema/source-scope
+failure preserves previous results and all completed/failed call artifacts; no partial
+extraction is accepted and no automatic retry occurs. The private raw-response manifest
+records page coverage, context-only rows, original requests and untouched responses.
+Sail/Fireworks long-document chunk extraction uses the configured wave width, default
+four and maximum four; operators can lower it to 1 or 2 for provider quotas. All admitted
+responses are retained before parsing; a failed wave starts no later wave. Calls and
+merged facts stay in source order. Per-call latency/usage remain separate; the parent
+chunk run records wall time. Inventory and fitting short-document extraction stay serial.
+Shorter chunked inputs retain the existing two-call paid-provider limit; other providers
+remain sequential. Parallelism changes neither the call cap nor source coverage and
+does not guarantee lower provider latency.
+Advanced legacy focused passes still repeat the complete source and only focus output.
 
 New application PDF imports use geometric reading order and record that choice.
 Ready native PDFs historically saved in content-stream order can use a derived
@@ -113,6 +189,44 @@ the named scale with an audit of the body and summary source spans. Latin typogr
 ligatures can be expanded with an offset map for literal source location, without
 rewriting words or treating paraphrases as exact quotations.
 
+The following source-only derivations also operate on detached views, not on an
+archived extraction or a saved human-facts revision:
+
+- `literal_section_scope_v1` can exclude an inherited condition/native atom only
+  when a unique physical table row belongs to another numbered section and the
+  clause exactly matches a uniquely located local introduction. Same-section and
+  descendant rows retain it. Global/exception wording, actual cross-references,
+  unknown ownership and manually entered conditions without parsed inheritance
+  proof remain unchanged. Reviewed atoms are retained with a scope-conflict audit.
+  The action preserves the complete excluded fields/atoms, original section span
+  and table-row location; exclusion establishes no lab support.
+- `physical_table_cell_citation` adds evidence only for a complete cell whose
+  text agrees with an existing atom and whose unique row has the exact test label
+  on the cited physical page. PDF hash, row/cell bounds, cell index and quote hash
+  are recorded. Ambiguous rows, changed numbers or partial cell text do not qualify.
+  This supplies a citation, never a new value or a lab-capability judgment.
+- `literal_conditioning_atoms_v1` completes duration, temperature and explicit RH
+  from one closed, already attached conditioning sentence. The complete sentence
+  must be located in physical source text; scalar values, printed ranges and
+  tolerances reuse the lexical quantity parser. New atoms have stable IDs, kind
+  `condition` and stage `conditioning`, with exact source text/page/offset provenance.
+  Existing equivalent facts are not duplicated. Conflicts, negation, exceptions,
+  omitted source fragments and extra unrecognized content prevent completion.
+  No quantity or applicability is inferred from the test name.
+
+These actions are retained in derived `normalization_actions` and matching input/
+policy artifacts. Original provider requests/responses, machine runs and reviewed
+facts are not replaced by the projection. Current-policy source derivations are
+therefore distinct from both raw model output and historical frozen verdicts.
+
+A separate source-proof memory cache holds at most eight derivations for PDFs of
+at most 1,000,000 bytes. The complete requirement JSON, document JSON and PDF bytes
+are its key; it accepts no lab capability, account or session fields. Every cache
+hit returns detached copies, and the caller still reads the authorized lab's PDF.
+Combined serialized source and PDF inputs over 2,000,000 characters/bytes also
+bypass it. This cache writes nothing to disk and ends with the server
+process; it is distinct from the legacy geometric-document disk cache above.
+
 Citation policy `v2` permits wrapping whitespace/CJK spacing and a narrow,
 length-preserving French apostrophe typography rule. Words, quantities, signs,
 code punctuation and all original artifacts remain unchanged. Atom citations may
@@ -130,16 +244,19 @@ spreads remain unresolved rather than being presented as trustworthy acceptance
 limits. These are conservative checks, not a complete scientific language model.
 
 The full 32,000-row synthetic method bank is separate from the active 99-test /
-153-method catalog. `GET /api/catalog/method-bank` provides read-only paginated
+154-method catalog. `GET /api/catalog/method-bank` provides read-only paginated
 lookup with exact identifier/family/domain/material filters and source hashes.
 Matching retrieves bounded candidates, retaining complete editions and parts.
 The bank never populates lab declarations or asserts equivalence between methods.
 
 Complex matching uses `whole_requirement_batches_v7`: preflight every complete-test
-batch before any network call, at most eight requests, with no retries. The matching
+batch before any network call, normally at most eight requests, with no retries.
+Workspace PDFs longer than ten pages allow at most sixteen. The matching
 input guard defaults to 120,000 characters per request, including schema/prompt.
-Sail and Fireworks use keyed correspondence output and waves of at most two independent
-whole-test requests; other providers remain sequential. Every in-flight response or
+Sail and Fireworks use keyed correspondence output. For workspace PDFs longer than
+ten pages, waves follow `SCIONE_LONG_DOCUMENT_PARALLELISM` (default four, allowed
+1–4); shorter matching batches retain their existing two-call wave limit. Other
+providers remain sequential. Every in-flight response or
 failure is retained, no later wave starts after a known failure, and a partial plan
 never becomes an accepted comparison. An indivisible test exceeding the guard fails
 before inference. The parent artifact is an
@@ -157,8 +274,18 @@ The compact wire omits legacy quotation bridges, requires an explicit aligned
 scope relation, and distinguishes text coverage from numeric comparison. Candidate
 ID enums are shared through schema references. Repeated long quotations may use
 `source_text_table` references; a mandatory round-trip check proves that expansion
-recovers every original input value. No source is summarized or truncated. Source
-submission/allocation quantities and verified shared project delivery clauses can
+recovers every original input value. No source is summarized or truncated.
+Lab claims with identical bodies can also use `claim_body_table`: each occurrence
+keeps its original claim ID and refers to every other original field without changes.
+This serialization reuse never permits mixing capabilities. It is enabled only when
+the complete wire payload saves at least 4,000 characters; expansion verifies full
+field equality. The immutable snapshot and actual transmitted request remain saved.
+The normal matching budget is eight batches. The workspace allows sixteen for source
+PDFs with more than ten physical pages, checked from the stored document rather than
+model output. Each complete request still fits the 120,000-character guard. The full
+plan is validated before inference, concurrency is bounded as above, and failures do not
+accept partial output or trigger retries. The single-call and default CLI budgets stay
+unchanged. Source submission/allocation quantities and verified shared project delivery clauses can
 remain workflow obligations without pretending to establish equipment capability.
 Core operating conditions and specimen acceptance facts remain comparable.
 
@@ -172,11 +299,17 @@ ownership, cross-field identity, complete coverage and scientific compatibility.
 An invalid ID rejects the attempt and preserves previous accepted results and the raw
 artifact. No automatic repair/retry is introduced, and schema validity does not prove
 that a proposed correspondence is factually correct.
+If both selected IDs are valid candidates but the capability belongs to a different
+test, only that item is downgraded to unknown after its references are checked. Its
+lab links and semantic bridges are cleared on the validated copy; original proposals
+remain in the artifact. This is an unresolved identity requiring review, not an
+unsupported-test verdict, and cannot discard the other valid items in a batch.
 
-Sail/Fireworks execute at most two independent whole-test batches in a request-scoped
-thread pool. Every request is preflighted before that pool starts. A failed wave retains
-both in-flight attempts, starts no later wave and accepts no partial result. Workers
-finish before the request returns; no recurring queue or automatic retry is created.
+Sail/Fireworks execute bounded whole-test waves in an operation-scoped thread pool:
+the long-document setting defaults to four calls, while shorter batches retain the
+two-call limit. Every request is preflighted before that pool starts. A failed wave
+retains all admitted attempts, starts no later wave and accepts no partial result. Workers
+finish before that operation completes; no recurring queue or automatic retry is created.
 The soft output-planning budget scales with the provider ceiling and is capped at
 eighty claims; a larger indivisible test still receives its own guarded request.
 Free providers remain sequential. Parallel parent latency is elapsed wall time; child
@@ -288,8 +421,9 @@ Saved assessment identity also hashes the complete computed report payload, incl
 source-review policy and warnings. A warning-policy upgrade creates a separate snapshot
 without replacing an earlier PDF/JSON assessment for the same source and lab inputs.
 
-Current policy versions are `atomic_requirements_v0_38`, `pilot_parameters_v7` and
-`semantic_alignment_guards_v0_24`; matching uses prompt `semantic_matching_v0_11`.
+Current policy versions are `atomic_requirements_v0_39`, source review `0.19`,
+`pilot_parameters_v7` and `semantic_alignment_guards_v0_26`; matching uses prompt
+`semantic_matching_v0_11`.
 
 ## Review and presentation
 
@@ -300,7 +434,7 @@ An unregistered field or local parser limitation alone is not proof that the sou
 extraction is wrong. Known invalid numeric facts remain guarded after confirmation;
 confirmation does not rewrite the original provider response or certify lab support.
 
-Source review policy `0.16` can show an unissued alternative-method acceptance class
+Source review policy `0.19` can show an unissued alternative-method acceptance class
 as a notice rather than blocking the explicitly specified primary route. This needs
 verified original role proposals, literal owned physical citations, an explicit
 primary class and the source's approval-dependent future-class statement. Numeric,
@@ -353,6 +487,17 @@ deterministic comparison within an already aligned lab/test; unfamiliar identiti
 ambiguous setups and unresolved source facts cannot use this recovery path. Metadata
 actions and comparison basis remain separate audit fields.
 
+`source_method_and_reviewed_sibling_exposure_mode` is a narrow same-capability
+comparison proof. An owned customer quotation must explicitly retain
+`ISO 6270-2 (CH)`, and the selected lab capability must explicitly declare that
+same method. Its one reviewed, supported CH exposure-mode claim must share the
+duration's exposure stage, sequence and sole configuration. Only then can the lab
+duration's comparison copy receive this existing setup context. Original duration,
+mode and source records remain unchanged; numeric range comparison still decides
+the result. Multiple modes, unknown/rejected declarations, different configurations,
+other source codes and unowned quotations do not qualify. A plain ISO identifier
+does not supply a setup, medium or temperature classification.
+
 When a semantic suggestion names a real lab entry but its scope cannot be accepted,
 the web table may show it as **Lab information to review**. These values are read only from
 the selected captured capability, are explicitly unconfirmed, and never change the
@@ -395,14 +540,35 @@ new model result. Synthetic development probes are not production accuracy claim
   The backend blocks concurrent AI operations for one document and releases that
   guard after failure.
 - Leaving a page stops browser waiting. Complex matching can finish its already
-  started bounded plan; up to two Sail/Fireworks requests can be in flight. It does
+  started bounded plan; Sail/Fireworks can have up to the configured long-document
+  width (default four) in flight, or two for shorter batched matching. It does
   not submit retries. Users can keep viewing a saved report and reopen the elapsed
   progress display without starting another operation. The
   advanced focused mode is a previously requested batch of up to eight calls that
   repeats the full source; it is not input chunking and leaving the page does not
   cancel that batch.
-- The default client uses a cancellable local deadline and closes its connection.
-  It creates no background retry worker or inference job queue.
+- Browser inference uses a short opt-in `Prefer: respond-async` admission request.
+  The server reserves the existing document/lab/global gate before acknowledging
+  a 202 receipt. An in-process pool runs at most two admitted jobs (one per lab),
+  preserving the submitting principal and workspace context. There is no waiting
+  queue, provider fallback or automatic retry. Legacy API calls without the header
+  keep their synchronous contract.
+- Receipt status is lab-scoped and contains only progress, a compact saved result
+  identifier or a fixed public error category. Raw source and arbitrary exception
+  details are never included. A request UUID is bound to the lab, document, action
+  and managed input digest; duplicate acknowledgement recovery cannot create another
+  inference. Finished receipts expire after one hour and are capped at 128 entries.
+- The browser polls through bounded short GETs, including the response body, and
+  reconciles a lost acknowledgement with the exact request UUID. It never repeats
+  the submission automatically. Persistently lost observation becomes completion
+  unknown; a saved successful run clears older transport errors. Server restarts
+  lose process-local receipts; saved results must be checked before an explicit retry.
+- Running extraction and matching expose the number of returned AI calls against
+  the preflighted plan. The displayed percentage measures completed AI steps,
+  not elapsed time or accepted results. Checking and saving remain visible after
+  the last call returns. Progress contains fixed stage labels only and is scoped
+  to the requesting lab. Timing references use comparable completed workloads;
+  without that history the UI gives a broad waiting notice rather than a countdown.
 - Closing a page, timing out or stopping the local server cannot guarantee that a
   provider cancels an already accepted inference or waives its charge. Close the
   server with Ctrl+C; Ctrl+Z suspends a process rather than stopping it.

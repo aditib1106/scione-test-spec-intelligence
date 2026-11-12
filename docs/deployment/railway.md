@@ -24,10 +24,11 @@ Bootstrap creates missing accounts, provisions their storage and optionally seed
 one demonstration lab. It never resets an existing password or reseeds an
 existing lab during restart. There is no public signup or email password reset.
 
-Fresh preparation creates `admin` (maintainer), `lab1` and `lab1staff` (the same
-coatings lab), and `lab2` (a separate materials lab). Their generated passwords
-are private and are not defaults. Existing installations retain their accounts
-until an operator explicitly changes them.
+Fresh preparation creates `admin` (maintainer) and four lab accounts, `lab1`
+through `lab4`, in four independent workspaces. The maintainer initially opens
+Lab 1 and can explicitly switch workspaces. Their generated passwords are private
+and are not defaults. An existing private preparation file is retained unchanged;
+preparation never renames, deletes or resets installed accounts.
 
 The current trial uses one Web replica and one Uvicorn worker. Inference admission
 allows two active document operations overall and one per lab. A larger deployment
@@ -82,9 +83,61 @@ storage. Confirm the ongoing hosting plan and owner with the client.
    `SCIONE_DATABASE_URL`; use the platform reference. If you use another MySQL
    service name, update the reference accordingly.
 
-The trial bootstrap contains a maintainer, two colleagues in the same seeded
-demonstration lab and one account in a separate empty lab. Share only the intended
-lab account with testers. Keep the maintainer account private.
+Before client testing, use a paid plan and expand the **existing MySQL volume to
+5 GB**. The Trial's 500 MB volume filled during retained-artifact testing and
+prevented MySQL from starting; this also made sign-in and report exports fail.
+Increasing the plan does not necessarily resize an existing volume. Check the
+volume's capacity separately. Railway bills occupied storage, not unused capacity;
+confirm current [volume limits and pricing](https://docs.railway.com/volumes/reference).
+
+The current small trial uses this MySQL start command:
+
+```text
+docker-entrypoint.sh mysqld --innodb-use-native-aio=0 --disable-log-bin --performance_schema=0 --innodb-buffer-pool-size=256M
+```
+
+Keep the original database volume attached when resizing or restarting. If MySQL
+reports `No space left on device`, expand the volume before retrying startup;
+do not delete database, redo or undo files. After recovery, verify an authenticated
+lab read and a report export. `/api/health` alone does not establish database health.
+
+The trial has one maintainer and four independent laboratory workspaces. Share
+only the intended lab account with testers. Keep the maintainer account private.
+The four current client-trial workspaces start with empty specification libraries
+and the same fixed synthetic capability declarations; actual lab users may edit
+or remove them. These declarations are demonstration data, not evidence of any
+real laboratory's equipment or accreditation.
+
+For a fresh installation, bootstrap seeds the 70-service development profile.
+To append the additional 12 fictional coatings declarations used by the client
+trial, run the initializer from the checkout through an existing operator SSH
+connection for each target lab account (substitute `lab2`, `lab3`, and `lab4`).
+The runtime image contains the installed package, not the checkout's scripts.
+This sends only the initializer's code, not local data or credentials:
+
+```bash
+python - <<'PY'
+import subprocess
+from pathlib import Path
+source = Path("scripts/initialize_lab.py").read_text()
+prefix = (
+    "from scione.deployment import prepare_host_environment, prepare_data_directory; "
+    "from scione.config import Settings; prepare_host_environment(); "
+    "prepare_data_directory(Settings()); "
+)
+subprocess.run([
+    "npx", "--yes", "@railway/cli", "ssh", "--service", "scione-web",
+    "python", "-c", prefix + "exec(" + repr(source) + ")",
+    "--lab-user", "lab1", "--profile", "ms-pnt-410", "--merge-existing",
+], check=True)
+PY
+```
+
+The initializer retains existing declarations and SQL revisions; it does not
+clear specifications. Removing a specification in the UI archives it, and uploading
+identical bytes restores its prior analysis with an explicit receipt. A genuinely
+fresh trial workspace must be provisioned separately by the operator. Never drop
+SQL tables or delete the application volume to simulate a clean upload.
 
 ### Connect and deploy local code
 
@@ -180,6 +233,14 @@ Page navigation and browser disconnection do not cancel admitted operations, but
 the single-worker server does not resume interrupted work after a restart. Its
 activity endpoints report an unfinished saved operation as completion unknown;
 users must inspect saved results before choosing an explicit retry.
+
+The browser uses a short `Prefer: respond-async` POST followed by operation-status
+GETs. This avoids holding a silent HTTP request across minutes of model inference:
+Railway's public edge closes requests with no transferred data after five minutes.
+The healthcheck timeout is a separate setting. The bounded in-process worker pool
+retains the original lab identity; it has two execution slots, one per lab, and no
+waiting queue. Do not add replicas/workers without shared admission leases and
+durable job state. See [Railway's edge limits](https://docs.railway.com/networking/public-networking/specs-and-limits).
 
 The local preview and hosted service have independent accounts, SQL records and
 file storage. Local uploads and password changes do not appear in the cloud;
