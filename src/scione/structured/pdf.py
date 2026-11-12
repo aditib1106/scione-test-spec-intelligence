@@ -25,6 +25,7 @@ PDF_WORKER_TIMEOUT_SECONDS = 20
 PDF_INLINE_TIMEOUT_SECONDS = 10
 PDF_MAX_PAGES = 64
 PDF_MAX_LAYOUT_CALLBACKS = 256
+PDF_OVERVIEW_ROWS_PER_TABLE = 12
 _SECTION_BOUNDARY = "<!-- scione-comparison-section -->"
 _CHECK_TABLE_OPEN = (
     "<table><tr><th width='43%'>Customer requirement</th>"
@@ -248,11 +249,12 @@ def _check_rows(
     *,
     section_breaks: bool = False,
     shown_reasons: set[tuple] | None = None,
+    flowing: bool = False,
 ) -> str:
     shown_reasons = shown_reasons if shown_reasons is not None else set()
-    parts = [_CHECK_TABLE_OPEN]
+    parts = [] if flowing else [_CHECK_TABLE_OPEN]
     for index, check in enumerate(comparison.checks):
-        if section_breaks and index and index % 8 == 0:
+        if not flowing and section_breaks and index and index % 8 == 0:
             parts.extend(["</table>", _SECTION_BOUNDARY, _CHECK_TABLE_OPEN])
         requested = check.requested
         declared = check.declared or "Not recorded by the lab"
@@ -314,16 +316,16 @@ def _check_rows(
                 ),
             )
         )
-        if combined_length > 600:
+        if flowing or combined_length > 600:
             parts.extend(
                 [
-                    "</table><div class='long-check'>",
+                    ("" if flowing else "</table>") + "<div class='long-check'>",
                     f"<p><b>{_text(check.label)}</b>{stage}{context}{sources}{scope}</p>",
                     f"<p><b>Customer requirement:</b> {_text(requested)}</p>",
                     f"<p><b>Lab declaration:</b> {_text(declared)}</p>",
                     f"<p class='{check.status}'><b>{_STATUS[check.status]}:</b> "
                     f"{_text(reason)}</p></div>",
-                    _CHECK_TABLE_OPEN,
+                    "" if flowing else _CHECK_TABLE_OPEN,
                 ]
             )
             continue
@@ -338,11 +340,12 @@ def _check_rows(
                 else ""
             )
         )
-    parts.append("</table>")
+    if not flowing:
+        parts.append("</table>")
     return "".join(parts)
 
 
-def _html(payload: dict, *, section_breaks: bool = False) -> str:
+def _html(payload: dict, *, section_breaks: bool = False, flowing_checks: bool = False) -> str:
     document = payload.get("document", {})
     if not isinstance(document, dict):
         raise ValueError("Document metadata must be a record.")
@@ -386,17 +389,27 @@ def _html(payload: dict, *, section_breaks: bool = False) -> str:
     if excluded:
         parts.append(f"<p class='meta'>{excluded} tests excluded from this assessment.</p>")
     if rows:
-        parts.append(
-            "<h2>Test overview</h2><table><tr><th width='40%'>Test</th>"
+        overview_header = (
+            "<table><tr><th width='40%'>Test</th>"
             "<th width='32%'>Requested method</th><th width='28%'>Assessment</th></tr>"
         )
-        for row, comparison in rows:
+        parts.append("<h2>Test overview</h2>")
+        for overview_index, (row, comparison) in enumerate(rows):
+            if overview_index % PDF_OVERVIEW_ROWS_PER_TABLE == 0:
+                parts.append(overview_header)
             parts.append(
                 f"<tr><td>{_text(row.get('test_name', 'Requested test'))}</td>"
                 f"<td>{_text(_methods(row.get('methods')))}</td>"
                 f"<td><b>{_STATUS[comparison.status]}</b></td></tr>"
             )
-        parts.append("</table>")
+            # MuPDF can repeatedly restart a long multi-page overview table.
+            # Close bounded groups instead of raising the page/time guards or
+            # discarding any test. These ordinary tables can share a page.
+            if (
+                (overview_index + 1) % PDF_OVERVIEW_ROWS_PER_TABLE == 0
+                or overview_index + 1 == len(rows)
+            ):
+                parts.append("</table>")
     else:
         parts.append("<p>No active test requirements are included in this assessment.</p>")
     for index, (row, comparison) in enumerate(rows, 1):
@@ -440,6 +453,7 @@ def _html(payload: dict, *, section_breaks: bool = False) -> str:
                     comparison.model_copy(update={"checks": own_checks}),
                     section_breaks=section_breaks,
                     shown_reasons=shown_reasons,
+                    flowing=flowing_checks,
                 ),
             ]
         )
@@ -459,6 +473,7 @@ def _html(payload: dict, *, section_breaks: bool = False) -> str:
                     applicability,
                     section_breaks=section_breaks,
                     shown_reasons=shown_reasons,
+                    flowing=flowing_checks,
                 ),
             ]
         )
@@ -500,33 +515,16 @@ def _render_comparison_pdf_inline(payload: dict) -> bytes:
         except ComparisonPDFError:
             if budget_exhausted:
                 raise
-            # MuPDF can restart an entire multi-table flow at its final table,
-            # repeating the same pages until the callback bound is reached.
-            # Independent section flows avoid that native pagination state;
-            # retain the identical overview, checks and shared applicability.
-            # The overall time, callback and final-page bounds still apply.
-            sections = _html(payload, section_breaks=True).split(_SECTION_BOUNDARY)
-            if len(sections) == 1:
-                raise
-            pdf = pymupdf.open()
-            try:
-                for section in sections:
-                    section = section.removeprefix("<html><body>").removesuffix("</body></html>")
-                    # Each isolated flow already starts on a fresh page. A
-                    # leading forced break can itself restart MuPDF's flow.
-                    section = section.replace(" class='shared-start'", "")
-                    section_story = pymupdf.Story(
-                        html="<html><body>" + section + "</body></html>", user_css=_CSS
-                    )
-                    with section_story.write_with_links(page_rect) as section_pdf:
-                        if len(pdf) + len(section_pdf) > PDF_MAX_PAGES:
-                            raise ComparisonPDFError(
-                                "Unable to create the comparison PDF within its page limit."
-                            )
-                        pdf.insert_pdf(section_pdf)
-            except Exception:
-                pdf.close()
-                raise
+            # MuPDF can restart a multi-table flow at its final table. Give
+            # checks flowing labeled paragraphs instead: every value, reason,
+            # source and shared applicability remains, while tests can share a
+            # page. Starting a separate PDF page per test makes a valid large
+            # assessment exceed the bound merely because it has many tests.
+            # Both attempts consume the same time/callback/page budgets.
+            flowing_story = pymupdf.Story(
+                html=_html(payload, flowing_checks=True), user_css=_CSS
+            )
+            pdf = flowing_story.write_with_links(page_rect)
         with pdf:
             total = len(pdf)
             if total > PDF_MAX_PAGES:

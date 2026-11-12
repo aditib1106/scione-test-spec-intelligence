@@ -207,7 +207,7 @@ def test_pdf_adapter_still_rejects_unrecognized_machine_check_fields():
         render_comparison_pdf(payload)
 
 
-def test_native_layout_restart_uses_complete_bounded_section_fallback(monkeypatch):
+def test_native_layout_restart_uses_complete_bounded_flowing_fallback(monkeypatch):
     import scione.structured.pdf as renderer
 
     payload = _payload()
@@ -236,13 +236,13 @@ def test_native_layout_restart_uses_complete_bounded_section_fallback(monkeypatc
             if not calls:
                 calls.append("native_failure")
                 raise ComparisonPDFError("Unable to create PDF within its layout limit.")
-            calls.append("bounded_section")
+            calls.append("bounded_flow")
             return super().write_with_links(*args, **kwargs)
 
     monkeypatch.setattr(renderer.pymupdf, "Story", RestartingLayout)
     text, pages = _compact(renderer._render_comparison_pdf_inline(payload))
-    assert 4 < pages < renderer.PDF_MAX_PAGES
-    assert calls[0] == "native_failure" and len(calls) > 5
+    assert 1 < pages < renderer.PDF_MAX_PAGES
+    assert calls == ["native_failure", "bounded_flow"]
     for index in range(18):
         assert text.count(f"SHARED_REQUIRED_VALUE_{index} ") == 1
         assert f"SHARED_LAB_VALUE_{index}" in text
@@ -250,6 +250,90 @@ def test_native_layout_restart_uses_complete_bounded_section_fallback(monkeypatc
     for row in payload["requirements"]:
         assert row["test_name"] in text
     assert "Applies to:" in text and payload == before
+
+
+def test_large_multiline_overview_uses_bounded_tables_and_preserves_all_tests():
+    from scione.structured import pdf as renderer
+
+    payload = _payload()
+    template = copy.deepcopy(payload["requirements"][0])
+    payload["requirements"] = []
+    for index in range(54):
+        row = copy.deepcopy(template)
+        row["requirement_id"] = row["comparison"]["requirement_id"] = f"req_{index}"
+        row["test_name"] = (
+            f"ASSESSMENT{index:02d} Coated vehicle component durability "
+            "before and after environmental conditioning"
+        )
+        row["methods"] = [f"ISO {60000 + index}:2025", f"Customer procedure {index:02d}"]
+        row["comparison"]["checks"][0]["id"] = f"check_{index}"
+        row["comparison"]["checks"][0]["requested"] = f"READING{index:02d} At least 90% retention"
+        payload["requirements"].append(row)
+    before = copy.deepcopy(payload)
+    html = renderer._html(payload)
+    overview = html.split("<h2>Test overview</h2>", 1)[1].split(
+        "<!-- scione-comparison-section -->", 1
+    )[0]
+    assert overview.count("<table>") == overview.count("</table>") == 5
+    assert overview.count("Requested method") == 5
+    text, pages = _compact(render_comparison_pdf(payload))
+    assert 1 < pages < renderer.PDF_MAX_PAGES
+    for index in range(54):
+        assert f"ASSESSMENT{index:02d}" in text
+        assert f"ISO {60000 + index}:2025" in text
+        assert f"READING{index:02d}" in text
+    assert payload == before
+
+
+def test_many_tests_fallback_shares_pages_and_preserves_every_check(monkeypatch):
+    from scione.structured import pdf as renderer
+
+    payload = _payload()
+    template = copy.deepcopy(payload["requirements"][0])
+    payload["requirements"] = []
+    for row_index in range(56):
+        row = copy.deepcopy(template)
+        row["requirement_id"] = row["comparison"]["requirement_id"] = f"req_{row_index}"
+        row["test_name"] = f"Requested test {row_index:02d}"
+        row["comparison"]["checks"] = [
+            {
+                "id": f"check_{row_index}_{index}", "label": f"Measurement {index}",
+                "kind": "criterion", "stage": "measurement", "status": "supported",
+                "requested": (
+                    f"REQ{row_index:02d}CHECK{index} Individual specimen measurements "
+                    "before and after exposure."
+                ),
+                "declared": (
+                    f"LAB{row_index:02d}CHECK{index} Individual measurements with lot "
+                    "and exposure-stage records."
+                ),
+                "reason": f"REASON{row_index:02d}CHECK{index} Covered by the saved declaration.",
+                "source_pages": [1 + row_index % 13],
+            }
+            for index in range(7)
+        ]
+        payload["requirements"].append(row)
+    original = copy.deepcopy(payload)
+    real_story = renderer.pymupdf.Story
+    calls = []
+
+    class RestartingLayout(real_story):
+        def write_with_links(self, *args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise ComparisonPDFError("Native table flow cannot paginate.")
+            return super().write_with_links(*args, **kwargs)
+
+    monkeypatch.setattr(renderer.pymupdf, "Story", RestartingLayout)
+    text, pages = _compact(renderer._render_comparison_pdf_inline(payload))
+    assert 1 < pages < renderer.PDF_MAX_PAGES and len(calls) == 2
+    assert "56 tests assessed" in text and payload == original
+    for row_index in range(56):
+        assert f"Requested test {row_index:02d}" in text
+        for index in range(7):
+            assert f"REQ{row_index:02d}CHECK{index}" in text
+            assert f"LAB{row_index:02d}CHECK{index}" in text
+            assert f"REASON{row_index:02d}CHECK{index}" in text
 
 
 def test_layout_fallback_cannot_bypass_the_overall_page_bound(monkeypatch):
