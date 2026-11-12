@@ -142,3 +142,63 @@ def test_an_explicit_source_rh_unit_does_not_invent_a_lab_rh_declaration():
     assert first.unit == "% RH"
     assert second.unit == "%"
     assert not actions
+
+
+@pytest.mark.parametrize("low,expected", [("40", "supported"), ("46", "gap")])
+def test_named_structured_lab_percent_uses_rh_dimension_without_changing_values_or_units(
+    low, expected,
+):
+    requested = humidity()
+    declared = humidity(
+        id="lab_claim_1", label="Panel conditioning relative humidity",
+        operator="range", value=None, tolerance=None,
+        minimum=Decimal(low), maximum=Decimal(60), unit="%",
+        raw_text=f"Panel conditioning relative humidity: {low}–60 %.", source_pages=[],
+    )
+    data = snapshot(requested=[requested], declared=[declared])
+    data.requirements[0].requirement = source_for(requested)
+    before = data.model_dump_json()
+
+    run, check = compile_case(data, proposal())
+
+    assert check.status == expected
+    assert run.output.items[0].claim_alignments[0].relation == "same_parameter"
+    assert check.requirement_claim.unit == "%"
+    assert check.requirement_claim.value == 50 and check.requirement_claim.tolerance == 5
+    assert run.input_snapshot.capabilities[0].claims[0].unit == "%"
+    assert data.model_dump_json() == before
+    assert not any("incompatible dimensions" in issue.reason for issue in run.validation_issues)
+
+
+@pytest.mark.parametrize("defect", [
+    "plain_source_percent", "plain_lab_percent", "wrong_lab_label", "negated_lab_label",
+    "changed_lab_value",
+])
+def test_humidity_dimension_bridge_needs_source_proof_and_explicit_matching_lab_record(defect):
+    requested = humidity()
+    declared = humidity(
+        id="lab_claim_1", label="Panel conditioning relative humidity",
+        operator="range", value=None, tolerance=None,
+        minimum=Decimal(40), maximum=Decimal(60), unit="%",
+        raw_text="Panel conditioning relative humidity: 40–60 %.", source_pages=[],
+    )
+    if defect == "plain_source_percent":
+        requested.raw_text = "Condition at 50 ± 5 %."
+        declared.unit = "% RH"
+    elif defect == "plain_lab_percent":
+        declared.raw_text = "Declared fraction: 40–60 %."
+    elif defect == "wrong_lab_label":
+        declared.label = "Fraction"
+    elif defect == "negated_lab_label":
+        declared.label = "Not relative humidity"
+    else:
+        declared.minimum = Decimal(41)
+    data = snapshot(requested=[requested], declared=[declared])
+    data.requirements[0].requirement = source_for(requested)
+    before = data.model_dump_json()
+
+    run, check = compile_case(data, proposal())
+
+    assert run.output.items[0].claim_alignments[0].relation == "unknown"
+    assert check.status == "unknown"
+    assert data.model_dump_json() == before

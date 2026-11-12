@@ -7,8 +7,9 @@ from test_semantic_matching import RecordingProvider, proposal, snapshot
 
 from scione.library.store import LibraryStore
 from scione.matching.models import MATCHING_PROMPT_VERSION, MATCHING_VALIDATION_VERSION
-from scione.matching.service import SemanticMatchingRunner
+from scione.matching.service import SemanticMatchingRunner, input_fingerprint
 from scione.matching.store import SQLMatchingStore
+from scione.structured.models import NORMALIZER_VERSION
 
 SETTINGS = {
     "temperature": 0.0,
@@ -114,3 +115,19 @@ def test_settings_filter_keeps_existing_workspace_model_prompt_and_validation_bo
     assert store.latest_completed("other_document", run.input_fingerprint) is None
     other_workspace = SQLMatchingStore(store.library, "workspace_two")
     assert other_workspace.latest_completed("document_one", run.input_fingerprint) is None
+
+
+def test_normalizer_policy_change_invalidates_matching_cache_without_changing_old_attempt(store):
+    old_input = snapshot()
+    for row in old_input.requirements:
+        row.normalized.normalizer_version = "atomic_requirements_v0_39_native_first"
+    old = SemanticMatchingRunner(RecordingProvider(proposal())).run(old_input)
+    store.save("document_one", old)
+    current_input = old_input.model_copy(deep=True)
+    for row in current_input.requirements:
+        row.normalized.normalizer_version = f"{NORMALIZER_VERSION}_native_first"
+    assert input_fingerprint(old_input) != input_fingerprint(current_input)
+    assert store.latest_completed("document_one", input_fingerprint(current_input)) is None
+    archived = store.load("document_one", old.run_id)
+    assert archived.input_snapshot == old_input
+    assert archived.output == old.output

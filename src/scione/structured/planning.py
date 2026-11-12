@@ -6,6 +6,7 @@ import re
 from decimal import Decimal
 
 from scione.numeric_literals import NUMBER, decimal_literal
+from scione.source_text import citation_text
 from scione.structured.models import AtomicClaim
 
 _WORDS = dict(
@@ -112,6 +113,9 @@ def _planning_context(scope: str, context: str | None) -> bool:
         return False
     text = _text(context).casefold()
     wanted = _text(scope).casefold()
+    # The model may retain the preposition from "three to baseline checks".
+    # Accept it only immediately before this exact closed planning scope.
+    text = re.sub(rf"^to\s+(?={re.escape(wanted)}(?:\b|$))", "", text)
     if wanted not in text:
         return False
     rest = text.replace(wanted, "", 1)
@@ -160,3 +164,35 @@ def canonical_planning_parameter(claim: AtomicClaim) -> str | None:
         )
     ]
     return candidates[0]["parameter_id"] if len(candidates) == 1 else None
+
+
+def planning_context_is_source_grounded(claim: AtomicClaim, source: str) -> bool:
+    """Prove a context-only planning edit against its owned source sentence.
+
+    Planning labels can reverse "From each lot ... assign three to baseline"
+    into "baseline, from each lot". Require that explicit local relationship;
+    another sentence's lot wording or a pooled allocation cannot prove it.
+    This does not change a count, unit, stage, or normalization state.
+    """
+    if canonical_planning_parameter(claim) != "sample_allocation":
+        return False
+    source = _text(citation_text(source)).casefold()
+    raw = _text(citation_text(claim.raw_text)).casefold()
+    occurrences = list(re.finditer(re.escape(raw), source))
+    if len(occurrences) != 1:
+        return False
+    context = _text(claim.source_context or "").casefold()
+    if not re.search(r"\bper lot\b|\b(?:from|for) each lot\b", context):
+        return True
+    before = source[:occurrences[0].start()]
+    # A semicolon can connect preparation and allocation, a new sentence cannot.
+    left = max([0, *(match.end() for match in re.finditer(r"[.!?。]", before))])
+    frame = before[left:]
+    return bool(
+        re.fullmatch(
+            r"\s*(?:from|for) each lot,?\s+"
+            r"(?:coat|prepare|take|select|allocate|provide|label)\b.*[;,]\s*",
+            frame,
+        )
+        and not re.search(r"\b(?:pooled|combined|across|except|unless|not)\b", frame)
+    )

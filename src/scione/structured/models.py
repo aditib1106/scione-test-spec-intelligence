@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_valid
 
 from scione.numeric_literals import validate_numeric_complexity
 
-NORMALIZER_VERSION = "atomic_requirements_v0_38"
+NORMALIZER_VERSION = "atomic_requirements_v0_40"
 ClaimKind = Literal["condition", "criterion", "reporting", "scope", "instruction"]
 
 

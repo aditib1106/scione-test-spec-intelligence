@@ -1697,6 +1697,16 @@ def _native_clause_audit(
             if claim.normalization_state == "unresolved" or not _numeric_values(claim):
                 continue
             first, second = resolve_unit(fallback.unit), resolve_unit(claim.unit)
+            source_definition = resolve_definition(fallback.parameter_id)
+            native_definition = resolve_definition(claim.parameter_id)
+            if (
+                source_definition is not None and native_definition is not None
+                and source_definition.id == native_definition.id == "relative_humidity"
+            ):
+                # '%' and '% RH' express the same retained humidity quantity.
+                # Do not apply this bridge to other percentage-valued properties.
+                first = resolve_unit(fallback.unit, dimension="humidity")
+                second = resolve_unit(claim.unit, dimension="humidity")
             same_unit = canonical_unit_name(fallback.unit) == canonical_unit_name(claim.unit)
             if is_planning_instruction(fallback) and is_planning_instruction(claim):
                 same_unit = fallback.unit is None or same_unit
@@ -1923,7 +1933,9 @@ def normalize_requirement(
     ]
     atoms = []
     review_issues: list[str] = []
-    normalization_actions: list[dict] = []
+    normalization_actions: list[dict] = list(
+        (source_unit_proofs or {}).get("__source_derivations__", {}).get("actions", [])
+    )
     model_identities: dict[str, int] = {}
     supplied = getattr(requirement, "atomic_claims", [])
     for item in supplied:

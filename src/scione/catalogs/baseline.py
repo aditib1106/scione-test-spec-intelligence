@@ -17,3 +17,18 @@ def development_lab_baseline() -> LabProfile:
     if payload.get("synthetic") is not True:
         raise ValueError("Development declarations must be explicitly synthetic.")
     return LabProfile.model_validate(payload["lab"])
+
+
+def ms_pnt_410_lab_baseline() -> LabProfile:
+    """Load the fixed fictional coatings lab without writing or replacing any lab.
+
+    Source-cited comparison expectations are fixture metadata, not laboratory
+    declarations. Loading this separate profile never changes the default setup
+    baseline or implies that a client lab owns these capabilities.
+    """
+    payload = json.loads(
+        files("scione.catalogs").joinpath("data/ms_pnt_410_lab_baseline_v1.json").read_text()
+    )
+    if payload.get("synthetic") is not True:
+        raise ValueError("MS-PNT-410 test declarations must be explicitly synthetic.")
+    return LabProfile.model_validate(payload["lab"])

@@ -23,6 +23,7 @@ def load_reference_catalog() -> ReferenceCatalog:
     """
 
     method_rows = [
+        ("iso_2808", "ISO 2808", "Film thickness (customer reference)"),
         ("iso_2409", "ISO 2409", "Cross-cut adhesion"),
         ("astm_d3359", "ASTM D3359", "Tape adhesion"),
         ("gb_t_9286", "GB/T 9286", "Cross-cut adhesion"),
@@ -216,7 +217,7 @@ def load_reference_catalog() -> ReferenceCatalog:
             "mottling_clouding",
             "Mottling / clouding",
             "发花与云斑",
-            [],
+            ["Mottling / clouding (effect colors only)"],
             ["customer_mottling_visual"],
         ),
         (
@@ -322,12 +323,13 @@ def load_reference_catalog() -> ReferenceCatalog:
                 "a generic thickness declaration does not establish separate-layer measurement."
             ),
             aliases=[
+                Alias(text="Film thickness", language="en"),
                 Alias(text="Dry film thickness", language="en"),
                 Alias(text="Dry-film thickness", language="en"),
                 Alias(text="Topcoat film thickness", language="en"),
                 Alias(text="干膜厚度", language="zh"),
             ],
-            method_ids=["synthetic_iso_60152_2025"],
+            method_ids=["synthetic_iso_60152_2025", "iso_2808"],
         )
     )
     pilot = ReferenceCatalog(

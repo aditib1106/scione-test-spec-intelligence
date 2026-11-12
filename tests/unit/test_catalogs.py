@@ -21,7 +21,7 @@ from scione.catalogs.seed import default_csp301_lab
 def test_pilot_catalog_retains_aliases_and_explicit_synthetic_editions() -> None:
     catalog = load_reference_catalog()
     assert len(catalog.tests) == 99
-    assert len(catalog.methods) == 153
+    assert len(catalog.methods) == 154
     assert catalog.version == 5
     assert catalog.synthetic
     assert "not an authoritative" in catalog.source_note
