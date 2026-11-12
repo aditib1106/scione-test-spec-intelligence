@@ -3,6 +3,7 @@
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from decimal import Decimal
+from hashlib import sha256
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -45,6 +46,7 @@ from scione.reports.review import batch_eligible, needs_review, quote_eligible, 
 from scione.reports.store import FileReportStore
 from scione.specifications.context_coverage import source_context_coverage_audits
 from scione.specifications.corrections import SQLFactsStore, effective_facts
+from scione.specifications.document_notes import document_notes_view
 from scione.specifications.extraction import coverage_issues
 from scione.specifications.manual_atoms import validate_parameter_edits
 from scione.specifications.parameter_view import parameter_review_view
@@ -107,10 +109,19 @@ class Workspace:
             ) from exc
         return replace(stored, document=document)
 
-    def comparison_source(self, document_id, run, *, native_first=True):
+    def comparison_source(self, document_id, run, *, native_first=True, pdf_bytes=None):
         """A detached, physically checked normalization input, never an archive edit."""
         document = self.current_document(document_id).document
-        views, proofs = physical_parameter_views(run.extraction.requirements, document)
+        if pdf_bytes is not None and (
+            not isinstance(pdf_bytes, bytes) or sha256(pdf_bytes).hexdigest() != document.sha256
+        ):
+            raise SpecStoreError(
+                "The source PDF changed. Reload the specification before reviewing."
+            )
+        views, proofs = physical_parameter_views(
+            run.extraction.requirements, document,
+            pdf_bytes=self.specs.read_pdf(document_id) if pdf_bytes is None else pdf_bytes,
+        )
         normalized = [
             normalize_requirement(
                 views[row.id], source_unit_proofs=proofs[row.id], native_first=native_first
@@ -244,19 +255,29 @@ class Workspace:
                 and item.atomic_claims == old.atomic_claims
             ):
                 item.atomic_claims = []
+            verified_evidence = []
+            old_evidence = {(entry.page, entry.quote) for entry in old.evidence} if old else set()
             for evidence in item.evidence:
                 located = inspect_pdf_highlights(
                     pdf, page_number=evidence.page, quotes=(evidence.quote,)
                 )
                 if not located.matches or located.matches[0].status != "matched":
+                    if (evidence.page, evidence.quote) in old_evidence:
+                        # Retain an unchanged model quotation for source review;
+                        # it cannot prove any newly entered parameter fact.
+                        continue
                     raise HTTPException(
                         400,
                         "Locate each test's quotation in the source PDF before saving. "
                         "Copy the source wording and select its page.",
                     )
+                verified_evidence.append(evidence)
             try:
                 validate_parameter_edits(
-                    old, item, source_unit_proofs=physical_unit_proofs(item, document, requirements)
+                    old,
+                    item,
+                    source_unit_proofs=physical_unit_proofs(item, document, requirements),
+                    verified_source_evidence=verified_evidence,
                 )
             except ValueError as exc:
                 raise HTTPException(400, str(exc)) from exc
@@ -324,7 +345,10 @@ class Workspace:
                 update={"message": public_analysis_error(failure.message, failure.error_code)}
             )
         views, unit_proofs = (
-            physical_parameter_views(run.extraction.requirements, stored.document)
+            physical_parameter_views(
+                run.extraction.requirements, stored.document,
+                pdf_bytes=self.specs.read_pdf(document_id),
+            )
             if run
             else ({}, {})
         )
@@ -353,6 +377,8 @@ class Workspace:
             "document_review_issues": list(document_review_issues(run, stored.document))
             if run
             else [],
+            "document_notes_review": document_notes_view(self, document_id, run=run)
+            if run else None,
             "failure": failure,
         }
 

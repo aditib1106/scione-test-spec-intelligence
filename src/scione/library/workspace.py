@@ -18,6 +18,7 @@ from scione.matching.projection import MATCHING_PROJECTION_VERSION
 from scione.matching.retrieval import RETRIEVAL_POLICY_VERSION
 from scione.parameters import REGISTRY_VERSION
 from scione.reports.matching import lab_fingerprint
+from scione.specifications.document_notes import document_notes_view
 from scione.specifications.extraction import coverage_issues
 from scione.specifications.review import (
     REVIEW_POLICY_VERSION,
@@ -83,29 +84,43 @@ class LibraryWorkspace:
         )
 
     def index(self, document_id: str):
+        stored, run, _pdf = self._index_source(document_id)
+        return stored, run
+
+    def _index_source(self, document_id: str):
+        """Return a request-local PDF for the adjacent source review to reuse.
+
+        The bytes come from this authorized source store and never enter a
+        longer-lived cache. A source-index miss needs physical normalization
+        and review; both should inspect the same immutable PDF once.
+        """
         stored = self.workspace.current_document(document_id)
         run = self.workspace.specs.load_latest_extraction(document_id)
         self.store.ensure_document(stored, run.extraction.document if run else None)
+        pdf = None
         if run:
             signature = self._source_signature(stored, run)
             lock, indexed, _assessments = self._read_caches()
             with lock:
                 if indexed.get(document_id) != signature:
-                    _, normalized = self.workspace.comparison_source(document_id, run)
+                    pdf = self.workspace.specs.read_pdf(document_id)
+                    _, normalized = self.workspace.comparison_source(
+                        document_id, run, pdf_bytes=pdf
+                    )
                     self.store.save_requirements(run, normalized)
                     self._remember(indexed, document_id, signature)
                 else:
                     indexed.move_to_end(document_id)
-        return stored, run
+        return stored, run, pdf
 
     def document(self, document_id: str) -> dict:
-        stored, run = self.index(document_id)
+        stored, run, pdf = self._index_source(document_id)
         run, review, _revision = (
             self.workspace.effective_source(document_id, run) if run else (None, None, None)
         )
-        return self._document_view(stored, run, review)
+        return self._document_view(stored, run, review, pdf_bytes=pdf)
 
-    def _document_view(self, stored, run, review) -> dict:
+    def _document_view(self, stored, run, review, *, pdf_bytes=None) -> dict:
         """Build metadata around one captured source/review, not another latest read."""
         row = self.store.document(stored.document_id)
         signature = self._source_signature(stored, run, review)
@@ -118,7 +133,10 @@ class LibraryWorkspace:
                         run,
                         stored.document,
                         review,
-                        pdf_bytes=self.workspace.specs.read_pdf(stored.document_id),
+                        pdf_bytes=(
+                            self.workspace.specs.read_pdf(stored.document_id)
+                            if pdf_bytes is None else pdf_bytes
+                        ),
                     )
                     if run
                     else {}
@@ -148,11 +166,11 @@ class LibraryWorkspace:
         }
 
     def detail(self, document_id: str) -> dict:
-        stored, machine = self.index(document_id)
+        stored, machine, pdf = self._index_source(document_id)
         effective, review, revision = (
             self.workspace.effective_source(document_id, machine) if machine else (None, None, None)
         )
-        document = self._document_view(stored, effective, review)
+        document = self._document_view(stored, effective, review, pdf_bytes=pdf)
         normalized_effective = (
             {
                 row.requirement_id: row
@@ -242,7 +260,7 @@ class LibraryWorkspace:
                 report, saved, explanations = deepcopy(cached)
         if cached is not None:
             self._assert_comparison_inputs_current(report, document, matching_revision)
-            return self._reviewed_comparison(saved, explanations=explanations)
+            return self._reviewed_comparison(saved, explanations=explanations, source_run=run)
         report = self.workspace.draft_from_inputs(inputs)
         run = report.source_run
         # Machine extraction rows are immutable. Reviewed facts have their own
@@ -488,9 +506,11 @@ class LibraryWorkspace:
                 self._comparison_views, signature, deepcopy((report, saved, explanations)),
                 limit=_COMPARISON_CACHE_LIMIT,
             )
-        return self._reviewed_comparison(saved, explanations=explanations)
+        return self._reviewed_comparison(saved, explanations=explanations, source_run=run)
 
-    def _reviewed_comparison(self, saved: dict, *, explanations: dict | None = None) -> dict:
+    def _reviewed_comparison(
+        self, saved: dict, *, explanations: dict | None = None, source_run=None
+    ) -> dict:
         # Pagination is presentation metadata; the persisted comparison remains immutable.
         reviews = SQLAssessmentReviews(
             self.store, self.workspace.labs.workspace_id
@@ -505,6 +525,9 @@ class LibraryWorkspace:
         )
         return {**(explanations if explanations is not None else saved),
                 **({"assessment_reviews": reviews} if reviews else {}),
+                "document_notes_review": document_notes_view(
+                    self.workspace, saved["document"]["document_id"], run=source_run
+                ),
                 "export_snapshot_id": export["comparison_id"]}
 
     def review_assessment(self, document_id: str, body) -> dict:

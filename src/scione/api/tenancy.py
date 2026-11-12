@@ -59,9 +59,9 @@ class _TenantLibraryWorkspace(LibraryWorkspace):
         self.workspace = workspace
         self.store = store
 
-    def _document_view(self, stored, run, review) -> dict:
+    def _document_view(self, stored, run, review, *, pdf_bytes=None) -> dict:
         return {
-            **super()._document_view(stored, run, review),
+            **super()._document_view(stored, run, review, pdf_bytes=pdf_bytes),
             "original_name": stored.original_name,
         }
 
@@ -290,6 +290,7 @@ class TenantWorkspaceRegistry:
         from scione.matching.store import upgrade_matching_schema
         from scione.monitoring.store import upgrade_monitoring_schema
         from scione.specifications.corrections import upgrade_corrections_schema
+        from scione.specifications.document_notes import upgrade_document_notes_schema
 
         for upgrade in (
             upgrade_lab_schema,
@@ -297,6 +298,7 @@ class TenantWorkspaceRegistry:
             upgrade_corrections_schema,
             upgrade_assessment_reviews_schema,
             upgrade_monitoring_schema,
+            upgrade_document_notes_schema,
         ):
             upgrade(workspace.library.store)
         return {"lab_id": lab_id, "backend": backend, "schema": tenant_schema(lab_id)}

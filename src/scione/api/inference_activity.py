@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 _DOCUMENT_ID = re.compile(r"[0-9a-f]{16}\Z")
 
 
-def create_inference_activity_router(gate, registry=None, legacy_workspace=None):
+def create_inference_activity_router(gate, registry=None, legacy_workspace=None, *, jobs=None):
     router = APIRouter(tags=["Analysis activity"])
 
     def selected_workspace():
@@ -74,6 +74,7 @@ def create_inference_activity_router(gate, registry=None, legacy_workspace=None)
             "latest": latest,
             "notice": notice,
             "background_resume_supported": False,
+            "recent_job": jobs.latest(document_id, workspace_id=workspace_id) if jobs else None,
         }
 
     return router

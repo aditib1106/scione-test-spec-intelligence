@@ -79,6 +79,7 @@ def upgrade_business_workspace(workspace) -> None:
     from scione.matching.store import upgrade_matching_schema
     from scione.monitoring.store import upgrade_monitoring_schema
     from scione.specifications.corrections import upgrade_corrections_schema
+    from scione.specifications.document_notes import upgrade_document_notes_schema
 
     store = workspace.library.store
     upgrade_lab_schema(store)
@@ -86,6 +87,7 @@ def upgrade_business_workspace(workspace) -> None:
     upgrade_corrections_schema(store)
     upgrade_assessment_reviews_schema(store)
     upgrade_monitoring_schema(store)
+    upgrade_document_notes_schema(store)
 
 
 def provision_callback(registry):

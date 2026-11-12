@@ -82,10 +82,16 @@ def test_status_survives_new_observer_and_isolated_same_pdf_tenant(activity):
     event_b = store_b.start("matching", document_id)
     store_b.finish(event_b, status="failure", duration_ms=12)
     path = f"/api/specifications/{document_id}/operations"
-    with gate.claim(f"{LAB_A}:{document_id}", "analysis", workspace_id=LAB_A):
+    with gate.claim(f"{LAB_A}:{document_id}", "analysis", workspace_id=LAB_A) as notify:
+        notify({"stage": "extracting", "completed_steps": 2, "total_steps": 7,
+                "message": "private-customer-a.pdf", "percent": 100})
         a = request(app, path).json()
         b = request(app, path, "opaque-b").json()
         assert a["state"] == "running" and a["latest"]["id"] == event_a
+        assert a["active"][0]["progress"] == {
+            "stage": "extracting", "completed_steps": 2, "total_steps": 7,
+            "percent": 28.6, "message": "Reading test requirements.",
+        }
         assert b["state"] == "idle" and b["active"] == []
         assert b["latest"]["id"] == event_b and b["latest"]["status"] == "failure"
         reopened = request(app, "/api/operations?lab_id=" + LAB_B).json()

@@ -64,7 +64,8 @@ def authenticated_api(tmp_path, monkeypatch):
         def __init__(self, adapter, **kwargs):
             self.adapter = adapter
 
-        def run(self, document, *, strategy):
+        def run(self, document, *, strategy, on_progress=None):
+            assert callable(on_progress)
             captured["extraction"].append(strategy)
             return CustomerExtractionRun.model_validate(
                 {
@@ -93,7 +94,8 @@ def authenticated_api(tmp_path, monkeypatch):
                 }
             )
 
-    def matching(self, document_id, body, provider):
+    def matching(self, document_id, body, provider, *, on_progress=None):
+        assert callable(on_progress)
         captured["matching"].append(body)
         return {
             "document_id": document_id,
@@ -304,7 +306,7 @@ def test_cached_matching_records_cache_reuse_instead_of_a_fresh_success(
     state = client.get(path + "/matching").json()
     cached_run_id = str(uuid4())
 
-    def cached_matching(self, document_id, body, provider):
+    def cached_matching(self, document_id, body, provider, *, on_progress=None):
         return {"run_id": cached_run_id, "cached": True, "status": "completed"}
 
     monkeypatch.setattr(MatchingWorkspace, "run", cached_matching)
@@ -334,7 +336,7 @@ def test_failed_provider_operation_is_recorded_without_changing_the_original_api
     document_id, headers, _ = login_and_upload(client)
     api = importlib.import_module("scione.api.app")
 
-    def unavailable(self, document, *, strategy):
+    def unavailable(self, document, *, strategy, on_progress=None):
         raise CustomerExtractionError("The offline provider could not complete analysis.")
 
     monkeypatch.setattr(api.CustomerRequirementRunner, "run", unavailable)

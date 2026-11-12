@@ -5,12 +5,14 @@ The current pilot runs one worker. A multiworker deployment must replace this
 process-local gate with a shared database lease before promising global exclusion.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from threading import Lock
 from time import monotonic
 from uuid import uuid4
+
+from scione.inference_progress import STAGE_MESSAGES, progress_snapshot
 
 
 class InferenceBusyError(RuntimeError):
@@ -31,7 +33,7 @@ class InferenceGate:
     @contextmanager
     def claim(
         self, document_id: str, operation: str, *, workspace_id: str | None = None
-    ) -> Iterator[None]:
+    ) -> Iterator[Callable[[dict], None]]:
         with self._lock:
             active = self._active.get(document_id)
             if active is not None:
@@ -57,20 +59,47 @@ class InferenceGate:
             self._active[document_id] = operation
             self._owners[document_id] = workspace_id
             prefix = f"{workspace_id}:" if workspace_id is not None else ""
+            operation_id = uuid4().hex
             self._details[document_id] = {
-                "operation_id": uuid4().hex,
+                "operation_id": operation_id,
                 "document_id": document_id.removeprefix(prefix) if prefix else document_id,
                 "kind": "extraction" if operation == "analysis" else operation,
                 "started_at": datetime.now(UTC).isoformat(),
                 "started_monotonic": monotonic(),
+                "progress": progress_snapshot("planning"),
             }
+
+        def report_progress(event):
+            # Only this admitted operation can publish to its own tenant/key.
+            # Ignore caller prose/percent: the public message is a fixed label.
+            try:
+                with self._lock:
+                    detail = self._details.get(document_id)
+                    if (detail is None or detail["operation_id"] != operation_id
+                            or self._owners.get(document_id) != workspace_id):
+                        return
+                    stage = event.get("stage")
+                    completed = event.get("completed_steps")
+                    total = event.get("total_steps")
+                    current = detail["progress"]
+                    if (stage not in STAGE_MESSAGES or type(completed) is not int
+                            or completed < current["completed_steps"]
+                            or (total is not None and (type(total) is not int or total < completed))
+                            or (current["total_steps"] is not None
+                                and total != current["total_steps"])):
+                        return
+                    detail["progress"] = progress_snapshot(stage, completed, total)
+            except Exception:
+                pass
         try:
-            yield
+            yield report_progress
         finally:
             with self._lock:
-                self._active.pop(document_id, None)
-                self._owners.pop(document_id, None)
-                self._details.pop(document_id, None)
+                detail = self._details.get(document_id)
+                if detail is not None and detail["operation_id"] == operation_id:
+                    self._active.pop(document_id, None)
+                    self._owners.pop(document_id, None)
+                    self._details.pop(document_id, None)
 
     def snapshot(
         self, *, workspace_id: str | None = None, document_id: str | None = None
@@ -96,5 +125,6 @@ class InferenceGate:
                     "started_at": details["started_at"],
                     "elapsed_seconds": round(max(0.0, now - details["started_monotonic"]), 3),
                     "state": "running",
+                    "progress": dict(details["progress"]),
                 })
             return sorted(result, key=lambda row: (row["started_at"], row["operation_id"]))

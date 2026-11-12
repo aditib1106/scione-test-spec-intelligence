@@ -9,6 +9,7 @@ from test_library_api import _seed
 from scione.api.workspace import Workspace
 from scione.config import Settings
 from scione.library.store import LibraryConflict
+from scione.specifications.store import SpecStoreError
 
 
 @pytest.fixture
@@ -56,6 +57,20 @@ def test_repeated_library_reads_reuse_normalization_and_pdf_review(cached_librar
     third = workspace.library.listing()["documents"][0]
     assert first == second == third
     assert calls == {"normalize": 1, "assess": 1, "review_pdf": 1}
+
+
+def test_first_detail_read_shares_physical_pdf_with_review_without_retaining_bytes(cached_library):
+    workspace, source, _run, calls = cached_library
+    workspace.library.detail(source.document_id)
+    assert calls == {"normalize": 1, "assess": 1, "review_pdf": 1}
+    assert not any(isinstance(value, bytes) for value in vars(workspace.library).values())
+
+
+def test_request_local_pdf_reuse_rejects_bytes_from_a_different_source(cached_library):
+    workspace, source, run, calls = cached_library
+    with pytest.raises(SpecStoreError, match="source PDF changed"):
+        workspace.comparison_source(source.document_id, run, pdf_bytes=b"another PDF")
+    assert calls == {"normalize": 1, "assess": 0, "review_pdf": 0}
 
 
 def test_human_review_and_sql_fact_edits_invalidate_only_the_source_derivation(cached_library):

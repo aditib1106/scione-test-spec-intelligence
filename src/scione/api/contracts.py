@@ -80,6 +80,13 @@ class SourceReview(WriteModel):
     facts_version: int = Field(default=0, ge=0)
 
 
+class DocumentNotesReview(WriteModel):
+    source_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+    expected_version: int = Field(ge=0)
+    note_ids: list[str] = Field(min_length=1, max_length=256)
+    reviewed: bool
+
+
 class SourceFactsEdit(WriteModel):
     run_id: str
     expected_version: int = Field(ge=0)

@@ -5,6 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from decimal import InvalidOperation
+from hashlib import sha256
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -16,6 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from scione.api.body_limits import UploadBodyLimitMiddleware
@@ -24,6 +26,7 @@ from scione.api.contracts import (
     AssessmentReview,
     CapabilityRemoval,
     CapabilityWrite,
+    DocumentNotesReview,
     ExclusionReview,
     LabExample,
     LibraryMetadata,
@@ -41,6 +44,7 @@ from scione.api.contracts import (
 )
 from scione.api.inference_activity import create_inference_activity_router
 from scione.api.inference_gate import InferenceBusyError, InferenceGate
+from scione.api.inference_jobs import InferenceJobs
 from scione.api.lab_capabilities import remove_capability, save_capability
 from scione.api.method_bank import router as method_bank_router
 from scione.api.monitoring import create_monitoring_router
@@ -67,6 +71,7 @@ from scione.catalogs.examples import (
 from scione.catalogs.lab_store import LabVersionConflict
 from scione.catalogs.seed import default_csp301_lab
 from scione.config import ConfigurationError, Settings
+from scione.inference_progress import ProgressReporter
 from scione.library.assessment_reviews import SQLAssessmentReviews
 from scione.library.reset import reset_library_workspace
 from scione.library.store import LibraryConflict, LibraryStoreError
@@ -74,6 +79,7 @@ from scione.monitoring import finish_operation, start_operation
 from scione.providers.factory import create_configured_provider
 from scione.reports.pdf import ReportPDFError, render_report_pdf
 from scione.reports.store import ReportStoreError, ReportVersionConflict
+from scione.specifications.document_notes import save_document_notes_review
 from scione.specifications.extraction import (
     CustomerExtractionError,
     CustomerRequirementRunner,
@@ -121,11 +127,31 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
     workspace = tenant_registry.proxy if tenant_registry is not None else Workspace(config)
     production = config.scione_environment == "production"
 
+    def inference_failure_status(exc):
+        if isinstance(exc, HTTPException):
+            return exc.status_code
+        if isinstance(exc, (
+            LabVersionConflict, SpecVersionConflict, ReportVersionConflict, LibraryConflict,
+            AuthConflict, InferenceBusyError,
+        )):
+            return 409
+        if isinstance(exc, (AuthStoreError, SQLAlchemyError)):
+            return 503
+        if isinstance(exc, (ValidationError, InvalidOperation)):
+            return 422
+        if isinstance(exc, (
+            LabStoreError, SpecStoreError, ReportStoreError, CatalogError, PDFPreviewError,
+            ReportPDFError, ComparisonPDFError, DemoResetError, LibraryStoreError,
+        )):
+            return 400
+        return 500
+
     @asynccontextmanager
     async def lifespan(_app):
         try:
             yield
         finally:
+            await run_in_threadpool(app.state.inference_jobs.shutdown)
             if tenant_registry is not None:
                 tenant_registry.close_all()
             else:
@@ -154,9 +180,12 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         max_per_workspace=1 if config.scione_auth_enabled else None,
     )
     app.state.inference_gate = inference_gate
+    inference_jobs = InferenceJobs(inference_gate, failure_status=inference_failure_status)
+    app.state.inference_jobs = inference_jobs
     app.include_router(create_inference_activity_router(
         inference_gate, tenant_registry,
         legacy_workspace=workspace if tenant_registry is None else None,
+        jobs=inference_jobs,
     ))
 
     @app.middleware("http")
@@ -267,6 +296,33 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         if isinstance(body, MatchingRequest):
             updates["rerun"] = False
         return body.model_copy(update=updates)
+
+    def async_inference(request: Request, document_id: str, kind: str, body, callback):
+        if "respond-async" not in {
+            item.strip().casefold() for item in request.headers.get("prefer", "").split(",")
+        }:
+            return None
+        selected = managed_inference(body)
+        fingerprint = sha256(json.dumps(
+            selected.model_dump(mode="json"), sort_keys=True, separators=(",", ":")
+        ).encode()).hexdigest()
+        receipt = inference_jobs.submit(
+            document_id=document_id, key=inference_key(document_id), kind=kind,
+            workspace_id=inference_workspace(), input_digest=fingerprint,
+            client_request_id=request.headers.get("x-inference-request-id"),
+            callback=lambda progress: observed_operation(
+                kind, document_id, lambda: callback(
+                    document_id, selected, on_progress=progress
+                ),
+            ),
+        )
+        return JSONResponse(receipt, status_code=202, headers={
+            "Preference-Applied": "respond-async", "Location": receipt["status_url"],
+        })
+
+    @app.get("/api/operations/{operation_id}")
+    def inference_job_status(operation_id: str):
+        return inference_jobs.status(operation_id, workspace_id=inference_workspace())
 
     async def domain_error(_request: Request, exc: Exception):
         conflict = isinstance(
@@ -489,16 +545,21 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         return public_matching_overview(workspace.matching.overview(document_id))
 
     @app.post("/api/specifications/{document_id}/matching")
-    def matching_run(document_id: str, body: MatchingRequest):
+    def matching_run(document_id: str, body: MatchingRequest, request: Request):
+        accepted = async_inference(request, document_id, "matching", body, matching_unlocked)
+        if accepted is not None:
+            return accepted
         with inference_gate.claim(
             inference_key(document_id), "matching", workspace_id=inference_workspace()
-        ):
+        ) as on_progress:
             return observed_operation(
                 "matching", document_id,
-                lambda: matching_unlocked(document_id, managed_inference(body)),
+                lambda: matching_unlocked(
+                    document_id, managed_inference(body), on_progress=on_progress
+                ),
             )
 
-    def matching_unlocked(document_id: str, body: MatchingRequest):
+    def matching_unlocked(document_id: str, body: MatchingRequest, *, on_progress=None):
         if not body.permission:
             raise HTTPException(
                 400,
@@ -524,7 +585,9 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             )
         except ConfigurationError as exc:
             raise HTTPException(400, str(exc)) from exc
-        return business_view(workspace.matching.run(document_id, body, provider))
+        return business_view(workspace.matching.run(
+            document_id, body, provider, on_progress=on_progress
+        ))
 
     @app.get("/api/specifications/{document_id}/matching/{run_id}/artifacts")
     def matching_artifacts(document_id: str, run_id: str):
@@ -591,13 +654,26 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             data = await file.read(MAX_PDF_BYTES + 1)
             if len(data) > MAX_PDF_BYTES:
                 raise HTTPException(413, "Choose a PDF smaller than 25 MB.")
-            saved = workspace.specs.import_pdf(file.filename or "specification.pdf", data)
+            saved, created = workspace.specs.import_pdf_with_status(
+                file.filename or "specification.pdf", data
+            )
+            restored = False
             if saved.document_id in workspace.library.store.archived_document_ids():
                 current = workspace.library.store.document(saved.document_id)
                 workspace.library.store.set_document_archived(
                     saved.document_id, archived=False, expected_version=current["version"]
                 )
-            return {"document_id": saved.document_id}
+                restored = True
+            return {
+                "document_id": saved.document_id,
+                "created": created,
+                "reused": not created,
+                "restored": restored,
+                "has_saved_analysis": (
+                    workspace.specs.load_latest_extraction(saved.document_id) is not None
+                ),
+                "original_name": saved.original_name,
+            }
         finally:
             await file.close()
 
@@ -670,7 +746,8 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
                 raise HTTPException(404, "This requirement is not in the selected extraction.")
             if claim_id:
                 views, unit_proofs = physical_parameter_views(
-                    run.extraction.requirements, workspace.current_document(document_id).document
+                    run.extraction.requirements, workspace.current_document(document_id).document,
+                    pdf_bytes=workspace.specs.read_pdf(document_id),
                 )
                 requirement = views[requirement_id]
                 claim = next(
@@ -714,6 +791,17 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             ),
             media_type="image/png",
             headers=headers,
+        )
+
+    @app.post("/api/specifications/{document_id}/document-notes/review")
+    def review_document_notes(document_id: str, body: DocumentNotesReview):
+        return save_document_notes_review(
+            workspace, document_id,
+            source_fingerprint=body.source_fingerprint,
+            expected_version=body.expected_version,
+            note_ids=body.note_ids,
+            reviewed=body.reviewed,
+            actor=current_actor(),
         )
 
     @app.post("/api/specifications/{document_id}/review")
@@ -760,16 +848,23 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         )
 
     @app.post("/api/specifications/{document_id}/analysis")
-    def analyze(document_id: str, body: AnalysisRequest):
+    def analyze(document_id: str, body: AnalysisRequest, request: Request):
+        accepted = async_inference(request, document_id, "extraction", body, analyze_unlocked)
+        if accepted is not None:
+            return accepted
         with inference_gate.claim(
             inference_key(document_id), "analysis", workspace_id=inference_workspace()
-        ):
+        ) as on_progress:
             return observed_operation(
                 "extraction", document_id,
-                lambda: analyze_unlocked(document_id, managed_inference(body)),
+                lambda: analyze_unlocked(
+                    document_id, managed_inference(body), on_progress=on_progress
+                ),
             )
 
-    def analyze_unlocked(document_id: str, body: AnalysisRequest):
+    def analyze_unlocked(document_id: str, body: AnalysisRequest, *, on_progress=None):
+        activity = ProgressReporter(on_progress)
+        activity.emit("planning")
         usage_acknowledged = body.billing_acknowledged or (
             body.provider == "gemini" and body.free_tier_confirmed
         )
@@ -803,11 +898,21 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             run = CustomerRequirementRunner(
                 adapter,
                 max_input_characters=config.scione_customer_input_character_limit,
-            ).run(stored.document, strategy=body.strategy)
+                max_concurrent_chunks=(
+                    config.scione_long_document_parallelism
+                    if stored.document.page_count > 10 else 2
+                ),
+                source_pdf_bytes=workspace.specs.read_pdf(document_id),
+            ).run(
+                stored.document, strategy=body.strategy,
+                on_progress=activity.forward if on_progress is not None else None,
+            )
+            activity.emit("saving")
             workspace.specs.save_extraction(document_id, run)
         except (CustomerExtractionError, ConfigurationError, SpecStoreError) as exc:
             message = str(exc)
             try:
+                activity.emit("saving")
                 workspace.specs.save_failure(
                     ExtractionFailure(
                         document_id=document_id,
