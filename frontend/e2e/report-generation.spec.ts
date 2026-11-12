@@ -118,9 +118,16 @@ async function prepareReport(page: Page, request: APIRequestContext) {
       if (state.failNext) {
         state.failNext = false;
         await route.fulfill({
-          status: 502,
+          status: 202,
           json: {
-            detail: "Provider failed (HTTP 503): temporarily unavailable.",
+            operation_id: "offline-failed-operation",
+            document_id: documentId,
+            kind: "matching",
+            state: "failed",
+            error: {
+              status: 502,
+              detail: "Provider failed (HTTP 503): temporarily unavailable.",
+            },
           },
         });
         return;
@@ -197,7 +204,7 @@ test("generation stays busy until the completed comparison is visible", async ({
   expect(state.posts).toBe(1);
 });
 
-test("a failed result refresh reloads saved matching without another model call", async ({
+test("a failed result refresh reconciles a later saved matching read without another model call", async ({
   page,
   request,
 }) => {
@@ -216,7 +223,11 @@ test("a failed result refresh reloads saved matching without another model call"
   );
   expect(state.posts).toBe(1);
   state.failComparison = false;
-  await failed.getByRole("button", { name: "Try again", exact: true }).click();
+  await page.evaluate((documentId) => {
+    window.dispatchEvent(
+      new CustomEvent("scione:inference-completed", { detail: { documentId } }),
+    );
+  }, documentId);
   await expect(failed).not.toBeVisible();
   await expect(
     page.getByRole("button", { name: "Check for updates", exact: true }),
@@ -228,14 +239,14 @@ test("source review generates a report once and refresh does not repeat inferenc
   page,
   request,
 }) => {
-  const { documentId, state } = await prepareReport(page, request);
+  const { documentId, state, comparison } = await prepareReport(page, request);
   state.hold = true;
-  await page.addInitScript(() => {
+  await page.addInitScript((units) => {
     localStorage.setItem(
       "scione:completed-duration:matching:v1",
-      JSON.stringify([{ seconds: 120, units: 1 }]),
+      JSON.stringify([{ seconds: 120, units }]),
     );
-  });
+  }, comparison.requirements.length);
   await page.goto(`/specifications?document=${documentId}`);
   const generate = page.getByRole("button", {
     name: "Generate report",
@@ -256,7 +267,7 @@ test("source review generates a report once and refresh does not repeat inferenc
     progress.getByRole("progressbar", { name: "AI request in progress" }),
   ).not.toHaveAttribute("aria-valuenow");
   await expect(
-    progress.getByText(/Reference time:.*based on a previous completed run/),
+    progress.getByText(/Reference time:.*based on a comparable completed run/),
   ).toBeVisible();
   await expect(progress.getByText("Elapsed", { exact: true })).toBeVisible();
   await expect(

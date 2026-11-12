@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Box, LinearProgress, Stack, Typography } from "@mui/material";
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
+import type { InferenceStepProgress } from "../api";
 
 type EstimateKey = "analysis" | "matching";
 interface DurationSample {
@@ -8,6 +9,53 @@ interface DurationSample {
   units: number;
 }
 const storageKey = (key: EstimateKey) => `scione:completed-duration:${key}:v1`;
+
+const stageMessages: Record<InferenceStepProgress["stage"], string> = {
+  planning: "Planning the analysis steps.",
+  inventory: "Identifying the requested tests.",
+  extracting: "Reading test requirements.",
+  matching: "Comparing requirements with lab capability.",
+  validating: "Checking the returned results.",
+  saving: "Saving the checked results.",
+};
+
+/** Step counts are server observations, never a time-based completion estimate. */
+export function inferenceStepDisplay(progress?: InferenceStepProgress | null) {
+  if (!progress || typeof progress !== "object") return null;
+  const stage = progress.stage;
+  if (!Object.hasOwn(stageMessages, stage)) return null;
+  const completed = progress.completed_steps;
+  const total = progress.total_steps;
+  const counted = Number.isInteger(completed) && completed >= 0;
+  const planned =
+    counted &&
+    Number.isInteger(total) &&
+    total !== null &&
+    total > 0 &&
+    completed <= total;
+  const percent = progress.percent;
+  const bounded =
+    planned &&
+    typeof percent === "number" &&
+    Number.isFinite(percent) &&
+    percent >= 0 &&
+    percent <= 100 &&
+    Math.abs(percent - (completed / total!) * 100) <= 1;
+  const message =
+    typeof progress.message === "string" && progress.message.trim()
+      ? progress.message.trim().slice(0, 240)
+      : stageMessages[stage];
+  return {
+    message,
+    label: planned
+      ? `AI steps completed ${completed}/${total}${bounded ? ` · ${Math.round(percent!)}%` : ""}`
+      : counted
+        ? `AI steps completed ${completed} · Planning total`
+        : "Planning AI steps",
+    percent: bounded ? percent : null,
+    finalizing: stage === "saving" || (planned && completed === total),
+  };
+}
 
 function samples(key: EstimateKey): DurationSample[] {
   try {
@@ -38,7 +86,14 @@ export function recordInferenceDuration(
   seconds: number,
   units = 1,
 ) {
-  if (!Number.isFinite(seconds) || seconds < 1 || seconds > 3600) return;
+  if (
+    !Number.isFinite(seconds) ||
+    seconds < 1 ||
+    seconds > 3600 ||
+    !Number.isFinite(units) ||
+    units < 1
+  )
+    return;
   try {
     localStorage.setItem(
       storageKey(key),
@@ -56,35 +111,43 @@ function duration(seconds: number) {
   return `${Math.max(1, Math.round(seconds / 60))} min`;
 }
 
-/** Indeterminate progress and a coarse reference based on completed local runs. */
+/** Observed AI steps plus a separate, workload-matched timing reference. */
 export default function InferenceProgress({
   title,
   detail,
   estimateKey = "matching",
   workUnits = 1,
   previousDurationSeconds,
+  previousWorkUnits,
   startedAt,
+  progress,
 }: {
   title: string;
   detail: string;
   estimateKey?: EstimateKey;
   workUnits?: number;
   previousDurationSeconds?: number;
+  previousWorkUnits?: number;
   startedAt?: string;
+  progress?: InferenceStepProgress | null;
 }) {
   const [elapsed, setElapsed] = useState(0);
+  const steps = inferenceStepDisplay(progress);
   const estimate = useMemo(() => {
     const history = samples(estimateKey);
     const similar = history.filter(
       (row) => row.units >= workUnits / 2 && row.units <= workUnits * 2,
     );
-    const values = (similar.length ? similar : history).map(
-      (row) => row.seconds,
-    );
+    const values = similar.map((row) => row.seconds);
     if (
       !values.length &&
       previousDurationSeconds &&
-      previousDurationSeconds >= 1
+      previousDurationSeconds >= 1 &&
+      Number.isFinite(previousDurationSeconds) &&
+      previousWorkUnits !== undefined &&
+      Number.isFinite(previousWorkUnits) &&
+      previousWorkUnits >= workUnits / 2 &&
+      previousWorkUnits <= workUnits * 2
     )
       values.push(previousDurationSeconds);
     if (!values.length) return null;
@@ -98,7 +161,7 @@ export default function InferenceProgress({
       values[Math.ceil((values.length - 1) * 0.75)] * 1.8,
     );
     return { low, high, count: values.length };
-  }, [estimateKey, workUnits, previousDurationSeconds]);
+  }, [estimateKey, workUnits, previousDurationSeconds, previousWorkUnits]);
   useEffect(() => {
     const parsed = startedAt ? Date.parse(startedAt) : NaN;
     const started = Number.isFinite(parsed) ? parsed : Date.now();
@@ -131,7 +194,7 @@ export default function InferenceProgress({
             color="text.secondary"
             sx={{ overflowWrap: "anywhere" }}
           >
-            {detail}
+            {steps?.message ?? detail}
           </Typography>
         </Box>
         <Box sx={{ textAlign: "right", flexShrink: 0 }}>
@@ -150,9 +213,26 @@ export default function InferenceProgress({
           </Typography>
         </Box>
       </Stack>
+      {steps && (
+        <Typography
+          variant="caption"
+          color="primary.main"
+          sx={{ display: "block", mb: 0.75, fontWeight: 650 }}
+        >
+          {steps.label}
+          {steps.finalizing &&
+            " · Final checks and saving are still in progress"}
+        </Typography>
+      )}
       <LinearProgress
         aria-label="AI request in progress"
-        sx={{ height: 4, borderRadius: 5 }}
+        variant={
+          steps?.percent !== null && steps?.percent !== undefined
+            ? "determinate"
+            : "indeterminate"
+        }
+        value={steps?.percent ?? undefined}
+        sx={{ height: 6, borderRadius: 5 }}
       />
       <Typography
         variant="caption"
@@ -162,8 +242,8 @@ export default function InferenceProgress({
         {estimate
           ? elapsed > estimate.high
             ? "Taking longer than previous runs. The request is still in progress."
-            : `Reference time: ${duration(estimate.low)}–${duration(estimate.high)}, based on ${estimate.count === 1 ? "a previous completed run" : `${estimate.count} completed runs`}. Larger workloads may take longer.`
-          : "No previous run to estimate yet. The elapsed time will keep updating."}
+            : `Reference time: ${duration(estimate.low)}–${duration(estimate.high)}, based on ${estimate.count === 1 ? "a comparable completed run" : `${estimate.count} comparable completed runs`}. Timing varies; this is not a countdown.`
+          : "Several AI steps may be needed. Larger workloads can take several minutes; timing varies."}
       </Typography>
     </Box>
   );

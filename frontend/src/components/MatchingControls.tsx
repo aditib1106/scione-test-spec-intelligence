@@ -29,7 +29,7 @@ import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
-import { request, useResource } from "../api";
+import { requestInference, useResource } from "../api";
 import type { ProviderOption } from "../types";
 import InferenceProgress, {
   recordInferenceDuration,
@@ -134,7 +134,7 @@ export default function MatchingControls({
     setError("");
     const inferenceStarted = performance.now();
     try {
-      const result = await request<{
+      const result = await requestInference<{
         run_id: string;
         status: string;
         cached: boolean;

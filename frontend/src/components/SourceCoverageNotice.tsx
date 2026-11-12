@@ -29,11 +29,10 @@ export default function SourceCoverageNotice({
       <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
         <Box sx={{ flex: "1 1 200px" }}>
           <Typography variant="body2" fontWeight={650}>
-            Check extracted requirements
+            Document notes
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {issues.length} source {issues.length === 1 ? "check" : "checks"} to
-            review
+            {issues.length} {issues.length === 1 ? "note" : "notes"} to check
           </Typography>
         </Box>
         {sourceReviewUrl && (

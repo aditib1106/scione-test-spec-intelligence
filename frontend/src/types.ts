@@ -1,3 +1,14 @@
+import type { DocumentNotesReview } from "./documentNotesTypes";
+
+export interface SpecificationUploadReceipt {
+  document_id: string;
+  created?: boolean;
+  reused?: boolean;
+  restored?: boolean;
+  has_saved_analysis?: boolean;
+  original_name?: string;
+}
+
 export interface Alias {
   text: string;
   language: string;
@@ -192,6 +203,7 @@ export interface ReviewSet {
   >;
 }
 export interface SpecificationData {
+  document_notes_review?: DocumentNotesReview;
   document_id: string;
   original_name: string;
   document: {

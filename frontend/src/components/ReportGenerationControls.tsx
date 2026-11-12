@@ -15,7 +15,12 @@ import {
 } from "@mui/material";
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import CodeRoundedIcon from "@mui/icons-material/CodeRounded";
-import { ApiError, request } from "../api";
+import {
+  ApiError,
+  InferenceCompletionUnknownError,
+  request,
+  requestInference,
+} from "../api";
 import { useAuth } from "../auth";
 import { useInferenceActivity } from "./InferenceActivity";
 import type { ProviderOption } from "../types";
@@ -32,8 +37,13 @@ interface MatchingInputs {
 }
 
 function generationError(reason: unknown) {
-  if (reason instanceof ApiError && reason.status === 409)
+  if (reason instanceof ApiError && reason.status === 409) {
+    if (/already running.*(?:lab|document)/i.test(reason.message))
+      return "Your lab already has an analysis running. You can browse other pages while it finishes.";
+    if (/analysis is busy|capacity/i.test(reason.message))
+      return "The analysis service is at capacity. Try again later; no additional analysis was started.";
     return "The specification or lab information changed, or a comparison is already running. Refresh the report before trying again.";
+  }
   const message =
     reason instanceof Error
       ? reason.message
@@ -58,6 +68,7 @@ function generationError(reason: unknown) {
 export default function ReportGenerationControls({
   documentId,
   comparisonId,
+  matchingRunId,
   aiApplied,
   providers,
   requirementCount = 1,
@@ -66,6 +77,7 @@ export default function ReportGenerationControls({
 }: {
   documentId: string;
   comparisonId: string;
+  matchingRunId?: string | null;
   aiApplied: boolean;
   providers: ProviderOption[];
   requirementCount?: number;
@@ -74,16 +86,20 @@ export default function ReportGenerationControls({
 }) {
   const { canDevelop } = useAuth();
   const configured = providers.find((provider) => provider.available);
-  const { active } = useInferenceActivity();
+  const { active, refresh: refreshActivity } = useInferenceActivity();
   const operation = active.find((item) => item.document_id === documentId);
   const [localBusy, setBusy] = useState(false);
-  const busy = localBusy || operation?.kind === "matching";
+  const busy =
+    localBusy ||
+    (operation?.kind === "matching" && operation.observation_state !== "stale");
   const [phase, setPhase] = useState<"preparing" | "comparing" | "updating">(
     "preparing",
   );
   const [progressOpen, setProgressOpen] = useState(false);
   const [developerOpen, setDeveloperOpen] = useState(false);
   const [error, setError] = useState("");
+  const transportFailure = useRef(false);
+  const previousMatchingRun = useRef(matchingRunId);
   const [notice, setNotice] = useState("");
   const mounted = useRef(false);
   const submitting = useRef(false);
@@ -99,14 +115,37 @@ export default function ReportGenerationControls({
     };
   }, []);
 
+  useEffect(() => {
+    setError("");
+    setNotice("");
+    setProgressOpen(false);
+  }, [documentId]);
+
+  useEffect(() => {
+    const changed = previousMatchingRun.current !== matchingRunId;
+    previousMatchingRun.current = matchingRunId;
+    // A report edit changes comparisonId too; only a new saved AI run proves
+    // that an earlier unknown transport outcome has subsequently completed.
+    if (changed && matchingRunId && transportFailure.current) {
+      transportFailure.current = false;
+      setError("");
+      setProgressOpen(false);
+    }
+  }, [matchingRunId]);
+
   async function generateReport() {
-    if (submitting.current || operation) return;
+    if (
+      submitting.current ||
+      (operation && operation.observation_state !== "stale")
+    )
+      return;
     submitting.current = true;
     const submittedDocument = documentId;
     const controller = new AbortController();
     controllerRef.current = controller;
     setBusy(true);
     setError("");
+    transportFailure.current = false;
     setNotice("");
     setPhase("preparing");
     setProgressOpen(true);
@@ -123,6 +162,15 @@ export default function ReportGenerationControls({
         );
     };
     try {
+      if (active.some((item) => item.observation_state === "stale")) {
+        const confirmed = await refreshActivity();
+        if (confirmed === null) throw new InferenceCompletionUnknownError();
+        if (confirmed.length)
+          throw new ApiError(
+            "An analysis is already running for your lab.",
+            409,
+          );
+      }
       const input = await request<MatchingInputs>(path, {
         signal: controller.signal,
       });
@@ -142,7 +190,10 @@ export default function ReportGenerationControls({
         );
       setPhase("comparing");
       const inferenceStarted = performance.now();
-      const result = await request<{ status: string; cached: boolean }>(path, {
+      const result = await requestInference<{
+        status: string;
+        cached: boolean;
+      }>(path, {
         method: "POST",
         signal: controller.signal,
         body: JSON.stringify({
@@ -168,12 +219,20 @@ export default function ReportGenerationControls({
         );
       await updateVisibleReport();
       if (!isCurrent()) return;
+      setError("");
       setProgressOpen(false);
       setNotice(
         result.cached ? "Your report is up to date." : "Report generated.",
       );
     } catch (reason) {
-      if (isCurrent()) setError(generationError(reason));
+      if (isCurrent()) {
+        transportFailure.current =
+          reason instanceof InferenceCompletionUnknownError ||
+          reason instanceof TypeError ||
+          (reason instanceof Error &&
+            reason.message.startsWith("The comparison is saved, but"));
+        setError(generationError(reason));
+      }
     } finally {
       submitting.current = false;
       if (controllerRef.current === controller) controllerRef.current = null;
@@ -207,7 +266,10 @@ export default function ReportGenerationControls({
           <Button
             variant={aiApplied ? "outlined" : "contained"}
             size="small"
-            disabled={operation?.kind === "extraction"}
+            disabled={
+              operation?.kind === "extraction" &&
+              operation.observation_state !== "stale"
+            }
             onClick={() => {
               if (busy) setProgressOpen(true);
               else void generateReport();
@@ -225,9 +287,11 @@ export default function ReportGenerationControls({
               ? phase === "updating"
                 ? "Updating report…"
                 : "Generating…"
-              : aiApplied
-                ? "Check for updates"
-                : "Generate report"}
+              : operation?.observation_state === "stale"
+                ? "Check analysis status"
+                : aiApplied
+                  ? "Check for updates"
+                  : "Generate report"}
           </Button>
         </span>
       </Tooltip>
@@ -259,6 +323,7 @@ export default function ReportGenerationControls({
           {busy ? (
             <InferenceProgress
               startedAt={operation?.started_at}
+              progress={phase === "updating" ? null : operation?.progress}
               workUnits={requirementCount}
               title={
                 phase === "preparing"

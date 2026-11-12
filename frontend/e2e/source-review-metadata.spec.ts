@@ -29,14 +29,28 @@ test("a document revision question appears once without marking each extracted t
   const { documentId, source, selected } = await workedExample(request);
   const issue =
     "The header states 'Rev A' while the revision block states 'Rev B'; confirm which document revision applies.";
+  const notes = {
+    source_fingerprint: "revision-note-fixture",
+    version: 0,
+    pending_count: 1,
+    reviewed_count: 0,
+    notes: [
+      {
+        id: "revision",
+        kind: "document_info",
+        title: "Document version",
+        detail: issue,
+        reviewed: false,
+      },
+    ],
+  };
   await page.route(`**/api/specifications/${documentId}`, (route) =>
     route.fulfill({
       json: {
         ...source,
+        document_notes_review: notes,
         document_review_issues: [issue],
-        coverage_issues: [
-          "Check a source method reference that has no extracted test row.",
-        ],
+        coverage_issues: [],
         assessments: {
           ...source.assessments,
           [selected.id]: { state: "ready", reasons: [] },
@@ -47,26 +61,14 @@ test("a document revision question appears once without marking each extracted t
   await page.goto(
     `/specifications?document=${documentId}&requirement=${selected.id}`,
   );
-  await expect(
-    page.getByText("Check document revision", { exact: true }),
-  ).toHaveCount(1);
-  await expect(
-    page.getByText("Check document revision", { exact: true }),
-  ).toBeVisible();
+  const summary = page.getByRole("button", { name: /Document notes/ });
+  await expect(summary).toHaveCount(1);
   await expect(page.getByText(issue, { exact: true })).not.toBeVisible();
   await expect(
     page.getByText("Check extracted requirements", { exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "View revision details", exact: true })
-    .click();
+  ).toHaveCount(0);
+  await summary.click();
   await expect(page.getByText(issue, { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("heading", {
-      name: selected.original_test_name,
-      exact: true,
-    }),
-  ).toBeVisible();
   await expect(
     page.getByText("Check this item against the PDF", { exact: true }),
   ).toHaveCount(0);
@@ -96,22 +98,18 @@ test("a document revision question appears once without marking each extracted t
     await route.fulfill({
       json: {
         ...saved,
+        document_notes_review: notes,
         document: { ...saved.document, document_review_issues: [issue] },
       },
     });
   });
   await page.goto(`/reports?document=${documentId}`);
+  const reportNotes = page.getByRole("button", { name: /Document notes/ });
+  await expect(reportNotes).toHaveCount(1);
+  await reportNotes.click();
+  await expect(page.getByText(issue, { exact: true })).toBeVisible();
   await expect(
-    page.getByText("Check document revision", { exact: true }),
-  ).toHaveCount(1);
-  await expect(
-    page.getByText("Check document revision", { exact: true }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "View revision details", exact: true })
-    .click();
-  await expect(
-    page.getByRole("link", { name: "Open PDF review", exact: true }),
+    page.getByRole("link", { name: "Open specification", exact: true }),
   ).toHaveAttribute("href", new RegExp(`document=${documentId}`));
 });
 

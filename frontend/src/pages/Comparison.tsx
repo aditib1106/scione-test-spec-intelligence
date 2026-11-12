@@ -52,6 +52,7 @@ import ReportScopeControls from "../components/ReportScopeControls";
 import ReportAssessmentReview from "../components/ReportAssessmentReview";
 import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
 import SourceCoverageNotice from "../components/SourceCoverageNotice";
+import DocumentNotes from "../components/DocumentNotes";
 import { specificationVersionLabel } from "../specificationDates";
 import type { PageProps } from "../types";
 import type { LibraryDocument } from "../libraryTypes";
@@ -277,6 +278,25 @@ export default function Comparison({ workspace }: PageProps) {
   const data = useResource<ComparisonData>(
     documentId ? `/api/comparisons/${encodeURIComponent(documentId)}` : null,
   );
+  const operationStatus = useResource<{
+    recent_job?: {
+      operation_id: string;
+      document_id: string;
+      kind: string;
+      state: string;
+      started_at: string;
+    } | null;
+    latest?: {
+      kind: string;
+      status: string;
+      started_at: string;
+      run_id?: string | null;
+    } | null;
+  }>(
+    documentId
+      ? `/api/specifications/${encodeURIComponent(documentId)}/operations`
+      : null,
+  );
   const library = useResource<{ documents: LibraryDocument[] }>("/api/library");
   const [views, setViews] = useState(readViews);
   const saved = views[documentId];
@@ -302,6 +322,24 @@ export default function Comparison({ workspace }: PageProps) {
   }, [views]);
   const report =
     data.data?.document.document_id === documentId ? data.data : null;
+  const recentJob = operationStatus.data?.recent_job;
+  const lastObserved = operationStatus.data?.latest;
+  const failedAt = Date.parse(recentJob?.started_at ?? "");
+  const newerSavedSuccess = Boolean(
+    report?.matching_run_id &&
+    lastObserved?.kind === "matching" &&
+    ["success", "cache_reuse"].includes(lastObserved.status) &&
+    lastObserved.run_id === report.matching_run_id &&
+    Date.parse(lastObserved.started_at) >= failedAt,
+  );
+  const showSavedFailure = Boolean(
+    report &&
+    recentJob?.document_id === documentId &&
+    recentJob.kind === "matching" &&
+    recentJob.state === "failed" &&
+    Number.isFinite(failedAt) &&
+    !newerSavedSuccess,
+  );
   const visible = useMemo(
     () => selectRequirements(report, view),
     [report, view.filter, view.query, view.order],
@@ -546,6 +584,7 @@ export default function Comparison({ workspace }: PageProps) {
               key={documentId}
               documentId={documentId}
               comparisonId={report.comparison_id}
+              matchingRunId={report.matching_run_id}
               aiApplied={report.comparison_engine === "ai_semantic_matching"}
               providers={workspace.providers}
               requirementCount={report.requirements.length}
@@ -570,24 +609,46 @@ export default function Comparison({ workspace }: PageProps) {
           </Stack>
         </Stack>
       </Stack>
+      {showSavedFailure && (
+        <Alert severity="warning" sx={{ mb: 1.5 }}>
+          The latest comparison attempt did not finish. Showing the saved
+          report. No automatic retry was made.
+        </Alert>
+      )}
       {report && report.comparison_engine !== "ai_semantic_matching" && (
         <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75 }}>
           Generate a report to compare these requirements with your saved lab
           information using AI.
         </Typography>
       )}
-      {report && (
+      {report && !report.document_notes_review && (
         <DocumentRevisionNotice
           issues={report.document.document_review_issues}
           sourceReviewUrl={`/specifications?${new URLSearchParams({ document: documentId })}`}
         />
       )}
-      {report && (
-        <SourceCoverageNotice
-          key={`coverage-${documentId}`}
-          issues={report.source_coverage_issues ?? []}
+      {report?.document_notes_review ? (
+        <DocumentNotes
+          key={`document-notes-${documentId}`}
+          documentId={documentId}
+          review={report.document_notes_review}
           sourceReviewUrl={`/specifications?${new URLSearchParams({ document: documentId })}`}
+          onUpdated={(notes) =>
+            data.setData((saved) =>
+              saved?.comparison_id === report.comparison_id
+                ? { ...saved, document_notes_review: notes }
+                : saved,
+            )
+          }
         />
+      ) : (
+        report && (
+          <SourceCoverageNotice
+            key={`coverage-${documentId}`}
+            issues={report.source_coverage_issues ?? []}
+            sourceReviewUrl={`/specifications?${new URLSearchParams({ document: documentId })}`}
+          />
+        )
       )}
       <Menu
         anchorEl={toolsAnchor}

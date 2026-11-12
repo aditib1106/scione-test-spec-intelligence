@@ -23,25 +23,27 @@ test("source coverage guidance supports correcting scope and instructions withou
   const issue =
     'Literal retention was not verified for "mild steel witnesses" and "Release requires Materials Engineering approval"; check existing scope and instructions.';
   await page.route(`**${path}`, (route) =>
-    route.fulfill({ json: { ...source, coverage_issues: [issue] } }),
+    route.fulfill({
+      json: {
+        ...source,
+        document_notes_review: undefined,
+        coverage_issues: [issue],
+      },
+    }),
   );
   await page.goto(`/specifications?document=${id}`);
-  const title = page.getByText("Check extracted requirements", {
-    exact: true,
-  });
-  await expect(title).toHaveCount(1);
-  const warning = page.getByRole("alert").filter({ has: title });
-  await expect(warning).toContainText("1 source check to review");
-  await expect(warning.getByText(issue, { exact: true })).not.toBeVisible();
-  await warning
-    .getByRole("button", { name: "Review notes", exact: true })
-    .click();
-  await expect(warning.getByText(issue, { exact: true })).toBeVisible();
+  const summary = page.getByRole("button", { name: /Review summary/ });
+  await expect(summary).toHaveCount(1);
+  await expect(summary).toContainText("1 source check");
+  await expect(page.getByText(issue, { exact: true })).not.toBeVisible();
+  await summary.click();
+  await expect(page.getByText(issue, { exact: true })).toBeVisible();
   await expect(
-    warning.getByText("Check the PDF and use Add missing test if needed.", {
-      exact: true,
-    }),
-  ).toHaveCount(0);
+    page.getByText(
+      "Check these references or shared instructions. Correct an existing test or add a missing test if needed.",
+      { exact: true },
+    ),
+  ).toBeVisible();
 });
 
 test("source references stay compact, notes expand on demand, and editing focuses one field", async ({

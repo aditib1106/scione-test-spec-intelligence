@@ -18,10 +18,14 @@ export default function DocumentRevisionNotice({
   sourceReviewUrl?: string;
 }) {
   if (!issues?.length) return null;
+  const revisionOnly = issues.every(
+    (issue) =>
+      /\brevision\b/i.test(issue) && !/\b(?:annex|approval)\b/i.test(issue),
+  );
   return (
     <Alert severity="warning" sx={{ flexShrink: 0 }}>
       <Typography variant="body2" fontWeight={650}>
-        Check document revision
+        {revisionOnly ? "Check document revision" : "Document notes to review"}
       </Typography>
       <Accordion
         disableGutters
@@ -32,7 +36,9 @@ export default function DocumentRevisionNotice({
           expandIcon={<ExpandMoreIcon />}
           sx={{ p: 0, minHeight: 32 }}
         >
-          <Typography variant="caption">View revision details</Typography>
+          <Typography variant="caption">
+            {revisionOnly ? "View revision details" : "View document notes"}
+          </Typography>
         </AccordionSummary>
         <AccordionDetails sx={{ p: 0 }}>
           <Stack gap={1}>

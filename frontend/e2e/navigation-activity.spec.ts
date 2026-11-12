@@ -195,6 +195,14 @@ test("returning to the library displays its session cache while a fresh read is 
   await expect(table).toBeVisible();
   await expect(table.getByRole("row")).toHaveCount(2);
   await navigate(page, "Lab capability");
+  // Wait for the lazy destination to mount. Clicking back before it resolves
+  // can leave the library mounted throughout, so no remount read would exist.
+  await expect(
+    page.getByRole("textbox", {
+      name: "Search tests and methods",
+      exact: true,
+    }),
+  ).toBeVisible();
   hold = true;
   try {
     await navigate(page, "Specifications");

@@ -196,12 +196,12 @@ test("document source coverage stays visible while filtering extracted report it
       modelCalls += 1;
   });
   await page.goto(`${base}/reports?document=summary-source`);
-  const title = page.getByText("Check extracted requirements", {
+  const title = page.getByText("Document notes", {
     exact: true,
   });
   const warning = page.getByRole("alert").filter({ has: title });
   await expect(title).toHaveCount(1);
-  await expect(warning).toContainText("1 source check to review");
+  await expect(warning).toContainText("1 note to check");
   await expect(
     warning.getByRole("link", { name: "Review specification", exact: true }),
   ).toHaveAttribute("href", "/specifications?document=summary-source");

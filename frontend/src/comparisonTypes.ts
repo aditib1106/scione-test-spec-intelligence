@@ -1,4 +1,5 @@
 import type { LibraryDocument } from "./libraryTypes";
+import type { DocumentNotesReview } from "./documentNotesTypes";
 
 export type ComparisonStatus =
   | "fully_matched"
@@ -71,6 +72,7 @@ export interface ComparisonRequirement {
 }
 
 export interface ComparisonData {
+  document_notes_review?: DocumentNotesReview;
   explanation_sources?: Record<string, Record<string, ReasonSource>>;
   export_snapshot_id?: string;
   comparison_id: string;

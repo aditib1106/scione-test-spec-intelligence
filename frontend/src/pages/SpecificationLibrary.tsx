@@ -56,7 +56,7 @@ import {
 } from "../specificationDates";
 import FactSummary from "../components/FactSummary";
 import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
-import type { PageProps } from "../types";
+import type { PageProps, SpecificationUploadReceipt } from "../types";
 import type {
   LibraryDetail,
   LibraryClaim,
@@ -153,6 +153,8 @@ export default function SpecificationLibrary({
   const [metadata, setMetadata] = useState<LibraryMetadata>(emptyMetadata);
   const [file, setFile] = useState<File | null>(null);
   const [uploadedId, setUploadedId] = useState<string | null>(null);
+  const [uploadReceipt, setUploadReceipt] =
+    useState<SpecificationUploadReceipt | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [notice, setNotice] = useState("");
@@ -269,6 +271,7 @@ export default function SpecificationLibrary({
     setMetadata(emptyMetadata());
     setFile(null);
     setUploadedId(null);
+    setUploadReceipt(null);
     setSaveError("");
     setDialogOpen(true);
   };
@@ -285,6 +288,7 @@ export default function SpecificationLibrary({
     });
     setFile(null);
     setUploadedId(null);
+    setUploadReceipt(null);
     setSaveError("");
     setDialogOpen(true);
   };
@@ -318,14 +322,17 @@ export default function SpecificationLibrary({
     setSaving(true);
     try {
       let documentId = editing?.document_id || uploadedId;
+      let receipt = uploadReceipt;
       if (!documentId && file) {
         const body = new FormData();
         body.append("file", file);
-        const uploaded = await request<{ document_id: string }>(
+        const uploaded = await request<SpecificationUploadReceipt>(
           "/api/specifications",
           { method: "POST", body },
         );
         documentId = uploaded.document_id;
+        receipt = uploaded;
+        setUploadReceipt(uploaded);
         setUploadedId(documentId);
         onRefresh();
       }
@@ -333,12 +340,12 @@ export default function SpecificationLibrary({
       const saved = await request<LibraryDetail>(
         `/api/library/${encodeURIComponent(documentId)}`,
       );
-      if (!editing && saved.document.version > 0) {
+      if (!editing && (receipt?.reused || saved.document.version > 0)) {
         // Preserve existing company/version metadata when the saved content is reopened.
         setDialogOpen(false);
         library.refresh();
         onRefresh();
-        navigate(reviewUrl(documentId));
+        navigate(reviewUrl(documentId), { state: { uploadReceipt: receipt } });
         return;
       }
       await request(`/api/library/${encodeURIComponent(documentId)}/metadata`, {
@@ -369,7 +376,7 @@ export default function SpecificationLibrary({
       if (editing) {
         setNotice("Specification details saved.");
       } else {
-        navigate(reviewUrl(documentId));
+        navigate(reviewUrl(documentId), { state: { uploadReceipt: receipt } });
       }
     } catch (error) {
       setSaveError(

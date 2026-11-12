@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Alert,
   Accordion,
@@ -38,7 +38,14 @@ import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
 import ExtractionEvidence from "../components/ExtractionEvidence";
-import { ApiError, apiFetch, request, useResource } from "../api";
+import {
+  ApiError,
+  apiFetch,
+  request,
+  requestInference,
+  requestOperation,
+  useResource,
+} from "../api";
 import { useInferenceActivity } from "../components/InferenceActivity";
 import { useAuth } from "../auth";
 import PdfPageViewer from "../components/PdfPageViewer";
@@ -49,9 +56,14 @@ import ExtractionReviewTable, {
 import InferenceProgress, {
   recordInferenceDuration,
 } from "../components/InferenceProgress";
-import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
-import SourceCoverageNotice from "../components/SourceCoverageNotice";
-import type { PageProps, Requirement, SpecificationData } from "../types";
+import SpecificationReviewSummary from "../components/SpecificationReviewSummary";
+import DocumentNotes from "../components/DocumentNotes";
+import type {
+  PageProps,
+  Requirement,
+  SpecificationData,
+  SpecificationUploadReceipt,
+} from "../types";
 
 const blue = "#2459cc";
 const pageBg = "#f5f7fb";
@@ -109,11 +121,16 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const [params, setParams] = useSearchParams();
   const lastRequirementParam = useRef(params.get("requirement"));
   const navigate = useNavigate();
+  const location = useLocation();
   const compact = useMediaQuery("(max-width:1099px)");
   const docs = workspace.documents;
   const requestedId = params.get("document");
   const documentId = requestedId || docs[0]?.document_id || "";
-  const { active: activeOperations } = useInferenceActivity();
+  const { active: activeOperations, refresh: refreshActivity } =
+    useInferenceActivity();
+  const analysisOperation = activeOperations.find(
+    (item) => item.document_id === documentId && item.kind === "extraction",
+  );
   const operationStatus = useResource<{ state: string; notice: string | null }>(
     documentId ? `/api/specifications/${documentId}/operations` : null,
   );
@@ -157,7 +174,10 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     (analysisInFlight && analysisDocumentId === documentId) ||
     (Boolean(sourceSyncDocument) && sourceSyncDocument === documentId) ||
     activeOperations.some(
-      (item) => item.document_id === documentId && item.kind === "extraction",
+      (item) =>
+        item.document_id === documentId &&
+        item.kind === "extraction" &&
+        item.observation_state !== "stale",
     );
   const [analysisDocumentName, setAnalysisDocumentName] = useState("");
   const analysisSubmitting = useRef(false);
@@ -171,20 +191,29 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       analysisController.current?.abort();
     };
   }, []);
-  const acceptSavedData = useCallback((updated: SpecificationData) => {
-    if (
-      !analysisMounted.current ||
-      activeDocumentRef.current !== updated.document_id
-    )
-      return false;
-    // A successful write supersedes any GET that started before it completed.
-    sourceReadSequence.current += 1;
-    dataRef.current = updated;
-    setData(updated);
-    setLoading(false);
-    setSourceSyncDocument("");
-    return true;
-  }, []);
+  const acceptSavedData = useCallback(
+    (updated: SpecificationData, clearAnalysisError = true) => {
+      if (
+        !analysisMounted.current ||
+        activeDocumentRef.current !== updated.document_id
+      )
+        return false;
+      // A successful write supersedes any GET that started before it completed.
+      sourceReadSequence.current += 1;
+      if (
+        clearAnalysisError &&
+        updated.run?.run_id &&
+        updated.run.run_id !== dataRef.current?.run?.run_id
+      )
+        setAnalysisError("");
+      dataRef.current = updated;
+      setData(updated);
+      setLoading(false);
+      setSourceSyncDocument("");
+      return true;
+    },
+    [],
+  );
   const [provider, setProvider] = useState(
     workspace.providers.find((item) => item.available)?.id ??
       workspace.providers[0]?.id ??
@@ -210,6 +239,20 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const [freeTierConfirmed, setFreeTierConfirmed] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [uploadReceipt, setUploadReceipt] =
+    useState<SpecificationUploadReceipt | null>(null);
+  useEffect(() => {
+    const receipt = location.state?.uploadReceipt as
+      SpecificationUploadReceipt | undefined;
+    if (!receipt || receipt.document_id !== documentId) return;
+    setUploadReceipt(receipt);
+    // Consume navigation context once. A later reload must not present an old
+    // upload receipt as if it had just reopened an earlier analysis.
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: null,
+    });
+  }, [documentId, location, navigate]);
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchIds, setBatchIds] = useState<string[]>([]);
   const [batchNote, setBatchNote] = useState("");
@@ -322,6 +365,11 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       })
         .then((updated) => {
           if (!isCurrent()) return;
+          if (
+            updated.run?.run_id &&
+            updated.run.run_id !== dataRef.current?.run?.run_id
+          )
+            setAnalysisError("");
           setData(updated);
           setSelectedId((current) =>
             updated.run?.extraction.requirements.some(
@@ -678,13 +726,18 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     if (!file) return;
     setUploading(true);
     setUploadError("");
+    setUploadReceipt(null);
     try {
       const form = new FormData();
       form.append("file", file);
-      const result = await request<{ document_id: string }>(
+      const result = await request<SpecificationUploadReceipt>(
         "/api/specifications",
-        { method: "POST", body: form },
+        {
+          method: "POST",
+          body: form,
+        },
       );
+      setUploadReceipt(result);
       onRefresh();
       lastRequirementParam.current = null;
       setParams({ document: result.document_id });
@@ -706,6 +759,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     )
       return;
     const documentAtSubmit = documentId;
+    setUploadReceipt(null);
     analysisSubmitting.current = true;
     ownedAnalysisDocument.current = documentAtSubmit;
     const analysisStartedAt = performance.now();
@@ -717,6 +771,18 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     setAnalysisDocumentName(data.original_name);
     setAnalysisError("");
     try {
+      if (activeOperations.some((item) => item.observation_state === "stale")) {
+        const confirmed = await refreshActivity();
+        if (confirmed === null)
+          throw new Error(
+            "The connection is unavailable and completion is unknown. No new analysis was started. Check the analysis status before trying again.",
+          );
+        if (confirmed.length)
+          throw new ApiError(
+            "An analysis is already running for your lab. Wait for it to finish before starting another analysis.",
+            409,
+          );
+      }
       const focusedPasses = Math.ceil(data.document.page_count / 3);
       if (strategy === "focused_passes" && focusedPasses > 8) {
         setAnalysisError(
@@ -725,7 +791,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         setAnalyzing(false);
         return;
       }
-      const updated = await request<SpecificationData>(
+      const updated = await requestInference<SpecificationData>(
         `/api/specifications/${encodeURIComponent(documentAtSubmit)}/analysis`,
         {
           method: "POST",
@@ -750,6 +816,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         analysisPages,
       );
       if (activeDocumentRef.current === documentAtSubmit) {
+        setAnalysisError("");
         const nextRequirement =
           updated.run?.extraction.requirements.find(
             (item) => statusOf(updated, item.id) === "needs_attention",
@@ -776,16 +843,16 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         );
         const sequence = ++sourceReadSequence.current;
         try {
-          const latest = await request<SpecificationData>(
+          const latest = await requestOperation<SpecificationData>(
             `/api/specifications/${encodeURIComponent(documentAtSubmit)}`,
-            { signal: controller.signal },
+            controller.signal,
           );
           if (
             analysisMounted.current &&
             sourceReadSequence.current === sequence &&
             activeDocumentRef.current === documentAtSubmit
           )
-            acceptSavedData(latest);
+            acceptSavedData(latest, false);
         } catch (refreshReason) {
           if (
             analysisMounted.current &&
@@ -1185,8 +1252,36 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               Check extracted requirements against their highlighted source.
             </Typography>
           </Box>
-          {documentControls}
+          <Stack gap={1} alignItems={{ lg: "flex-end" }}>
+            {documentControls}
+            {!canDevelop && data?.run && data.document_id === documentId && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => void analyze()}
+                disabled={
+                  analyzing || !selectedProvider?.available || !model.trim()
+                }
+              >
+                {analyzing ? "Analyzing…" : "Analyze again"}
+              </Button>
+            )}
+          </Stack>
         </Stack>
+
+        {uploadReceipt?.document_id === documentId && uploadReceipt.reused && (
+          <Alert severity="info" sx={{ py: 0 }}>
+            {uploadReceipt.has_saved_analysis
+              ? "Opened saved analysis for this file in your lab. No new analysis started."
+              : "Opened the saved file in your lab. No analysis started."}
+            {uploadReceipt.original_name && (
+              <> Saved as {uploadReceipt.original_name}.</>
+            )}
+            {uploadReceipt.restored && (
+              <> Restored to your specification library.</>
+            )}
+          </Alert>
+        )}
 
         {!docs.length && (
           <Paper sx={{ ...panelSx, p: { xs: 2, sm: 4 }, textAlign: "center" }}>
@@ -1283,7 +1378,6 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                       )}
               </Alert>
             ))}
-            <DocumentRevisionNotice issues={data.document_review_issues} />
             {canDevelop ? (
               <Accordion
                 expanded={analysisOpen}
@@ -1596,40 +1690,46 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                 </AccordionDetails>
               </Accordion>
             ) : (
-              <Paper variant="outlined" sx={{ ...panelSx, p: 2 }}>
-                <Stack
-                  direction={{ xs: "column", sm: "row" }}
-                  gap={2}
-                  alignItems={{ sm: "center" }}
-                  justifyContent="space-between"
-                >
-                  <Box>
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      {data.run
-                        ? "Extracted requirements"
-                        : "Analyze customer specification"}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {data.run
-                        ? "Review the extracted test items below, or run a fresh analysis."
-                        : "Extract the test items, conditions and acceptance criteria from this PDF."}
-                    </Typography>
-                  </Box>
-                  <Button
-                    variant="contained"
-                    onClick={() => void analyze()}
-                    disabled={
-                      analyzing || !selectedProvider?.available || !model.trim()
-                    }
-                    sx={{ flexShrink: 0 }}
-                  >
-                    {analyzing
-                      ? "Analyzing…"
-                      : data.run
-                        ? "Analyze again"
-                        : "Analyze PDF"}
-                  </Button>
-                </Stack>
+              <>
+                {!data.run && (
+                  <Paper variant="outlined" sx={{ ...panelSx, p: 2 }}>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      gap={2}
+                      alignItems={{ sm: "center" }}
+                      justifyContent="space-between"
+                    >
+                      <Box>
+                        <Typography variant="subtitle1" fontWeight={700}>
+                          {data.run
+                            ? "Extracted requirements"
+                            : "Analyze customer specification"}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {data.run
+                            ? "Review the extracted test items below, or run a fresh analysis."
+                            : "Extract the test items, conditions and acceptance criteria from this PDF."}
+                        </Typography>
+                      </Box>
+                      <Button
+                        variant="contained"
+                        onClick={() => void analyze()}
+                        disabled={
+                          analyzing ||
+                          !selectedProvider?.available ||
+                          !model.trim()
+                        }
+                        sx={{ flexShrink: 0 }}
+                      >
+                        {analyzing
+                          ? "Analyzing…"
+                          : data.run
+                            ? "Analyze again"
+                            : "Analyze PDF"}
+                      </Button>
+                    </Stack>
+                  </Paper>
+                )}
                 {!selectedProvider?.available && (
                   <Alert severity="info" sx={{ mt: 1.5 }}>
                     Document analysis is currently unavailable. Please contact
@@ -1645,12 +1745,12 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                   (!data.run ||
                     Date.parse(data.failure.occurred_at) >
                       Date.parse(data.run.started_at)) && (
-                    <Alert severity="warning" sx={{ mt: 1.5 }}>
+                    <Alert severity="error" sx={{ mt: 1.5 }}>
                       The latest analysis did not finish. Your saved document
                       and earlier results are available.
                     </Alert>
                   )}
-              </Paper>
+              </>
             )}
 
             {operationStatus.data?.state === "completion_unknown" && (
@@ -1660,12 +1760,11 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
             )}
             {analyzing && (
               <InferenceProgress
-                startedAt={
-                  activeOperations.find(
-                    (item) =>
-                      item.document_id === documentId &&
-                      item.kind === "extraction",
-                  )?.started_at
+                startedAt={analysisOperation?.started_at}
+                progress={
+                  sourceSyncDocument === documentId
+                    ? null
+                    : analysisOperation?.progress
                 }
                 title={
                   sourceSyncDocument === documentId
@@ -1682,10 +1781,24 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               />
             )}
 
-            {data.run && (
-              <SourceCoverageNotice
-                key={`coverage-${documentId}`}
-                issues={data.coverage_issues}
+            {data.document_notes_review ? (
+              <DocumentNotes
+                key={`document-notes-${documentId}`}
+                documentId={documentId}
+                review={data.document_notes_review}
+                onUpdated={(notes) =>
+                  setData((saved) =>
+                    saved?.document_id === documentId
+                      ? { ...saved, document_notes_review: notes }
+                      : saved,
+                  )
+                }
+              />
+            ) : (
+              <SpecificationReviewSummary
+                key={`summary-${documentId}`}
+                documentNotes={data.document_review_issues}
+                coverageIssues={data.run ? data.coverage_issues : []}
               />
             )}
             <Stack
