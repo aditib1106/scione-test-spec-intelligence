@@ -4,6 +4,7 @@ export interface LibraryDocument {
   specification_id: string | null;
   title: string | null;
   revision: string | null;
+  specification_date?: string | null;
   family_id: string;
   version: number;
   original_name: string;
@@ -14,10 +15,12 @@ export interface LibraryDocument {
   run_id: string | null;
   page_count: number;
   provider?: string | null;
+  document_review_issues?: string[];
 }
 
 export interface LibraryClaim {
   parameter_id: string | null;
+  kind?: string;
   label: string;
   display_value: string;
   unit: string | null;
@@ -47,5 +50,6 @@ export interface LibraryMetadata {
   specification_id: string;
   title: string;
   revision: string;
+  specification_date?: string | null;
   family_id: string | null;
 }

@@ -59,6 +59,7 @@ class MappingChoice(ReportModel):
     capability_id: str | None = None
     capability_verdict: Literal["unreviewed", "supported", "unsupported"] = "unreviewed"
     lab_fingerprint: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    source_requirement_fingerprint: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     note: str = Field(min_length=1, max_length=4000)
 
 
@@ -68,7 +69,23 @@ class QuoteChoice(ReportModel):
     quantity: Decimal = Field(gt=0, le=1_000_000, allow_inf_nan=False)
     scope_and_basis_confirmed: Literal[True]
     lab_fingerprint: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    source_requirement_fingerprint: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     note: str = Field(min_length=1, max_length=4000)
+
+
+class ReportScopeAction(ReportModel):
+    """A report-only scope decision; extraction and machine results stay intact."""
+
+    action_id: str = Field(
+        pattern=r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+    )
+    requirement_id: str = Field(pattern=r"^req_[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+    excluded: bool
+    actor: str = Field(min_length=1, max_length=200)
+    occurred_at: datetime
+    note: str = Field(min_length=1, max_length=4000)
+    previous_status: MatchStatus
+    previous_excluded: bool
 
 
 class ReportWorkspace(ReportModel):
@@ -77,6 +94,34 @@ class ReportWorkspace(ReportModel):
     version: int = Field(default=0, ge=0)
     mappings: dict[str, MappingChoice] = Field(default_factory=dict)
     quantities: dict[str, QuoteChoice] = Field(default_factory=dict)
+    scope_actions: list[ReportScopeAction] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def consistent_scope_history(self) -> Self:
+        identifiers = [action.action_id for action in self.scope_actions]
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("Report scope action IDs must be unique.")
+        previous: dict[str, bool] = {}
+        for action in self.scope_actions:
+            state = previous.get(action.requirement_id, False)
+            if action.previous_excluded != state or action.excluded == state:
+                raise ValueError(
+                    "Report scope history must record each change from its prior state."
+                )
+            previous[action.requirement_id] = action.excluded
+        return self
+
+    @property
+    def active_exclusions(self) -> dict[str, ReportScopeAction]:
+        """Latest active report-scope removals, separate from source review."""
+
+        active: dict[str, ReportScopeAction] = {}
+        for action in self.scope_actions:
+            if action.excluded:
+                active[action.requirement_id] = action
+            else:
+                active.pop(action.requirement_id, None)
+        return active
 
 
 class QuoteLine(ReportModel):
@@ -108,6 +153,7 @@ class GapLine(ReportModel):
     operation_checks: list[str] = Field(default_factory=list)
     operation_reasons: list[str] = Field(default_factory=list)
     quote: QuoteLine | None = None
+    report_scope_exclusion: ReportScopeAction | None = None
 
 
 class ReportSnapshot(ReportModel):
@@ -120,6 +166,7 @@ class ReportSnapshot(ReportModel):
     document_sha256: str
     source_run: CustomerExtractionRun
     source_review: RequirementReviewSet
+    source_facts_revision_id: str | None = None
     lab: LabProfile
     catalog: ReferenceCatalog
     workspace: ReportWorkspace
@@ -142,8 +189,18 @@ class ReportSnapshot(ReportModel):
         source_ids = [item.id for item in self.source_run.extraction.requirements]
         if [line.requirement.id for line in self.lines] != source_ids:
             raise ValueError("Every extracted requirement must remain represented in source order.")
+        if any(action.requirement_id not in source_ids for action in self.workspace.scope_actions):
+            raise ValueError("Report scope actions must belong to this exact extraction.")
+        active_exclusions = self.workspace.active_exclusions
         totals: dict[str, Decimal] = {}
         for line in self.lines:
+            exclusion = active_exclusions.get(line.requirement.id)
+            if exclusion is not None and (
+                line.status != "excluded" or line.report_scope_exclusion != exclusion
+            ):
+                raise ValueError("Report lines must preserve their active scope exclusion.")
+            if exclusion is None and line.report_scope_exclusion is not None:
+                raise ValueError("A report line cannot contain an inactive scope exclusion.")
             quote = line.quote
             if quote is None:
                 continue

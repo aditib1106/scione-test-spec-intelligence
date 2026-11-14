@@ -118,6 +118,17 @@ def test_structured_pdf_escapes_html_and_preserves_long_requirements() -> None:
     assert "END_MARKER" in text
 
 
+def test_document_revision_question_remains_visible_without_repeating_per_test() -> None:
+    payload = _payload()
+    question = "Header says Rev A while the issue block says Rev B. Confirm the revision."
+    payload["document"]["document_review_issues"] = [question]
+    before = copy.deepcopy(payload)
+    text, _pages = _compact(render_comparison_pdf(payload))
+    assert "Check document revision" in text
+    assert text.count(question) == 1
+    assert payload == before
+
+
 def test_structured_pdf_keeps_excluded_tests_outside_assessed_counts() -> None:
     payload = _payload()
     payload["requirements"][0]["excluded"] = True
@@ -133,6 +144,252 @@ def test_structured_pdf_rejects_invalid_saved_comparison() -> None:
     del payload["requirements"][0]["comparison"]["checks"]
     with pytest.raises(ComparisonPDFError, match="Unable to create"):
         render_comparison_pdf(payload)
+
+
+def test_pdf_includes_current_review_decisions_without_changing_unknown_findings() -> None:
+    payload = _payload()
+    payload["document"]["specification_date"] = "2026-10-28"
+    payload["assessment_reviews"] = {
+        "INTERNAL_REQUIREMENT_2": {
+            "review_status": "accepted",
+            "decision": "clarify_customer",
+            "note": "Confirm the reporting stage with the customer.",
+        }
+    }
+    before = copy.deepcopy(payload)
+    text, pages = _compact(render_comparison_pdf(payload))
+    assert "Specification date: 2026-10-28" in text
+    assert "Lab review: Reviewed" in text
+    assert "Ask customer to clarify" in text
+    assert "Confirm the reporting stage with the customer." in text
+    assert "Needs information" in text
+    assert "Review decisions do not change the capability findings." in text
+    assert pages <= 4 and payload == before
+
+
+def test_pdf_keeps_source_question_values_without_internal_audit_identifiers() -> None:
+    payload = _payload()
+    payload["requirements"][2]["comparison"]["checks"][0]["reason"] = (
+        "req_003 req_003_source_audit_deadbeef: Unrepresented source quantity: 200 mm."
+    )
+    before = copy.deepcopy(payload)
+    text, _ = _compact(render_comparison_pdf(payload))
+    assert "Confirm this source requirement: 200 mm." in text
+    assert "req_003" not in text and "deadbeef" not in text
+    assert payload == before
+
+
+def test_saved_web_candidate_hints_do_not_break_or_change_the_printed_assessment():
+    payload = _payload()
+    check = payload["requirements"][2]["comparison"]["checks"][0]
+    check["candidate_lab_entries"] = [
+        {
+            "claim_id": "UNCONFIRMED_CANDIDATE_ID",
+            "label": "Unconfirmed nearby lab field",
+            "value": "UNCONFIRMED_CANDIDATE_VALUE",
+            "stage": "general",
+            "context": None,
+            "confirmed": False,
+        }
+    ]
+    before = copy.deepcopy(payload)
+    text, _pages = _compact(render_comparison_pdf(payload))
+    assert "Needs information" in text
+    assert "Not recorded by the lab" in text
+    assert "UNCONFIRMED_CANDIDATE" not in text
+    assert payload == before
+
+
+def test_pdf_adapter_still_rejects_unrecognized_machine_check_fields():
+    payload = _payload()
+    payload["requirements"][0]["comparison"]["checks"][0]["invented_machine_verdict"] = True
+    with pytest.raises(ComparisonPDFError):
+        render_comparison_pdf(payload)
+
+
+def test_native_layout_restart_uses_complete_bounded_flowing_fallback(monkeypatch):
+    import scione.structured.pdf as renderer
+
+    payload = _payload()
+    for row_index, row in enumerate(payload["requirements"]):
+        for index in range(18):
+            row["comparison"]["checks"].append(
+                {
+                    "id": f"shared_{row_index}_{index}",
+                    "parameter_id": f"shared_preparation_{index}",
+                    "label": f"Preparation setting {index}",
+                    "kind": "condition",
+                    "stage": "preparation",
+                    "requested": f"SHARED_REQUIRED_VALUE_{index}",
+                    "declared": f"SHARED_LAB_VALUE_{index}",
+                    "status": "supported",
+                    "reason": f"SHARED_REASON_{index}",
+                    "source_pages": [1],
+                }
+            )
+    before = copy.deepcopy(payload)
+    real_story = renderer.pymupdf.Story
+    calls = []
+
+    class RestartingLayout(real_story):
+        def write_with_links(self, *args, **kwargs):
+            if not calls:
+                calls.append("native_failure")
+                raise ComparisonPDFError("Unable to create PDF within its layout limit.")
+            calls.append("bounded_flow")
+            return super().write_with_links(*args, **kwargs)
+
+    monkeypatch.setattr(renderer.pymupdf, "Story", RestartingLayout)
+    text, pages = _compact(renderer._render_comparison_pdf_inline(payload))
+    assert 1 < pages < renderer.PDF_MAX_PAGES
+    assert calls == ["native_failure", "bounded_flow"]
+    for index in range(18):
+        assert text.count(f"SHARED_REQUIRED_VALUE_{index} ") == 1
+        assert f"SHARED_LAB_VALUE_{index}" in text
+        assert f"SHARED_REASON_{index}" in text
+    for row in payload["requirements"]:
+        assert row["test_name"] in text
+    assert "Applies to:" in text and payload == before
+
+
+def test_large_multiline_overview_uses_bounded_tables_and_preserves_all_tests():
+    from scione.structured import pdf as renderer
+
+    payload = _payload()
+    template = copy.deepcopy(payload["requirements"][0])
+    payload["requirements"] = []
+    for index in range(54):
+        row = copy.deepcopy(template)
+        row["requirement_id"] = row["comparison"]["requirement_id"] = f"req_{index}"
+        row["test_name"] = (
+            f"ASSESSMENT{index:02d} Coated vehicle component durability "
+            "before and after environmental conditioning"
+        )
+        row["methods"] = [f"ISO {60000 + index}:2025", f"Customer procedure {index:02d}"]
+        row["comparison"]["checks"][0]["id"] = f"check_{index}"
+        row["comparison"]["checks"][0]["requested"] = f"READING{index:02d} At least 90% retention"
+        payload["requirements"].append(row)
+    before = copy.deepcopy(payload)
+    html = renderer._html(payload)
+    overview = html.split("<h2>Test overview</h2>", 1)[1].split(
+        "<!-- scione-comparison-section -->", 1
+    )[0]
+    assert overview.count("<table>") == overview.count("</table>") == 5
+    assert overview.count("Requested method") == 5
+    text, pages = _compact(render_comparison_pdf(payload))
+    assert 1 < pages < renderer.PDF_MAX_PAGES
+    for index in range(54):
+        assert f"ASSESSMENT{index:02d}" in text
+        assert f"ISO {60000 + index}:2025" in text
+        assert f"READING{index:02d}" in text
+    assert payload == before
+
+
+def test_many_tests_fallback_shares_pages_and_preserves_every_check(monkeypatch):
+    from scione.structured import pdf as renderer
+
+    payload = _payload()
+    template = copy.deepcopy(payload["requirements"][0])
+    payload["requirements"] = []
+    for row_index in range(56):
+        row = copy.deepcopy(template)
+        row["requirement_id"] = row["comparison"]["requirement_id"] = f"req_{row_index}"
+        row["test_name"] = f"Requested test {row_index:02d}"
+        row["comparison"]["checks"] = [
+            {
+                "id": f"check_{row_index}_{index}", "label": f"Measurement {index}",
+                "kind": "criterion", "stage": "measurement", "status": "supported",
+                "requested": (
+                    f"REQ{row_index:02d}CHECK{index} Individual specimen measurements "
+                    "before and after exposure."
+                ),
+                "declared": (
+                    f"LAB{row_index:02d}CHECK{index} Individual measurements with lot "
+                    "and exposure-stage records."
+                ),
+                "reason": f"REASON{row_index:02d}CHECK{index} Covered by the saved declaration.",
+                "source_pages": [1 + row_index % 13],
+            }
+            for index in range(7)
+        ]
+        payload["requirements"].append(row)
+    original = copy.deepcopy(payload)
+    real_story = renderer.pymupdf.Story
+    calls = []
+
+    class RestartingLayout(real_story):
+        def write_with_links(self, *args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise ComparisonPDFError("Native table flow cannot paginate.")
+            return super().write_with_links(*args, **kwargs)
+
+    monkeypatch.setattr(renderer.pymupdf, "Story", RestartingLayout)
+    text, pages = _compact(renderer._render_comparison_pdf_inline(payload))
+    assert 1 < pages < renderer.PDF_MAX_PAGES and len(calls) == 2
+    assert "56 tests assessed" in text and payload == original
+    for row_index in range(56):
+        assert f"Requested test {row_index:02d}" in text
+        for index in range(7):
+            assert f"REQ{row_index:02d}CHECK{index}" in text
+            assert f"LAB{row_index:02d}CHECK{index}" in text
+            assert f"REASON{row_index:02d}CHECK{index}" in text
+
+
+def test_layout_fallback_cannot_bypass_the_overall_page_bound(monkeypatch):
+    import scione.structured.pdf as renderer
+
+    monkeypatch.setattr(renderer, "PDF_MAX_PAGES", 1)
+    with pytest.raises(ComparisonPDFError, match="limit"):
+        renderer._render_comparison_pdf_inline(_payload())
+
+
+def test_long_report_keeps_shared_preparation_and_every_test_on_complete_pages():
+    payload = _payload()
+    for index, row in enumerate(payload["requirements"]):
+        checks = []
+        for number in range(24):
+            checks.append(
+                {
+                    "id": f"own_{index}_{number}",
+                    "parameter_id": f"measurement_{index}_{number}",
+                    "label": f"Specific measurement {number + 1}",
+                    "kind": "criterion",
+                    "stage": "measurement",
+                    "requested": f"OWN_{index}_{number} Customer threshold and reporting context.",
+                    "declared": "Recorded laboratory operating and reporting range.",
+                    "status": "supported",
+                    "reason": "The requested result is within this method's declared capability.",
+                    "source_pages": [2],
+                }
+            )
+        for number in range(25):
+            checks.append(
+                {
+                    "id": f"shared_{index}_{number}",
+                    "parameter_id": f"preparation_{number}",
+                    "label": f"Shared preparation setting {number + 1}",
+                    "kind": "condition",
+                    "stage": "conditioning",
+                    "requested": (
+                        f"SHARED_{number}_VALUE Customer preparation and handling details."
+                    ),
+                    "declared": "Recorded laboratory preparation setting.",
+                    "status": "supported",
+                    "reason": "The preparation is included in the saved declaration.",
+                    "source_pages": [1],
+                }
+            )
+        row["comparison"]["checks"] = checks
+    before = copy.deepcopy(payload)
+    text, pages = _compact(render_comparison_pdf(payload))
+    assert 4 < pages < 64
+    for index in range(4):
+        assert f"OWN_{index}_0" in text and f"OWN_{index}_23" in text
+    assert text.count("SHARED_0_VALUE") == 1
+    assert text.count("SHARED_24_VALUE") == 1
+    assert "Shared requirements" in text
+    assert payload == before
 
 
 def test_manual_reference_pdf_is_labelled_without_printing_provider_identifiers() -> None:
@@ -209,3 +466,147 @@ def test_shared_duration_checks_keep_distinct_thermal_cycle_steps() -> None:
     assert "Step 1" in text
     assert "Step 2" in text
     assert text.count("The same cycle step is declared.") == 2
+
+
+def test_long_combined_row_context_flows_and_following_table_restores_full_columns():
+    from scione.structured.pdf import _CHECK_TABLE_OPEN, _html
+
+    payload = _payload()
+    check = payload["requirements"][0]["comparison"]["checks"][0]
+    check["requested"] = "BEGIN_REQUEST " + "requested detail " * 12 + " END_REQUEST"
+    check["reason"] = "BEGIN_REASON " + "reason detail " * 12 + " END_REASON"
+    check["requirement_claim"] = {
+        "id": "context_atom",
+        "parameter_id": "custom_metric",
+        "label": "Retention",
+        "kind": "criterion",
+        "operator": "text",
+        "text_value": check["requested"],
+        "raw_text": check["requested"],
+        "source_context": "CONTEXT_MARKER " + "each panel " * 14,
+        "configuration": "CONFIGURATION_MARKER",
+        "stage": "after_cycle",
+    }
+    payload["requirements"][0]["comparison"]["checks"].append(
+        {
+            "id": "following",
+            "label": "FOLLOWING_ROW",
+            "kind": "scope",
+            "requested": "FOLLOWING_VALUE",
+            "status": "unknown",
+            "reason": "FOLLOWING_REASON",
+        }
+    )
+    html = _html(payload)
+    assert "</div>" + _CHECK_TABLE_OPEN in html
+    assert re.search(r"</div><table>(?!<tr><th)", html) is None
+    text, _pages = _compact(render_comparison_pdf(payload))
+    for marker in [
+        "BEGIN_REQUEST",
+        "END_REQUEST",
+        "BEGIN_REASON",
+        "END_REASON",
+        "CONTEXT_MARKER",
+        "CONFIGURATION_MARKER",
+        "FOLLOWING_ROW",
+        "FOLLOWING_VALUE",
+    ]:
+        assert marker in text
+
+
+def test_equal_values_with_different_source_material_or_statistic_never_merge():
+    payload = _payload()
+    for index, context in enumerate(["CONCRETE_MEAN of six cores", "STEEL_INDIVIDUAL specimen"]):
+        payload["requirements"][index]["comparison"]["checks"].append(
+            {
+                "id": f"strength_{index}",
+                "parameter_id": "compressive_strength",
+                "label": "Strength",
+                "kind": "condition",
+                "requested": "38 MPa",
+                "declared": None,
+                "status": "unknown",
+                "reason": "Declare the matching material and statistic.",
+                "requirement_claim": {
+                    "id": f"strength_atom_{index}",
+                    "parameter_id": "compressive_strength",
+                    "label": "Strength",
+                    "operator": "=",
+                    "value": 38,
+                    "unit": "MPa",
+                    "raw_text": "Strength 38 MPa",
+                    "source_context": context,
+                    "configuration": "Rig-A",
+                },
+            }
+        )
+    text, _pages = _compact(render_comparison_pdf(payload))
+    assert text.count("Declare the matching material and statistic.") == 2
+    assert "CONCRETE_MEAN" in text and "STEEL_INDIVIDUAL" in text and "Rig-A" in text
+
+
+def test_renderer_timeout_discards_partial_bytes_and_never_forwards_credentials(monkeypatch):
+    import subprocess
+
+    from scione.structured import pdf as module
+
+    monkeypatch.setenv("SAIL_API_KEY", "not-forwarded")
+    monkeypatch.setenv("SCIONE_DATABASE_URL", "not-forwarded")
+    captured = {}
+
+    def stalled(command, **options):
+        captured.update(command=command, **options)
+        raise subprocess.TimeoutExpired(command, options["timeout"], output=b"%PDF-PARTIAL")
+
+    monkeypatch.setattr(module.subprocess, "run", stalled)
+    with pytest.raises(ComparisonPDFError, match="20-second rendering limit") as caught:
+        render_comparison_pdf(_payload())
+    assert "PARTIAL" not in str(caught.value)
+    assert "web report and JSON remain available" in str(caught.value)
+    assert captured["timeout"] == 20
+    assert captured["command"][-2:] == ["-m", "scione.structured.pdf_worker"]
+    assert "SAIL_API_KEY" not in captured["env"] and "SCIONE_DATABASE_URL" not in captured["env"]
+
+
+@pytest.mark.parametrize("returncode,output", [(1, b"%PDF-PARTIAL"), (0, b"unexpected output")])
+def test_failed_or_nonpdf_worker_output_is_never_returned(monkeypatch, returncode, output):
+    from types import SimpleNamespace
+
+    from scione.structured import pdf as module
+
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *_a, **_k: SimpleNamespace(
+            returncode=returncode, stdout=output, stderr=b"source text must not leak"
+        ),
+    )
+    with pytest.raises(ComparisonPDFError) as caught:
+        render_comparison_pdf(_payload())
+    assert "source text" not in str(caught.value)
+
+
+@pytest.mark.parametrize("mode", ["page", "callback", "elapsed"])
+def test_worker_inline_renderer_has_explicit_layout_bounds(monkeypatch, mode):
+    from scione.structured import pdf as module
+
+    class LayoutLimitProbe:
+        def __init__(self, **_kwargs):
+            pass
+
+        def write_with_links(self, callback):
+            if mode == "page":
+                callback(65, pymupdf.Rect())
+            elif mode == "callback":
+                for _ in range(257):
+                    callback(0, pymupdf.Rect())
+            else:
+                callback(0, pymupdf.Rect())
+            pytest.fail("The renderer must stop before accepting a partial document.")
+
+    monkeypatch.setattr(module.pymupdf, "Story", LayoutLimitProbe)
+    if mode == "elapsed":
+        ticks = iter([0, 11])
+        monkeypatch.setattr(module.time, "monotonic", lambda: next(ticks))
+    with pytest.raises(ComparisonPDFError, match="layout limit"):
+        module._render_comparison_pdf_inline(_payload())

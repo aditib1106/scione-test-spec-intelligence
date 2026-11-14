@@ -14,7 +14,7 @@ from scione.catalogs.models import (
 
 
 def load_reference_catalog() -> ReferenceCatalog:
-    """Return a fresh pilot catalog without reading files or calling a model.
+    """Return fresh identities from pilot metadata and a packaged bank excerpt.
 
     Existing pilot identities are retained alongside the CSP-EN-301 synthetic
     sample. Chinese aliases are curated demo terminology. Editions are unknown
@@ -23,6 +23,7 @@ def load_reference_catalog() -> ReferenceCatalog:
     """
 
     method_rows = [
+        ("iso_2808", "ISO 2808", "Film thickness (customer reference)"),
         ("iso_2409", "ISO 2409", "Cross-cut adhesion"),
         ("astm_d3359", "ASTM D3359", "Tape adhesion"),
         ("gb_t_9286", "GB/T 9286", "Cross-cut adhesion"),
@@ -216,7 +217,7 @@ def load_reference_catalog() -> ReferenceCatalog:
             "mottling_clouding",
             "Mottling / clouding",
             "发花与云斑",
-            [],
+            ["Mottling / clouding (effect colors only)"],
             ["customer_mottling_visual"],
         ),
         (
@@ -322,15 +323,16 @@ def load_reference_catalog() -> ReferenceCatalog:
                 "a generic thickness declaration does not establish separate-layer measurement."
             ),
             aliases=[
+                Alias(text="Film thickness", language="en"),
                 Alias(text="Dry film thickness", language="en"),
                 Alias(text="Dry-film thickness", language="en"),
                 Alias(text="Topcoat film thickness", language="en"),
                 Alias(text="干膜厚度", language="zh"),
             ],
-            method_ids=["synthetic_iso_60152_2025"],
+            method_ids=["synthetic_iso_60152_2025", "iso_2808"],
         )
     )
-    return ReferenceCatalog(
+    pilot = ReferenceCatalog(
         id="ms_pnt_410_pilot",
         name="Synthetic coatings test catalog",
         version=3,
@@ -349,6 +351,11 @@ def load_reference_catalog() -> ReferenceCatalog:
         tests=tests,
         methods=methods,
     )
+    # Package resources are stable reviewed metadata. Application startup never
+    # scans local PDFs or imports a user's lab capabilities from this bank.
+    from scione.catalogs.generated import enrich_reference_catalog
+
+    return enrich_reference_catalog(pilot)
 
 
 def default_demo_lab() -> LabProfile:

@@ -10,11 +10,13 @@ import hashlib
 import json
 import threading
 from collections.abc import Callable
+from contextlib import contextmanager
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from pydantic import ValidationError
 from sqlalchemy import (
     JSON,
     Column,
@@ -29,13 +31,17 @@ from sqlalchemy import (
     delete,
     event,
     insert,
+    inspect,
     select,
+    text,
     update,
 )
 from sqlalchemy.dialects.mysql import LONGBLOB
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import StaticPool
+
+from scione.specifications.models import CustomerExtraction
 
 
 class LibraryStoreError(RuntimeError):
@@ -75,6 +81,7 @@ documents = Table(
     Column("family_id", String(32), ForeignKey("specification_families.id"), nullable=False),
     Column("original_name", String(500), nullable=False),
     Column("revision", String(300)),
+    Column("specification_date", String(10)),
     Column("created_at", String(40), nullable=False),
     Column("updated_at", String(40), nullable=False),
     Column("version", Integer, nullable=False, default=0),
@@ -89,6 +96,17 @@ runs = Table(
     Column("normalizer_version", String(100), nullable=False),
     Column("created_at", String(40), nullable=False),
     Column("source", JSON, nullable=False),
+)
+document_archives = Table(
+    "specification_archives",
+    metadata,
+    Column(
+        "document_id",
+        String(16),
+        ForeignKey("specification_versions.document_id"),
+        primary_key=True,
+    ),
+    Column("archived_at", String(40), nullable=False),
 )
 requirements = Table(
     "requirements",
@@ -147,6 +165,75 @@ def digest(value: object) -> str:
     ).hexdigest()
 
 
+def _same_extraction_source(archived: object, current: dict) -> bool:
+    """Allow additive contract defaults without replacing historical source JSON.
+
+    Older archives can omit newly introduced optional fields, such as an atom's
+    source_context. Revalidate that snapshot through the current strict contract
+    for comparison only. Unknown fields, invalid records and actual source edits
+    still conflict; no normalized content is written back to the source archive.
+    """
+    if archived == current:
+        return True
+    try:
+        compatible = CustomerExtraction.model_validate(archived).model_dump(mode="json")
+    except ValidationError:
+        return False
+    return compatible == current
+
+
+def specification_date(value: object) -> str | None:
+    """A customer-document date, never inferred from its upload timestamp."""
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str) or len(value) != 10:
+        raise LibraryStoreError("Use a specification date in YYYY-MM-DD format.")
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        raise LibraryStoreError("Use a valid specification date in YYYY-MM-DD format.") from None
+    if parsed.isoformat() != value:
+        raise LibraryStoreError("Use a specification date in YYYY-MM-DD format.")
+    return value
+
+
+def _upgrade_library_schema(engine) -> None:
+    """Add the nullable version date while preserving original revision labels."""
+    with engine.connect() as connection:
+        version = connection.execute(
+            select(schema_versions.c.version).where(schema_versions.c.component == "library")
+        ).scalar_one_or_none()
+    if version not in {None, 1, 2}:
+        raise LibraryStoreError("This database schema needs a compatible application version.")
+    columns = {item["name"] for item in inspect(engine).get_columns(documents.name)}
+    if "specification_date" not in columns:
+        try:
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "ALTER TABLE specification_versions "
+                        "ADD COLUMN specification_date VARCHAR(10) NULL"
+                    )
+                )
+        except SQLAlchemyError:
+            if "specification_date" not in {
+                item["name"] for item in inspect(engine).get_columns(documents.name)
+            }:
+                raise
+    with engine.begin() as connection:
+        if version is None:
+            connection.execute(insert(schema_versions).values(component="library", version=2))
+        elif version == 1:
+            connection.execute(
+                update(schema_versions)
+                .where(
+                    schema_versions.c.component == "library",
+                    schema_versions.c.version == 1,
+                )
+                .values(version=2)
+            )
+
+
 class LibraryStore:
     def __init__(self, root: Path, database_url: str | None = None):
         self.root = Path(root).absolute()
@@ -157,6 +244,21 @@ class LibraryStore:
     @property
     def backend(self) -> str:
         return make_url(self.url).get_backend_name() if self.url else "sqlite"
+
+    @property
+    def engine(self) -> Engine:
+        """The shared SQL connection pool, initialized lazily and without exposing its URL."""
+        return self._db()
+
+    @contextmanager
+    def schema_upgrade(self):
+        """Serialize this process's lazy schema initialization across requests.
+
+        Cloud releases execute database-upgrade before web/worker start. This
+        also protects the local app's concurrent first-use requests.
+        """
+        with self._lock:
+            yield self._db()
 
     def _db(self) -> Engine:
         with self._lock:
@@ -194,20 +296,7 @@ class LibraryStore:
                             cursor.close()
 
                     metadata.create_all(engine)
-                    with engine.begin() as connection:
-                        version = connection.execute(
-                            select(schema_versions.c.version).where(
-                                schema_versions.c.component == "library"
-                            )
-                        ).scalar_one_or_none()
-                        if version is None:
-                            connection.execute(
-                                insert(schema_versions).values(component="library", version=1)
-                            )
-                        elif version != 1:
-                            raise LibraryStoreError(
-                                "This database schema needs a compatible application version."
-                            )
+                    _upgrade_library_schema(engine)
                     self._engine = engine
                 except (SQLAlchemyError, ValueError) as exc:
                     if engine is not None:
@@ -342,6 +431,41 @@ class LibraryStore:
             raise LibraryStoreError("This specification has not been saved to the library.")
         return dict(row)
 
+    def archived_document_ids(self) -> set[str]:
+        """Hide archived versions without removing their source or report history."""
+        with self._db().connect() as connection:
+            return set(connection.execute(select(document_archives.c.document_id)).scalars())
+
+    def set_document_archived(
+        self, document_id: str, *, archived: bool, expected_version: int
+    ) -> dict:
+        with self._lock, self._db().begin() as connection:
+            current = connection.execute(
+                select(documents.c.version).where(documents.c.document_id == document_id)
+            ).scalar_one_or_none()
+            if current is None:
+                raise LibraryStoreError("This specification has not been saved to the library.")
+            if current != expected_version:
+                raise LibraryConflict("The specification changed. Reload before removing it.")
+            changed = connection.execute(
+                update(documents)
+                .where(
+                    documents.c.document_id == document_id,
+                    documents.c.version == expected_version,
+                )
+                .values(version=expected_version + 1, updated_at=now())
+            )
+            if changed.rowcount != 1:
+                raise LibraryConflict("The specification changed. Reload before removing it.")
+            connection.execute(
+                delete(document_archives).where(document_archives.c.document_id == document_id)
+            )
+            if archived:
+                connection.execute(
+                    insert(document_archives).values(document_id=document_id, archived_at=now())
+                )
+        return {"document_id": document_id, "archived": archived, "version": expected_version + 1}
+
     def edit_metadata(self, document_id: str, values: dict, expected_version: int) -> None:
         with self._lock, self._db().begin() as connection:
             current = (
@@ -429,6 +553,11 @@ class LibraryStore:
                 .values(
                     family_id=target,
                     revision=values.get("revision") or None,
+                    specification_date=(
+                        specification_date(values["specification_date"])
+                        if "specification_date" in values
+                        else current["specification_date"]
+                    ),
                     updated_at=now(),
                     version=expected_version + 1,
                 )
@@ -441,11 +570,20 @@ class LibraryStore:
         normalized_by_id = {item.requirement_id: item for item in normalized}
         if len(normalized_by_id) != len(normalized) or set(normalized_by_id) != set(raw_ids):
             raise LibraryConflict("Structured requirements do not match this extraction run.")
+        versions = {item.normalizer_version for item in normalized}
         normalizer_version = normalized[0].normalizer_version if normalized else "none"
-        if any(item.normalizer_version != normalizer_version for item in normalized):
-            raise LibraryConflict(
-                "Structured requirements must use the same normalization version."
-            )
+        if len(versions) > 1:
+            # One document can contain native atoms alongside an older raw-only
+            # requirement. Native-first deliberately leaves that older row's
+            # parsing unchanged; both rows still use this one software policy.
+            # This is not permission to combine unrelated normalizer versions.
+            ordered = sorted(versions, key=len)
+            if len(ordered) == 2 and ordered[1] == ordered[0] + "_native_first":
+                normalizer_version = ordered[1]
+            else:
+                raise LibraryConflict(
+                    "Structured requirements must use the same normalization version."
+                )
         source = run.extraction.model_dump(mode="json")
         with self._lock, self._db().begin() as connection:
             previous = (
@@ -454,7 +592,8 @@ class LibraryStore:
                 .first()
             )
             if previous and (
-                previous["document_id"] != run.document_id or previous["source"] != source
+                previous["document_id"] != run.document_id
+                or not _same_extraction_source(previous["source"], source)
             ):
                 raise LibraryConflict(
                     "An extraction run cannot be replaced with different source data."

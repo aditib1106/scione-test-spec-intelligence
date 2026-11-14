@@ -11,6 +11,7 @@ function record(overrides: Partial<LibraryDocument>): LibraryDocument {
     specification_id: "CSP-301",
     title: "Exterior fascia finish",
     revision: "Issue B",
+    specification_date: "2026-11-03",
     family_id: "fascia",
     version: 1,
     original_name: "fascia-b.pdf",
@@ -26,12 +27,13 @@ function record(overrides: Partial<LibraryDocument>): LibraryDocument {
 
 test("library keeps source versions separate and links atomic fields to their PDF page", async ({
   page,
-}) => {
+}, testInfo) => {
   const documents = [
     record({}),
     record({
       document_id: "source-a",
       revision: "Issue A",
+      specification_date: "2026-10-03",
       original_name: "fascia-a.pdf",
       created_at: "2026-10-03T12:00:00Z",
       updated_at: "2026-10-03T12:00:00Z",
@@ -44,6 +46,7 @@ test("library keeps source versions separate and links atomic fields to their PD
       title: "Interior trim",
       family_id: "trim",
       revision: "Release 1",
+      specification_date: null,
     }),
   ];
   await page.route("**/api/library**", async (route) => {
@@ -99,11 +102,31 @@ test("library keeps source versions separate and links atomic fields to their PD
     name: "Saved customer specifications",
   });
   await expect(listing.getByRole("row")).toHaveCount(3);
-  await expect(listing.getByText("Issue B", { exact: true })).toBeVisible();
+  const sourceRow = listing
+    .getByRole("row")
+    .filter({ hasText: "Exterior fascia finish" });
+  await expect(sourceRow.getByRole("cell").nth(2)).toHaveText("Nov 3, 2026");
+  await expect(
+    listing.getByText("Date not provided", { exact: true }),
+  ).toBeVisible();
   await expect(listing.getByText("Issue A", { exact: true })).toHaveCount(0);
 
   await listing.getByRole("button").first().click();
   await page.getByRole("button", { name: /Cross-cut adhesion/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Cross-cut adhesion" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("table", { name: "Saved requirement records" }),
+  ).not.toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("library-test-summary.png"),
+    animations: "disabled",
+    fullPage: true,
+  });
+  await page
+    .getByRole("button", { name: "View detailed requirements" })
+    .click();
   let claims = page.getByRole("table", {
     name: "Saved requirement records",
   });
@@ -114,9 +137,15 @@ test("library keeps source versions separate and links atomic fields to their PD
     "/specifications?document=source-b&requirement=req_adhesion&page=2",
   );
 
-  await page.getByRole("combobox", { name: "Saved version" }).click();
-  await page.getByRole("option", { name: /Issue A/ }).click();
+  await page.getByRole("combobox", { name: "Specification date" }).click();
+  await page.getByRole("option", { name: "Oct 3, 2026" }).click();
   await page.getByRole("button", { name: /Cross-cut adhesion/ }).click();
+  await expect(
+    page.getByRole("table", { name: "Saved requirement records" }),
+  ).not.toBeVisible();
+  await page
+    .getByRole("button", { name: "View detailed requirements" })
+    .click();
   claims = page.getByRole("table", {
     name: "Saved requirement records",
   });
@@ -132,6 +161,47 @@ test("library keeps source versions separate and links atomic fields to their PD
   await expect(
     page.getByRole("heading", { name: "Interior trim" }),
   ).toBeVisible();
+});
+
+test("library edits a specification date while retaining its original revision", async ({
+  page,
+}) => {
+  let document = record({ specification_date: null });
+  let submitted: Record<string, unknown> | null = null;
+  const detail = (): LibraryDetail => ({
+    document,
+    versions: [document],
+    requirements: [],
+  });
+  await page.route("**/api/library**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/library") {
+      await route.fulfill({ json: { documents: [document] } });
+    } else if (path.endsWith("/metadata")) {
+      submitted = route.request().postDataJSON();
+      document = {
+        ...document,
+        specification_date: String(submitted!.specification_date),
+        version: document.version + 1,
+      };
+      await route.fulfill({ json: detail() });
+    } else {
+      await route.fulfill({ json: detail() });
+    }
+  });
+  await page.goto(`${base}/specifications/library?document=source-b`);
+  await page.getByRole("button", { name: "Edit details" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("Specification date")).toHaveValue("");
+  await expect(
+    dialog.getByText("Original source revision: Issue B"),
+  ).toBeVisible();
+  await dialog.getByLabel("Specification date").fill("2026-11-08");
+  await dialog.getByRole("button", { name: "Save details" }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(submitted?.["specification_date"]).toBe("2026-11-08");
+  expect(submitted?.["revision"]).toBe("Issue B");
+  await expect(page.getByText(/Nov 8, 2026/).first()).toBeVisible();
 });
 
 for (const scenario of [
@@ -151,7 +221,7 @@ for (const scenario of [
     status: "unknown",
     capability: null,
     label: "Review test and method",
-    destination: "/reports/advanced?document=source-b",
+    destination: "/specifications?document=source-b&requirement=req_gloss",
   },
   {
     name: "uninterpreted source clause",
@@ -242,7 +312,7 @@ for (const scenario of [
     await expect(
       page.getByRole("link", { name: scenario.label, exact: true }),
     ).toHaveAttribute("href", scenario.destination);
-    if (scenario.label !== "Update lab information")
+    if (!scenario.capability || scenario.status !== "unknown")
       await expect(
         page.getByRole("link", { name: "Update lab information", exact: true }),
       ).toHaveCount(0);

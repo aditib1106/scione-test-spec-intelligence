@@ -1,7 +1,11 @@
 """Local HTTP and static frontend entry point for the MUI lab workspace."""
 
+import json
+import logging
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 from decimal import InvalidOperation
+from hashlib import sha256
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -13,43 +17,94 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from scione.api.body_limits import UploadBodyLimitMiddleware
 from scione.api.contracts import (
     AnalysisRequest,
+    AssessmentReview,
+    CapabilityRemoval,
+    CapabilityWrite,
+    DocumentNotesReview,
+    ExclusionReview,
     LabExample,
     LibraryMetadata,
+    LibraryRemoval,
     MappingReset,
     MappingReview,
+    MatchingRequest,
     QuantityReview,
     ReportInput,
     ResetRequest,
     ScopeReview,
+    SourceFactsEdit,
+    SourceRequirementAdd,
     SourceReview,
 )
+from scione.api.inference_activity import create_inference_activity_router
+from scione.api.inference_gate import InferenceBusyError, InferenceGate
+from scione.api.inference_jobs import InferenceJobs
+from scione.api.lab_capabilities import remove_capability, save_capability
+from scione.api.method_bank import router as method_bank_router
+from scione.api.monitoring import create_monitoring_router
+from scione.api.public_views import (
+    business_view,
+    current_actor,
+    lab_request,
+    public_matching_overview,
+)
+from scione.api.security_headers import SecurityHeadersMiddleware
+from scione.api.tenancy import TenantWorkspaceMiddleware, TenantWorkspaceRegistry
 from scione.api.workspace import Workspace, utc_now
+from scione.auth.manager import AuthManager
+from scione.auth.middleware import AuthMiddleware
+from scione.auth.models import current_principal
+from scione.auth.router import router as auth_router
+from scione.auth.store import AuthConflict, AuthStoreError
 from scione.catalogs import CatalogError, LabProfile, LabStoreError, default_demo_lab
+from scione.catalogs.examples import (
+    demonstration_csp301_lab,
+    detailed_csp301_lab,
+    typed_csp301_lab,
+)
 from scione.catalogs.lab_store import LabVersionConflict
 from scione.catalogs.seed import default_csp301_lab
 from scione.config import ConfigurationError, Settings
+from scione.inference_progress import ProgressReporter
+from scione.library.assessment_reviews import SQLAssessmentReviews
 from scione.library.reset import reset_library_workspace
 from scione.library.store import LibraryConflict, LibraryStoreError
+from scione.monitoring import finish_operation, start_operation
 from scione.providers.factory import create_configured_provider
 from scione.reports.pdf import ReportPDFError, render_report_pdf
 from scione.reports.store import ReportStoreError, ReportVersionConflict
+from scione.specifications.document_notes import save_document_notes_review
 from scione.specifications.extraction import (
     CustomerExtractionError,
     CustomerRequirementRunner,
     build_plan,
 )
-from scione.specifications.pdf_preview import PDFPreviewError, render_pdf_page
+from scione.specifications.parameter_views import physical_parameter_views
+from scione.specifications.pdf_preview import (
+    PDFPreviewError,
+    inspect_pdf_highlights,
+    render_pdf_page,
+)
+from scione.specifications.preview_quotes import (
+    PreviewField,
+    field_preview_quotes,
+    parameter_preview_quotes,
+)
+from scione.specifications.public_errors import public_analysis_error
 from scione.specifications.store import (
     MAX_PDF_BYTES,
     ExtractionFailure,
     SpecStoreError,
     SpecVersionConflict,
 )
-from scione.structured.pdf import render_comparison_pdf
+from scione.structured import normalize_requirement
+from scione.structured.pdf import ComparisonPDFError, render_comparison_pdf
 from scione.web.diagnostics_data import (
     comparison_rows,
     evidence_rows,
@@ -65,38 +120,228 @@ CSP301_SPEC = REPOSITORY_ROOT / "docs" / "samples" / "CSP-EN-301_demo_spec.pdf"
 
 def create_app(settings: Settings | None = None, frontend_dir: Path | None = None) -> FastAPI:
     config = settings if settings is not None else Settings()
-    workspace = Workspace(config)
-    app = FastAPI(title="SciOne local workspace", version="0.1.0")
-    app.add_middleware(
-        TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", "testserver"]
+    auth_manager = AuthManager(config)
+    tenant_registry = TenantWorkspaceRegistry(config) if config.scione_auth_enabled else None
+    if config.scione_auth_enabled:
+        auth_manager.ensure_ready()
+    workspace = tenant_registry.proxy if tenant_registry is not None else Workspace(config)
+    production = config.scione_environment == "production"
+
+    def inference_failure_status(exc):
+        if isinstance(exc, HTTPException):
+            return exc.status_code
+        if isinstance(exc, (
+            LabVersionConflict, SpecVersionConflict, ReportVersionConflict, LibraryConflict,
+            AuthConflict, InferenceBusyError,
+        )):
+            return 409
+        if isinstance(exc, (AuthStoreError, SQLAlchemyError)):
+            return 503
+        if isinstance(exc, (ValidationError, InvalidOperation)):
+            return 422
+        if isinstance(exc, (
+            LabStoreError, SpecStoreError, ReportStoreError, CatalogError, PDFPreviewError,
+            ReportPDFError, ComparisonPDFError, DemoResetError, LibraryStoreError,
+        )):
+            return 400
+        return 500
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        try:
+            yield
+        finally:
+            await run_in_threadpool(app.state.inference_jobs.shutdown)
+            if tenant_registry is not None:
+                tenant_registry.close_all()
+            else:
+                workspace.library.store.close()
+            auth_manager.close()
+
+    app = FastAPI(
+        title="SciOne Lab Workspace", version="0.2.0",
+        lifespan=lifespan,
+        docs_url=None if production else "/docs",
+        redoc_url=None if production else "/redoc",
+        openapi_url=None if production else "/openapi.json",
     )
+    app.state.auth_manager = auth_manager
+    app.state.tenant_registry = tenant_registry
+    app.include_router(auth_router)
+    app.include_router(method_bank_router)
+    app.include_router(
+        create_monitoring_router(
+            tenant_registry, auth_manager,
+            legacy_workspace=workspace if tenant_registry is None else None,
+        )
+    )
+    inference_gate = InferenceGate(
+        max_concurrent=2 if config.scione_auth_enabled else None,
+        max_per_workspace=1 if config.scione_auth_enabled else None,
+    )
+    app.state.inference_gate = inference_gate
+    inference_jobs = InferenceJobs(inference_gate, failure_status=inference_failure_status)
+    app.state.inference_jobs = inference_jobs
+    app.include_router(create_inference_activity_router(
+        inference_gate, tenant_registry,
+        legacy_workspace=workspace if tenant_registry is None else None,
+        jobs=inference_jobs,
+    ))
 
     @app.middleware("http")
     async def local_requests(request: Request, call_next):
-        # The prototype has no accounts: keep writes on the local application
-        # origin, including Vite's same-origin development proxy.
+        # Authentication enforces session CSRF separately. Retain origin
+        # protection for development/compatibility requests as well.
         origin = request.headers.get("origin")
         if request.method not in {"GET", "HEAD", "OPTIONS"} and origin:
             parsed = urlsplit(origin)
             same_origin = (
                 parsed.scheme == request.url.scheme and parsed.netloc == request.url.netloc
             )
-            if not same_origin and origin not in {
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-            }:
-                return JSONResponse({"detail": "Open the local workspace to make changes."}, 403)
+            trusted = set(config.scione_trusted_origins)
+            if config.scione_public_url:
+                trusted.add(config.scione_public_url.rstrip("/"))
+            if not production:
+                trusted.update({"http://localhost:5173", "http://127.0.0.1:5173"})
+            if not same_origin and origin.rstrip("/") not in trusted:
+                return JSONResponse({"detail": "Open your workspace to make changes."}, 403)
         response = await call_next(request)
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         return response
 
+    # Middleware is added inside-out: authentication chooses the lab before
+    # tenant storage is bound. A query parameter/header never selects a lab.
+    if tenant_registry is not None:
+        app.add_middleware(TenantWorkspaceMiddleware, registry=tenant_registry)
+    app.add_middleware(AuthMiddleware, manager=auth_manager)
+    app.add_middleware(UploadBodyLimitMiddleware)
+    allowed_hosts = list(config.scione_allowed_hosts)
+    if config.scione_public_url:
+        hostname = urlsplit(config.scione_public_url).hostname
+        if hostname and hostname not in allowed_hosts:
+            allowed_hosts.append(hostname)
+    if production:
+        allowed_hosts.append("healthcheck.railway.app")
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+    app.add_middleware(SecurityHeadersMiddleware, production=production)
+
+    def inference_key(document_id: str) -> str:
+        principal = current_principal()
+        return (
+            f"{principal.lab_id}:{document_id}"
+            if principal and principal.lab_id else document_id
+        )
+
+    def inference_workspace() -> str | None:
+        principal = current_principal()
+        return principal.lab_id if principal else None
+
+    def observed_operation(kind: str, document_id: str, callback):
+        # Only admitted operations reach this wrapper. Metrics are best-effort
+        # and never alter an existing result, exception or inference policy.
+        handle = start_operation(workspace, kind, document_id)
+        try:
+            result = callback()
+        except Exception:
+            finish_operation(handle, "failure")
+            raise
+        run_id = page_count = test_count = None
+        status = "success"
+        if isinstance(result, dict):
+            if result.get("cached"):
+                status = "cache_reuse"
+            elif result.get("status") in {"failed", "failure"}:
+                status = "failure"
+            run_id = result.get("run_id")
+            if kind == "extraction":
+                run = result.get("run")
+                if isinstance(run, dict):
+                    run_id = run.get("run_id")
+                    extraction = run.get("extraction")
+                    if isinstance(extraction, dict) and isinstance(
+                        extraction.get("requirements"), list
+                    ):
+                        test_count = len(extraction["requirements"])
+                document = result.get("document")
+                if isinstance(document, dict):
+                    page_count = document.get("page_count")
+        finish_operation(
+            handle, status, run_id=run_id, page_count=page_count, test_count=test_count,
+        )
+        return result
+
+    def managed_inference(body):
+        if not lab_request():
+            return body
+        provider = config.model_provider.strip().casefold()
+        if provider not in {"sail", "fireworks", "groq", "gemini"}:
+            raise HTTPException(503, "Analysis is not configured. Contact your administrator.")
+        if not config.provider_configured(provider):
+            raise HTTPException(503, "Analysis is unavailable. Contact your administrator.")
+        output_limit = (
+            config.groq_max_completion_tokens if provider == "groq"
+            else getattr(config, f"{provider}_max_output_tokens")
+        )
+        updates = {
+            "provider": provider, "model": getattr(config, f"{provider}_model"),
+            "output_limit": output_limit, "permission": True,
+        }
+        if isinstance(body, AnalysisRequest):
+            updates.update({
+                "strategy": "inventory_compact_document", "billing_acknowledged": True,
+                "free_tier_confirmed": True,
+            })
+        if isinstance(body, MatchingRequest):
+            updates["rerun"] = False
+        return body.model_copy(update=updates)
+
+    def async_inference(request: Request, document_id: str, kind: str, body, callback):
+        if "respond-async" not in {
+            item.strip().casefold() for item in request.headers.get("prefer", "").split(",")
+        }:
+            return None
+        selected = managed_inference(body)
+        fingerprint = sha256(json.dumps(
+            selected.model_dump(mode="json"), sort_keys=True, separators=(",", ":")
+        ).encode()).hexdigest()
+        receipt = inference_jobs.submit(
+            document_id=document_id, key=inference_key(document_id), kind=kind,
+            workspace_id=inference_workspace(), input_digest=fingerprint,
+            client_request_id=request.headers.get("x-inference-request-id"),
+            callback=lambda progress: observed_operation(
+                kind, document_id, lambda: callback(
+                    document_id, selected, on_progress=progress
+                ),
+            ),
+        )
+        return JSONResponse(receipt, status_code=202, headers={
+            "Preference-Applied": "respond-async", "Location": receipt["status_url"],
+        })
+
+    @app.get("/api/operations/{operation_id}")
+    def inference_job_status(operation_id: str):
+        return inference_jobs.status(operation_id, workspace_id=inference_workspace())
+
     async def domain_error(_request: Request, exc: Exception):
         conflict = isinstance(
-            exc, (LabVersionConflict, SpecVersionConflict, ReportVersionConflict, LibraryConflict)
+            exc, (LabVersionConflict, SpecVersionConflict, ReportVersionConflict, LibraryConflict,
+                  AuthConflict)
         )
-        return JSONResponse({"detail": str(exc)}, 409 if conflict else 400)
+        detail = str(exc)
+        if lab_request() and not conflict and any(
+            marker in detail
+            for marker in (
+                "/data/", "/Users/", "/app/", "/private/", "/tmp/", "Traceback",
+                "validation error for", "SQLAlchemy", "pymysql", "sqlite3",
+            )
+        ):
+            detail = (
+                "This saved item could not be opened or updated. Your earlier files "
+                "remain saved. Please retry or contact your administrator."
+            )
+        return JSONResponse({"detail": detail}, 409 if conflict else 400)
 
     for error_type in (
         LabStoreError,
@@ -105,17 +350,48 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         CatalogError,
         PDFPreviewError,
         ReportPDFError,
+        ComparisonPDFError,
         DemoResetError,
         LibraryStoreError,
+        AuthConflict,
     ):
         app.add_exception_handler(error_type, domain_error)
 
+    @app.exception_handler(AuthStoreError)
+    async def account_store_error(_request: Request, _exc: AuthStoreError):
+        return JSONResponse(
+            {"detail": "Sign-in is temporarily unavailable. Please try again shortly."}, 503
+        )
+
+    @app.exception_handler(InferenceBusyError)
+    async def inference_busy(_request: Request, exc: InferenceBusyError):
+        return JSONResponse({"detail": str(exc)}, 409)
+
     @app.exception_handler(SQLAlchemyError)
-    async def database_error(_request: Request, _exc: SQLAlchemyError):
+    async def database_error(request: Request, exc: SQLAlchemyError):
+        # Log a useful correlation/code without SQL, bound customer data or
+        # connection credentials. A query resource limit is not a DB outage.
+        reference = uuid4().hex[:12]
+        args = getattr(getattr(exc, "orig", None), "args", ())
+        code = args[0] if args and isinstance(args[0], int) else None
+        logging.getLogger(__name__).error(
+            "Workspace database error ref=%s path=%s type=%s driver_code=%s",
+            reference,
+            request.url.path,
+            type(exc).__name__,
+            code,
+        )
+        message = (
+            "Saved comparison history could not be loaded. Your source files and "
+            "earlier reports are preserved. Try again or contact the workspace administrator."
+            if code == 1038
+            else "The specification database could not complete this action. "
+            "Check the database service and retry. Existing source files have been preserved."
+        )
         return JSONResponse(
             {
-                "detail": "The specification database could not complete this action. "
-                "Check the database service and retry. Existing source files have been preserved."
+                "detail": message,
+                "error_reference": reference,
             },
             503,
         )
@@ -139,56 +415,191 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
 
     @app.get("/api/workspace")
     def overview():
-        return jsonable_encoder(workspace.overview())
+        data = workspace.overview()
+        if lab_request():
+            data["providers"] = [
+                {**provider, "label": "Analysis service"}
+                for provider in data["providers"]
+                if provider["id"] == config.model_provider
+            ]
+        return business_view(data)
 
     @app.get("/api/lab")
     def lab():
         return workspace.labs.load_or_create()
+
+    @app.get("/api/lab/records")
+    def lab_records():
+        return business_view(workspace.labs.records())
+
+    @app.get("/api/parameters")
+    def parameter_definitions():
+        from scione.parameters.registry import definitions
+
+        return {"parameters": [item.model_dump(mode="json") for item in definitions()]}
 
     @app.put("/api/lab")
     def save_lab(body: LabProfile):
         workspace.labs.save(body)
         return workspace.labs.load_or_create()
 
+    @app.post("/api/lab/capabilities")
+    def add_capability(body: CapabilityWrite):
+        return save_capability(workspace, body)
+
+    @app.put("/api/lab/capabilities/{capability_id}")
+    def edit_capability(capability_id: str, body: CapabilityWrite):
+        return save_capability(workspace, body, capability_id=capability_id)
+
+    @app.delete("/api/lab/capabilities/{capability_id}")
+    def delete_capability(capability_id: str, body: CapabilityRemoval):
+        return remove_capability(workspace, capability_id, body.version)
+
     @app.post("/api/lab/example")
     def example_lab(body: LabExample):
         lab = workspace.labs.load_or_create()
         if lab.version != body.version:
             raise HTTPException(409, "Lab changed. Reload before loading the example.")
-        if lab.capabilities:
-            raise HTTPException(409, "Examples can only be loaded into an empty lab.")
-        workspace.labs.save(
-            lab.model_copy(
-                update={
-                    "capabilities": (
-                        default_csp301_lab().capabilities
-                        if body.example == "csp301"
-                        else default_demo_lab().capabilities
-                    )
-                }
+        if body.replace_existing and not body.acknowledged:
+            raise HTTPException(
+                400, "Confirm replacing lab capabilities with synthetic example data."
             )
+        if lab.capabilities and not (body.replace_existing and body.acknowledged):
+            raise HTTPException(409, "Examples can only be loaded into an empty lab.")
+        examples = {
+            "csp301": default_csp301_lab,
+            "csp301_typed": typed_csp301_lab,
+            "csp301_detailed": detailed_csp301_lab,
+            "csp301_demo": demonstration_csp301_lab,
+            "legacy": default_demo_lab,
+        }
+        workspace.labs.save(
+            lab.model_copy(update={"capabilities": examples[body.example]().capabilities})
         )
         return workspace.labs.load_or_create()
 
     @app.get("/api/catalog")
     def catalog():
-        return workspace.catalog
+        return workspace.catalog_for_lab()
 
     @app.get("/api/library")
     def library():
-        return workspace.library.listing()
+        return business_view(workspace.library.listing())
 
     @app.get("/api/library/{document_id}")
     def library_document(document_id: str):
-        return workspace.library.detail(document_id)
+        return business_view(workspace.library.detail(document_id))
 
     @app.put("/api/library/{document_id}/metadata")
     def library_metadata(document_id: str, body: LibraryMetadata):
-        return workspace.library.metadata(document_id, body)
+        return business_view(workspace.library.metadata(document_id, body))
+
+    @app.delete("/api/library/{document_id}")
+    def remove_library_document(document_id: str, body: LibraryRemoval):
+        workspace.library.index(document_id)
+        with workspace.specs.write_guard():
+            return workspace.library.store.set_document_archived(
+                document_id, archived=True, expected_version=body.version
+            )
+
+    @app.post("/api/library/{document_id}/restore")
+    def restore_library_document(document_id: str, body: LibraryRemoval):
+        workspace.library.index(document_id)
+        with workspace.specs.write_guard():
+            return workspace.library.store.set_document_archived(
+                document_id, archived=False, expected_version=body.version
+            )
 
     @app.get("/api/comparisons/{document_id}")
     def comparison(document_id: str):
         return workspace.library.comparison(document_id)
+
+    @app.post("/api/comparisons/{document_id}/reviews")
+    def review_assessment(document_id: str, body: AssessmentReview):
+        return workspace.library.review_assessment(document_id, body)
+
+    @app.get("/api/comparisons/{document_id}/reviews")
+    def assessment_review_history(document_id: str, download: bool = False):
+        current = workspace.library.comparison(document_id)
+        payload = {
+            "document_id": document_id,
+            "comparison_id": current["comparison_id"],
+            "input_fingerprint": current["report_input_fingerprint"],
+            "events": SQLAssessmentReviews(
+                workspace.library.store, workspace.labs.workspace_id
+            ).history(current["comparison_id"]),
+            "note": (
+                "Human processing decisions do not replace machine checks or establish lab support."
+            ),
+        }
+        if download:
+            return Response(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                media_type="application/json",
+                headers={"Content-Disposition": 'attachment; filename="assessment-reviews.json"'},
+            )
+        return payload
+
+    @app.get("/api/specifications/{document_id}/matching")
+    def matching_status(document_id: str):
+        return public_matching_overview(workspace.matching.overview(document_id))
+
+    @app.post("/api/specifications/{document_id}/matching")
+    def matching_run(document_id: str, body: MatchingRequest, request: Request):
+        accepted = async_inference(request, document_id, "matching", body, matching_unlocked)
+        if accepted is not None:
+            return accepted
+        with inference_gate.claim(
+            inference_key(document_id), "matching", workspace_id=inference_workspace()
+        ) as on_progress:
+            return observed_operation(
+                "matching", document_id,
+                lambda: matching_unlocked(
+                    document_id, managed_inference(body), on_progress=on_progress
+                ),
+            )
+
+    def matching_unlocked(document_id: str, body: MatchingRequest, *, on_progress=None):
+        if not body.permission:
+            raise HTTPException(
+                400,
+                "Allow sending these requirements and lab declarations "
+                "to the selected model API before running matching.",
+            )
+        selected = config.model_copy(
+            update={
+                "groq_max_completion_tokens": body.output_limit,
+                "gemini_max_output_tokens": body.output_limit,
+                "fireworks_max_output_tokens": body.output_limit,
+                "sail_max_output_tokens": body.output_limit,
+                "groq_temperature": 0.0,
+                "gemini_temperature": 0.0,
+                "fireworks_temperature": 0.0,
+                "sail_temperature": 0.0,
+                "scione_single_attempt_mode": True,
+            }
+        )
+        try:
+            provider = create_configured_provider(
+                selected, provider_name=body.provider, model_name=body.model
+            )
+        except ConfigurationError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return business_view(workspace.matching.run(
+            document_id, body, provider, on_progress=on_progress
+        ))
+
+    @app.get("/api/specifications/{document_id}/matching/{run_id}/artifacts")
+    def matching_artifacts(document_id: str, run_id: str):
+        import json
+
+        return Response(
+            json.dumps(workspace.matching.artifacts(document_id, run_id), ensure_ascii=False),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": 'attachment; filename="scione-matching-artifacts.json"'
+            },
+        )
 
     @app.get("/api/comparison-snapshots/{comparison_id}")
     def comparison_snapshot(comparison_id: str):
@@ -235,7 +646,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
 
     @app.get("/api/specifications")
     def documents():
-        return [asdict(item) for item in workspace.specs.list_documents()]
+        return [asdict(item) for item in workspace.active_documents()]
 
     @app.post("/api/specifications")
     async def upload_specification(file: UploadFile):
@@ -243,14 +654,35 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             data = await file.read(MAX_PDF_BYTES + 1)
             if len(data) > MAX_PDF_BYTES:
                 raise HTTPException(413, "Choose a PDF smaller than 25 MB.")
-            saved = workspace.specs.import_pdf(file.filename or "specification.pdf", data)
-            return {"document_id": saved.document_id}
+            saved, created = workspace.specs.import_pdf_with_status(
+                file.filename or "specification.pdf", data
+            )
+            restored = False
+            if saved.document_id in workspace.library.store.archived_document_ids():
+                current = workspace.library.store.document(saved.document_id)
+                workspace.library.store.set_document_archived(
+                    saved.document_id, archived=False, expected_version=current["version"]
+                )
+                restored = True
+            return {
+                "document_id": saved.document_id,
+                "created": created,
+                "reused": not created,
+                "restored": restored,
+                "has_saved_analysis": (
+                    workspace.specs.load_latest_extraction(saved.document_id) is not None
+                ),
+                "original_name": saved.original_name,
+            }
         finally:
             await file.close()
 
     @app.post("/api/specifications/demo")
     def import_demo(example: str = "legacy"):
-        sample = CSP301_SPEC if example == "csp301" else SAMPLE_SPEC
+        samples = {"legacy": SAMPLE_SPEC, "csp301": CSP301_SPEC}
+        if example not in samples:
+            raise HTTPException(400, "Choose an available example specification.")
+        sample = samples[example]
         saved = workspace.specs.import_pdf(sample.name, sample.read_bytes())
         return {"document_id": saved.document_id}
 
@@ -278,7 +710,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
 
     @app.get("/api/specifications/{document_id}")
     def specification(document_id: str, run_id: str | None = None):
-        return jsonable_encoder(workspace.specification(document_id, run_id))
+        return business_view(workspace.specification(document_id, run_id))
 
     @app.get("/api/specifications/{document_id}/pdf")
     def source_pdf(document_id: str):
@@ -290,14 +722,21 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
         page: int,
         requirement_id: str | None = None,
         run_id: str | None = None,
+        field: PreviewField | None = None,
+        claim_id: str | None = None,
     ):
         quotes = []
+        highlight_scope = "none"
+        located = None
+        pdf = workspace.specs.read_pdf(document_id)
         if requirement_id:
             run = (
                 workspace.specs.load_extraction(document_id, run_id)
                 if run_id
                 else workspace.specs.load_latest_extraction(document_id)
             )
+            if run:
+                run, _, _ = workspace.effective_source(document_id, run)
             requirement = (
                 next((row for row in run.extraction.requirements if row.id == requirement_id), None)
                 if run
@@ -305,16 +744,64 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             )
             if requirement is None:
                 raise HTTPException(404, "This requirement is not in the selected extraction.")
-            quotes = [evidence.quote for evidence in requirement.evidence if evidence.page == page]
+            if claim_id:
+                views, unit_proofs = physical_parameter_views(
+                    run.extraction.requirements, workspace.current_document(document_id).document,
+                    pdf_bytes=workspace.specs.read_pdf(document_id),
+                )
+                requirement = views[requirement_id]
+                claim = next(
+                    (
+                        item
+                        for item in normalize_requirement(
+                            requirement, source_unit_proofs=unit_proofs[requirement_id]
+                        ).claims
+                        if item.id == claim_id
+                    ),
+                    None,
+                )
+                if claim is None:
+                    raise HTTPException(404, "This parameter is not in the selected test.")
+                quotes, highlight_scope = parameter_preview_quotes(requirement, page, claim)
+            else:
+                quotes, highlight_scope = field_preview_quotes(requirement, page, field)
+            if highlight_scope in {"field", "parameter"}:
+                located = inspect_pdf_highlights(pdf, page_number=page, quotes=quotes)
+                if not located.matches or any(
+                    match.status != "matched" for match in located.matches
+                ):
+                    quotes, highlight_scope = field_preview_quotes(requirement, page, None)
+                    located = None
+            if located is None and quotes:
+                located = inspect_pdf_highlights(pdf, page_number=page, quotes=quotes)
+        elif claim_id:
+            raise HTTPException(422, "Select a test before locating its parameter.")
+        if located is not None and not located.rectangles:
+            highlight_scope = "none"
+        headers = {"X-Highlight-Scope": highlight_scope}
+        if located is not None and located.focus_y is not None:
+            headers["X-Highlight-Focus"] = str(round(located.focus_y, 6))
         return Response(
             render_pdf_page(
-                workspace.specs.read_pdf(document_id),
+                pdf,
                 page_number=page,
                 scale=2.4,
                 max_dimension=2000,
                 highlight_quotes=quotes,
             ),
             media_type="image/png",
+            headers=headers,
+        )
+
+    @app.post("/api/specifications/{document_id}/document-notes/review")
+    def review_document_notes(document_id: str, body: DocumentNotesReview):
+        return save_document_notes_review(
+            workspace, document_id,
+            source_fingerprint=body.source_fingerprint,
+            expected_version=body.expected_version,
+            note_ids=body.note_ids,
+            reviewed=body.reviewed,
+            actor=current_actor(),
         )
 
     @app.post("/api/specifications/{document_id}/review")
@@ -324,6 +811,12 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             raise HTTPException(400, "Acknowledge the explicitly selected batch before saving.")
         if body.decision == "excluded" and not body.note:
             raise HTTPException(400, "Explain why these requirements should be excluded.")
+
+        def validate_facts():
+            revision = workspace.facts.latest(document_id, body.run_id)
+            if (revision.version if revision else 0) != body.facts_version:
+                raise LibraryConflict("Extracted content changed. Reload before confirming it.")
+
         workspace.specs.save_reviews(
             document_id,
             body.run_id,
@@ -332,16 +825,56 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             body.note,
             expected_version=body.version,
             require_latest=True,
+            validate_current=validate_facts,
+            actor=current_actor(),
         )
-        return jsonable_encoder(workspace.specification(document_id))
+        return business_view(workspace.specification(document_id))
+
+    @app.post("/api/specifications/{document_id}/facts")
+    def source_facts(document_id: str, body: SourceFactsEdit):
+        return business_view(workspace.correct_facts(document_id, body))
+
+    @app.post("/api/specifications/{document_id}/requirements")
+    def source_requirement_add(document_id: str, body: SourceRequirementAdd):
+        return business_view(workspace.add_source_requirement(document_id, body))
+
+    @app.get("/api/specifications/{document_id}/analysis-failures/{attempt_id}/artifacts")
+    def analysis_failure_artifacts(document_id: str, attempt_id: str):
+        artifact = workspace.specs.load_failure_artifact(document_id, attempt_id)
+        return Response(
+            artifact.model_dump_json(indent=2),
+            media_type="application/json",
+            headers={"Content-Disposition": 'attachment; filename="scione-failed-analysis.json"'},
+        )
 
     @app.post("/api/specifications/{document_id}/analysis")
-    def analyze(document_id: str, body: AnalysisRequest):
-        if not body.permission or (body.provider == "gemini" and not body.free_tier_confirmed):
-            raise HTTPException(
-                400, "Confirm sending permission and the provider's tier terms first."
+    def analyze(document_id: str, body: AnalysisRequest, request: Request):
+        accepted = async_inference(request, document_id, "extraction", body, analyze_unlocked)
+        if accepted is not None:
+            return accepted
+        with inference_gate.claim(
+            inference_key(document_id), "analysis", workspace_id=inference_workspace()
+        ) as on_progress:
+            return observed_operation(
+                "extraction", document_id,
+                lambda: analyze_unlocked(
+                    document_id, managed_inference(body), on_progress=on_progress
+                ),
             )
-        stored = workspace.specs.load_document(document_id)
+
+    def analyze_unlocked(document_id: str, body: AnalysisRequest, *, on_progress=None):
+        activity = ProgressReporter(on_progress)
+        activity.emit("planning")
+        usage_acknowledged = body.billing_acknowledged or (
+            body.provider == "gemini" and body.free_tier_confirmed
+        )
+        if not body.permission or (
+            body.provider in {"gemini", "fireworks", "sail"} and not usage_acknowledged
+        ):
+            raise HTTPException(
+                400, "Confirm sending permission and acknowledge the provider's API usage terms."
+            )
+        stored = workspace.current_document(document_id)
         previous = workspace.specs.load_latest_extraction(document_id)
         try:
             build_plan(stored.document, body.strategy)
@@ -351,6 +884,11 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
                         "groq_max_completion_tokens": body.output_limit,
                         "groq_temperature": 0.0,
                         "gemini_max_output_tokens": body.output_limit,
+                        "gemini_temperature": 0.0,
+                        "fireworks_max_output_tokens": body.output_limit,
+                        "sail_max_output_tokens": body.output_limit,
+                        "fireworks_temperature": 0.0,
+                        "sail_temperature": 0.0,
                         "scione_single_attempt_mode": True,
                     }
                 ),
@@ -360,11 +898,21 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             run = CustomerRequirementRunner(
                 adapter,
                 max_input_characters=config.scione_customer_input_character_limit,
-            ).run(stored.document, strategy=body.strategy)
+                max_concurrent_chunks=(
+                    config.scione_long_document_parallelism
+                    if stored.document.page_count > 10 else 2
+                ),
+                source_pdf_bytes=workspace.specs.read_pdf(document_id),
+            ).run(
+                stored.document, strategy=body.strategy,
+                on_progress=activity.forward if on_progress is not None else None,
+            )
+            activity.emit("saving")
             workspace.specs.save_extraction(document_id, run)
         except (CustomerExtractionError, ConfigurationError, SpecStoreError) as exc:
             message = str(exc)
             try:
+                activity.emit("saving")
                 workspace.specs.save_failure(
                     ExtractionFailure(
                         document_id=document_id,
@@ -374,14 +922,21 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
                         strategy=body.strategy,
                         output_limit=body.output_limit,
                         message=message[:4000],
+                        error_code=getattr(exc, "error_code", None),
                         previous_run_id=previous.run_id if previous else None,
-                    )
+                    ),
+                    artifact=exc.artifact if isinstance(exc, CustomerExtractionError) else None,
                 )
             except SpecStoreError:
                 message += " Attempt details could not be saved. Existing data was not reset."
-            raise HTTPException(400, message) from exc
+            raise HTTPException(
+                400,
+                public_analysis_error(message, getattr(exc, "error_code", None))
+                + " No automatic retry was made. Your previous saved result is unchanged. "
+                "Review the failed attempt before starting another analysis.",
+            ) from exc
         workspace.library.index(document_id)
-        return jsonable_encoder(workspace.specification(document_id))
+        return business_view(workspace.specification(document_id))
 
     @app.get("/api/reports/{document_id}")
     def report(document_id: str):
@@ -390,6 +945,10 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
     @app.post("/api/reports/{document_id}/scope")
     def scope(document_id: str, body: ScopeReview):
         return jsonable_encoder(workspace.scope(document_id, body))
+
+    @app.post("/api/reports/{document_id}/exclusions")
+    def exclusions(document_id: str, body: ExclusionReview):
+        return jsonable_encoder(workspace.exclusions(document_id, body))
 
     @app.post("/api/reports/{document_id}/mapping")
     def mapping(document_id: str, body: MappingReview):
@@ -488,6 +1047,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
                     run, selected["document"], pdf_bytes=workspace.specs.read_pdf(document_id)
                 ),
                 "comparison": comparison_rows(baseline, run) if baseline else [],
+                "source_review_audits": workspace.source_review_audits(document_id, run),
             }
         )
 
@@ -502,10 +1062,13 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
 
     @app.post("/api/workspace/reset")
     def reset(body: ResetRequest):
-        result = reset_library_workspace(config, workspace.library.store)
+        result = reset_library_workspace(workspace.settings, workspace.library.store)
         return {"backup_path": str(result.backup_path) if result.backup_path else None}
 
-    static = frontend_dir if frontend_dir is not None else REPOSITORY_ROOT / "frontend" / "dist"
+    static = (
+        frontend_dir if frontend_dir is not None
+        else config.scione_frontend_dir or REPOSITORY_ROOT / "frontend" / "dist"
+    )
     if (static / "index.html").is_file():
         if (static / "assets").is_dir():
             app.mount("/assets", StaticFiles(directory=static / "assets"), name="assets")
@@ -515,6 +1078,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
 
         for route in (
             "/",
+            "/login",
             "/my-lab",
             "/catalog",
             "/specifications",
@@ -522,6 +1086,7 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             "/reports",
             "/reports/advanced",
             "/developer",
+            "/monitoring",
         ):
             app.add_api_route(route, frontend, methods=["GET"], include_in_schema=False)
 

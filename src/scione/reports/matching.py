@@ -17,6 +17,7 @@ from decimal import Decimal
 from difflib import SequenceMatcher
 from uuid import uuid4
 
+from scione.catalogs.identity_keys import private_method_key
 from scione.catalogs.models import (
     LabCapability,
     LabProfile,
@@ -55,7 +56,7 @@ _METHOD = re.compile(
     re.IGNORECASE,
 )
 _REVISION = re.compile(r"^\s*:\s*(\d{4})\s*$")
-MATCHING_POLICY_VERSION = "0.5"
+MATCHING_POLICY_VERSION = "0.8"
 
 
 @dataclass(frozen=True)
@@ -104,14 +105,23 @@ def _method_resolution(
     identity = _parse_method(requested.code)
     if identity is None:
         # Nonstandard source procedures have their own explicit identifiers.
-        # Only exact curated strings are accepted; no phrase is stripped until
-        # a standard happens to appear, and no equipment implies equivalence.
+        # Exact strings remain primary. A lab's own private codes additionally
+        # allow narrow letter/digit formatting changes, never method equivalence.
         exact = [
             method
             for method in catalog.methods
             if _name(requested.code)
             in {_name(method.identifier), *(_name(alias.text) for alias in method.aliases)}
         ]
+        if not exact and (key := private_method_key(requested.code)) is not None:
+            exact = [
+                method for method in catalog.methods
+                if method.id.startswith("labmethod_")
+                and any(
+                    private_method_key(value) == key
+                    for value in [method.identifier, *(alias.text for alias in method.aliases)]
+                )
+            ]
         if len(exact) == 1:
             if requested.revision and _revision(requested.revision) != _revision(exact[0].edition):
                 return exact[0].id, (
@@ -130,6 +140,21 @@ def _method_resolution(
             for value in identifiers
         ):
             candidates.append(method)
+    embedded = _revision(identity.revision)
+    explicit = _revision(requested.revision)
+    if embedded and explicit and embedded != explicit:
+        return None, f"Conflicting method revisions: {requested.code} / {requested.revision}."
+    requested_revision = explicit or embedded
+    # Several editions may legitimately coexist. An explicit source edition
+    # narrows identity before ambiguity is assessed; it never establishes
+    # equivalence to an older/newer edition or removes an extra qualifier.
+    if requested_revision:
+        same_edition = [
+            method for method in candidates
+            if _revision(method.edition) == requested_revision
+        ]
+        if same_edition:
+            candidates = same_edition
     if len(candidates) != 1:
         message = "Unknown" if not candidates else "Ambiguous"
         return None, f"{message} catalog method: {requested.code}."
@@ -139,11 +164,6 @@ def _method_resolution(
             f"Method qualifier needs review: {requested.code}; the base identifier alone "
             "does not establish support."
         )
-    embedded = _revision(identity.revision)
-    explicit = _revision(requested.revision)
-    if embedded and explicit and embedded != explicit:
-        return method.id, f"Conflicting method revisions: {requested.code} / {requested.revision}."
-    requested_revision = explicit or embedded
     catalog_revision = _revision(method.edition)
     if requested_revision and requested_revision != catalog_revision:
         return method.id, (
@@ -268,9 +288,9 @@ def _selected_methods(
         roles = [
             (_name(method.role) if method.role else "") for method in requirement.requested_methods
         ]
-        # A clearly required primary route can be evaluated while a separately
-        # approval-dependent optional route remains visible in original source.
-        # Unknown roles or merely calling something an alternative never suffice.
+        # Evaluate an explicitly primary/required route while retaining its
+        # separately labelled alternatives. Choosing the primary does not
+        # establish equivalence or permission to use an alternative.
         primary_indices = [
             index for index, role in enumerate(roles) if role in {"required", "primary"}
         ]
@@ -283,7 +303,8 @@ def _selected_methods(
                 and re.search(r"\brequired\b", role)
                 for role in optional_roles
             )
-            if explicit_conditional:
+            explicit_alternatives = all(role == "alternative" for role in optional_roles)
+            if explicit_conditional or explicit_alternatives:
                 return [requirement.requested_methods[primary_index]], []
         # Explicit source roles can establish that references are cumulative
         # (for example exposure + measurement). Merely seeing several known
@@ -326,6 +347,64 @@ def _selected_methods(
             "Saved method selection is empty, duplicated, or no longer an original method code."
         ]
     return [method for method in requirement.requested_methods if method.code in selected], []
+
+
+def _source_permitted_alternative_method(
+    requirement: CustomerRequirement,
+    capability: LabCapability,
+    catalog: ReferenceCatalog,
+    choice: MappingChoice | None = None,
+) -> RequestedMethod | None:
+    """Accept one explicitly permitted source route, never infer equivalence.
+
+    All references must be labelled alternatives for the same test, exactly one
+    must be registered in the selected lab service, and a located source quote
+    must itself permit choosing either reference. Approval-dependent proposals,
+    ambiguous roles and explicit human method selections remain authoritative.
+    """
+    methods = requirement.requested_methods
+    if (
+        len(methods) < 2
+        or any(_name(method.role or "") != "alternative" for method in methods)
+        or (choice is not None and choice.selected_method_codes is not None)
+    ):
+        return None
+    resolved = [_method_resolution(method, catalog) for method in methods]
+    test = catalog.test_by_id(capability.canonical_test_id)
+    if any(identifier is None or issue for identifier, issue in resolved):
+        return None
+    if any(identifier not in test.method_ids for identifier, _ in resolved):
+        return None
+    offered = [
+        method for method, (identifier, _issue) in zip(methods, resolved, strict=True)
+        if identifier in capability.method_ids
+    ]
+    if len(offered) != 1:
+        return None
+    codes = [" ".join(_text(method.code).casefold().split()) for method in methods]
+    for evidence in requirement.evidence:
+        quote = " ".join(_text(evidence.quote).casefold().split())
+        sentences = re.split(r"(?<=[.!?。])\s+", quote)
+        for index, sentence in enumerate(sentences):
+            if not all(code in sentence for code in codes):
+                continue
+            if not re.search(r"\b(?:may|can)\s+(?:reference|use|choose|select|apply)\b", sentence):
+                continue
+            if not re.search(r"\bor\b", sentence):
+                continue
+            if re.search(r"\b(?:approv\w*|consent|subject to|prior agreement)\b", sentence):
+                continue
+            # A following approval sentence can qualify the preceding choice.
+            # A separate approval of deviations/conditioning is not permission
+            # to substitute methods and remains a separate source obligation.
+            following = sentences[index + 1] if index + 1 < len(sentences) else ""
+            if (
+                re.search(r"\b(?:approv\w*|consent)\b", following)
+                and not re.search(r"\b(?:deviation|departure|conditioning)\b", following)
+            ):
+                continue
+            return offered[0]
+    return None
 
 
 def _choose_capability(
@@ -601,6 +680,8 @@ def build_report(
         warnings.append(
             "The reference catalog is synthetic demonstration metadata, not authoritative."
         )
+    if any(action.requirement_id not in source_ids for action in workspace.scope_actions):
+        raise ValueError("Report scope actions do not belong to this extraction.")
     for key in sorted((workspace.mappings.keys() | workspace.quantities.keys()) - source_ids):
         warnings.append(
             f"{key}: stale saved mapping / quantity does not belong to this extraction."
@@ -608,6 +689,7 @@ def build_report(
     lines: list[GapLine] = []
     totals: dict[str, Decimal] = {}
     current_lab_fingerprint = lab_fingerprint(lab)
+    active_exclusions = workspace.active_exclusions
     for requirement in run.extraction.requirements:
         line = _line(
             requirement,
@@ -616,7 +698,16 @@ def build_report(
             lab,
             workspace.mappings.get(requirement.id),
         )
-        problem = _attach_quote(line, workspace, current_lab_fingerprint)
+        exclusion = active_exclusions.get(requirement.id)
+        if exclusion is not None:
+            line.status = "excluded"
+            line.report_scope_exclusion = exclusion.model_copy(deep=True)
+            line.reasons.append(f"Removed from this report: {exclusion.note}")
+        problem = (
+            None
+            if line.status == "excluded"
+            else _attach_quote(line, workspace, current_lab_fingerprint)
+        )
         if problem is not None:
             warnings.append(problem)
         if line.quote is not None:

@@ -22,8 +22,12 @@ def seed_shared_demo(specs: FileSpecStore, labs: FileLabStore) -> None:
 
     def evidence(page: int, start: str, end: str) -> list[dict[str, object]]:
         text = pages[page]
-        begin = text.index(start)
-        return [{"page": page, "quote": text[begin : text.index(end, begin)].strip()}]
+        # Geometric extraction keeps a visual row together. Wrapped item names
+        # may have intervening method/criteria columns, so use their first
+        # physical label line as the known row boundary in this UI fixture.
+        begin = text.index(start.splitlines()[0])
+        finish = text.index(end.splitlines()[0], begin + len(start.splitlines()[0]))
+        return [{"page": page, "quote": text[begin:finish].strip()}]
 
     requirements = [
         {

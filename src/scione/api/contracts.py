@@ -1,8 +1,14 @@
 """HTTP write contracts with explicit consent, edit versions and input fingerprints."""
 
+from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from scione.catalogs.models import LabCapability
+from scione.specifications.models import CustomerRequirement
+
+ProviderName = Literal["groq", "gemini", "fireworks", "sail"]
 
 
 class WriteModel(BaseModel):
@@ -11,7 +17,36 @@ class WriteModel(BaseModel):
 
 class LabExample(WriteModel):
     version: int = Field(ge=1)
-    example: Literal["legacy", "csp301"] = "legacy"
+    example: Literal["legacy", "csp301", "csp301_typed", "csp301_detailed", "csp301_demo"] = (
+        "legacy"
+    )
+    replace_existing: bool = False
+    acknowledged: bool = False
+
+
+class PrivateTestInput(WriteModel):
+    id: str | None = Field(default=None, pattern=r"^labtest_[a-f0-9]{32}$")
+    name: str = Field(min_length=1, max_length=300)
+    description: str = Field(default="", max_length=4000)
+    aliases: list[str] = Field(default_factory=list, max_length=20)
+
+
+class PrivateMethodInput(WriteModel):
+    id: str | None = Field(default=None, pattern=r"^labmethod_[a-f0-9]{32}$")
+    name: str = Field(min_length=1, max_length=300)
+    identifier: str = Field(default="", max_length=200)
+    aliases: list[str] = Field(default_factory=list, max_length=20)
+
+
+class CapabilityWrite(WriteModel):
+    version: int = Field(ge=1)
+    capability: LabCapability
+    custom_test: PrivateTestInput | None = None
+    custom_methods: list[PrivateMethodInput] = Field(default_factory=list, max_length=30)
+
+
+class CapabilityRemoval(WriteModel):
+    version: int = Field(ge=1)
 
 
 class LibraryMetadata(WriteModel):
@@ -19,8 +54,20 @@ class LibraryMetadata(WriteModel):
     specification_id: str | None = Field(default=None, max_length=300)
     title: str | None = Field(default=None, max_length=500)
     revision: str | None = Field(default=None, max_length=300)
+    specification_date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     family_id: str | None = Field(default=None, max_length=32)
     expected_version: int = Field(default=0, ge=0)
+
+    @field_validator("specification_date")
+    @classmethod
+    def valid_specification_date(cls, value):
+        if value is not None:
+            date.fromisoformat(value)
+        return value
+
+
+class LibraryRemoval(WriteModel):
+    version: int = Field(ge=0)
 
 
 class SourceReview(WriteModel):
@@ -30,15 +77,42 @@ class SourceReview(WriteModel):
     decision: Literal["confirmed", "excluded", "needs_review"]
     note: str = Field(default="", max_length=4000)
     acknowledged: bool = False
+    facts_version: int = Field(default=0, ge=0)
+
+
+class DocumentNotesReview(WriteModel):
+    source_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+    expected_version: int = Field(ge=0)
+    note_ids: list[str] = Field(min_length=1, max_length=256)
+    reviewed: bool
+
+
+class SourceFactsEdit(WriteModel):
+    run_id: str
+    expected_version: int = Field(ge=0)
+    expected_review_version: int = Field(ge=0)
+    requirements: list[CustomerRequirement] = Field(min_length=1, max_length=1000)
+    note: str = Field(min_length=1, max_length=4000)
+
+
+class SourceRequirementAdd(WriteModel):
+    run_id: str
+    expected_version: int = Field(ge=0)
+    expected_review_version: int = Field(ge=0)
+    requirement: CustomerRequirement
+    note: str = Field(min_length=1, max_length=4000)
 
 
 class AnalysisRequest(WriteModel):
-    provider: Literal["groq", "gemini"]
+    provider: ProviderName
     model: str = Field(min_length=1, max_length=500)
-    strategy: Literal["compact_document", "whole_document", "focused_passes"] = "compact_document"
+    strategy: Literal[
+        "inventory_compact_document", "compact_document", "whole_document", "focused_passes"
+    ] = "inventory_compact_document"
     output_limit: int = Field(ge=512, le=65536)
     permission: bool = False
     free_tier_confirmed: bool = False
+    billing_acknowledged: bool = False
 
 
 class ReportInput(WriteModel):
@@ -46,8 +120,38 @@ class ReportInput(WriteModel):
     input_fingerprint: str
 
 
+class AssessmentReview(WriteModel):
+    comparison_id: str = Field(min_length=1, max_length=32)
+    input_fingerprint: str = Field(min_length=1, max_length=64)
+    requirement_id: str = Field(min_length=1, max_length=100)
+    expected_version: int = Field(ge=0)
+    review_status: Literal["accepted", "pending"] = "accepted"
+    decision: Literal["keep", "clarify_customer", "outsource", "decline"] = "keep"
+    note: str = Field(default="", max_length=4000)
+
+    @model_validator(mode="after")
+    def explain_followup(self):
+        if self.decision != "keep" and not self.note:
+            raise ValueError("Add a note explaining the selected follow-up decision.")
+        return self
+
+
+class MatchingRequest(ReportInput):
+    provider: ProviderName
+    model: str = Field(min_length=1, max_length=200)
+    output_limit: int = Field(default=8000, ge=512, le=65536)
+    permission: bool = False
+    rerun: bool = False
+
+
 class ReportEdit(ReportInput):
     version: int = Field(ge=0)
+
+
+class ExclusionReview(ReportEdit):
+    requirement_ids: list[str] = Field(min_length=1)
+    excluded: bool
+    note: str = Field(default="", max_length=4000)
 
 
 class ScopeReview(ReportEdit):

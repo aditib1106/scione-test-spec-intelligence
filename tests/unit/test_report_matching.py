@@ -1044,9 +1044,17 @@ def test_required_primary_route_keeps_approval_dependent_alternative_separate():
     assert "approval" in line.requirement.requested_methods[1].role
 
 
-@pytest.mark.parametrize(
-    "role", [None, "alternative", "optional", "Optional North American route", "measurement"]
-)
+def test_explicit_primary_is_evaluated_without_equating_an_unselected_alternative():
+    row = _requirement(methods=("ISO 2409", "ASTM D3359"))
+    row.requested_methods[0].role = "primary"
+    row.requested_methods[1].role = "alternative"
+    line = build_report(*_inputs([row])).lines[0]
+    assert line.status == "in_house"
+    assert line.considered_method_codes == ["ISO 2409"]
+    assert len(line.requirement.requested_methods) == 2
+
+
+@pytest.mark.parametrize("role", [None, "optional", "Optional North American route", "measurement"])
 def test_unclear_alternative_role_still_needs_review(role):
     row = _requirement(methods=("ISO 2409", "ASTM D3359"))
     row.requested_methods[0].role = "required"

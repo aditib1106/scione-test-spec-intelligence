@@ -312,7 +312,8 @@ def test_non_uuid_or_noncanonical_run_and_report_ids_rejected(
 
 
 @pytest.mark.parametrize(
-    "data", [b"", b"not a PDF", b"%PDF-malformed", b"a" * (MAX_REPORT_PDF_BYTES + 1)]
+    "data", [b"", b"not a PDF", b"%PDF-malformed", b"a" * (MAX_REPORT_PDF_BYTES + 1)],
+    ids=["empty", "not-pdf", "malformed", "oversized"],
 )
 def test_invalid_report_pdf_rejected_before_store_creation(tmp_path: Path, data: bytes) -> None:
     store = FileReportStore(tmp_path)

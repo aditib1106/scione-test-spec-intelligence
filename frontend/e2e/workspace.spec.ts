@@ -38,9 +38,15 @@ async function navigateTo(page: Page, label: string) {
       .catch(() => false)
   ) {
     await page.getByRole("button", { name: "Open navigation" }).click();
-    await page.getByRole("link", { name: label }).click();
+    await page
+      .getByRole("list", { name: "Workspace navigation", exact: true })
+      .getByRole("link", { name: label, exact: true })
+      .click();
   } else {
-    await page.getByRole("link", { name: label }).click();
+    await page
+      .getByRole("list", { name: "Workspace navigation", exact: true })
+      .getByRole("link", { name: label, exact: true })
+      .click();
   }
 }
 
@@ -65,7 +71,7 @@ async function chooseMuiOption(
   await page.getByRole("option", { name: option }).click();
 }
 
-test("empty lab can load, edit, save, reload, and cancel a capability", async ({
+test("lab capability edits persist and can be cancelled", async ({
   page,
   request,
 }, testInfo) => {
@@ -75,8 +81,18 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
     page.getByText("Start with your lab’s capabilities"),
   ).toBeVisible();
 
-  await chooseMuiOption(page, "Example", "MS-PNT-410 · pilot lab");
-  await page.getByRole("button", { name: "Load example lab" }).click();
+  const profile = await readJson<{ version: number }>(
+    request,
+    `${emptyBase}/api/lab`,
+  );
+  expect(
+    (
+      await request.post(`${emptyBase}/api/lab/example`, {
+        data: { version: profile.version, example: "legacy" },
+      })
+    ).ok(),
+  ).toBeTruthy();
+  await page.reload();
   await expect(
     page.getByText("Pencil hardness", { exact: true }),
   ).toBeVisible();
@@ -98,6 +114,9 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
   await dialog.getByLabel("Price").fill("101.25");
   await dialog.getByLabel("Currency").fill("USD");
   await dialog.getByLabel("Pricing basis").fill("per panel");
+  await dialog
+    .getByRole("button", { name: /Additional wording and notes/ })
+    .click();
   await dialog
     .getByLabel("Measurements and additional capability details")
     .fill("Browser review saved note");
@@ -144,6 +163,9 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
     .click();
   const reopened = page.getByRole("dialog");
   await reopened
+    .getByRole("button", { name: /Additional wording and notes/ })
+    .click();
+  await reopened
     .getByLabel("Measurements and additional capability details")
     .fill("This edit should be cancelled");
   if (testInfo.project.name === "narrow")
@@ -166,6 +188,9 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
     .nth(pencilIndex)
     .click();
   const conflictDialog = page.getByRole("dialog");
+  await conflictDialog
+    .getByRole("button", { name: /Additional wording and notes/ })
+    .click();
   await conflictDialog
     .getByLabel("Measurements and additional capability details")
     .fill("Retain this unsaved conflict draft");
@@ -199,7 +224,7 @@ test("empty lab can load, edit, save, reload, and cancel a capability", async ({
   });
 });
 
-test("catalog search, mobile navigation, and demo PDF import do not analyze", async ({
+test("catalog search, mobile navigation, and real PDF upload do not analyze", async ({
   page,
   request,
 }, testInfo) => {
@@ -216,7 +241,7 @@ test("catalog search, mobile navigation, and demo PDF import do not analyze", as
   const catalogDetails = page.getByRole("dialog");
   await expect(
     catalogDetails.getByRole("heading", {
-      name: "Pencil hardness",
+      name: "Test reference Pencil hardness",
       exact: true,
     }),
   ).toBeVisible();
@@ -236,7 +261,10 @@ test("catalog search, mobile navigation, and demo PDF import do not analyze", as
     page.getByRole("heading", { name: "Specification library" }),
   ).toBeVisible();
   await page.getByRole("tab", { name: "PDF & review", exact: true }).click();
-  await page.getByRole("button", { name: "Import demo specification" }).click();
+  await page
+    .locator("input[type=file]")
+    .first()
+    .setInputFiles("../docs/samples/MS-PNT-410_demo_spec.pdf");
   await expect(page.getByText("No extraction yet")).toBeVisible();
   if (testInfo.project.name === "narrow") {
     await page.getByRole("button", { name: /Source PDF preview/ }).click();
@@ -295,14 +323,25 @@ test("seeded source review, lab support, catalog gap, and immutable report histo
       })
       .toBe("confirmed");
   }
-  await page.getByRole("button", { name: "Continue to lab review" }).click();
+  await page.getByRole("button", { name: "Generate report" }).click();
   await expect(
     page.getByRole("heading", { name: "Gap report", exact: true }),
   ).toBeVisible();
+  const generation = page.getByRole("dialog", {
+    name: "Report needs another look",
+    exact: true,
+  });
+  await expect(generation).toBeVisible();
+  await generation.getByRole("button", { name: "Close", exact: true }).click();
   await expect(
-    page.getByRole("table", { name: "Test capability comparison" }),
+    page.getByRole("button", { name: "Conditions", exact: true }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Advanced review", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Report options", exact: true })
+    .click();
+  await page
+    .getByRole("menuitem", { name: "Review test matching", exact: true })
+    .click();
   await expect(
     page.getByRole("tab", { name: "Review & confirm" }),
   ).toBeVisible();
@@ -552,25 +591,29 @@ test("a late draft response cannot open a different document's report", async ({
   ).toHaveAttribute("href", new RegExp(secondSnapshot.report_id));
 });
 
-test("worked example saves atomic requirements and exports the same honest gap assessment", async ({
+test("saved source fixtures retain atomic requirements and export the same gap assessment", async ({
   page,
   request,
-}) => {
+}, testInfo) => {
   await resetEmptyWorkspace(request);
-  await page.goto(`${emptyBase}/my-lab`);
-  await chooseMuiOption(page, "Example", "CSP-EN-301 · four tests");
-  await page.getByRole("button", { name: "Load example lab" }).click();
-  await expect(page.getByText("Specular gloss", { exact: true })).toBeVisible();
-
-  await navigateTo(page, "Specifications");
-  await page
-    .getByRole("button", { name: "Try worked example", exact: true })
-    .click();
+  const lab = await readJson<{ version: number }>(
+    request,
+    `${emptyBase}/api/lab`,
+  );
+  expect(
+    (
+      await request.post(`${emptyBase}/api/lab/example`, {
+        data: { version: lab.version, example: "csp301" },
+      })
+    ).ok(),
+  ).toBeTruthy();
+  expect(
+    (await request.post(`${emptyBase}/api/specifications/worked-example`)).ok(),
+  ).toBeTruthy();
+  await page.goto(`${emptyBase}/specifications/library`);
   await expect(
-    page.getByText(
-      "Manually prepared example requirements. Analyze the PDF to evaluate a model.",
-    ),
-  ).toBeVisible();
+    page.getByRole("button", { name: "Try worked example", exact: true }),
+  ).toHaveCount(0);
   const archive = await readJson<{
     documents: {
       document_id: string;
@@ -601,7 +644,18 @@ test("worked example saves atomic requirements and exports the same honest gap a
     ),
   ).toBeTruthy();
 
+  await page.goto(
+    `${emptyBase}/specifications/library?document=${document!.document_id}`,
+  );
   await page.getByRole("button", { name: /Specular gloss/ }).click();
+  await page.screenshot({
+    path: testInfo.outputPath("worked-library-summary.png"),
+    animations: "disabled",
+    fullPage: true,
+  });
+  await page
+    .getByRole("button", { name: "View detailed requirements" })
+    .click();
   await expect(
     page.getByRole("table", { name: "Saved requirement records" }),
   ).toBeVisible();
@@ -610,9 +664,9 @@ test("worked example saves atomic requirements and exports the same honest gap a
     page.getByText("Manually prepared example requirements.", { exact: false }),
   ).toBeVisible();
 
-  await navigateTo(page, "Reports");
+  await navigateTo(page, "Gap report");
   await expect(
-    page.getByRole("table", { name: "Test capability comparison" }),
+    page.getByRole("button", { name: "Conditions", exact: true }),
   ).toBeVisible();
   const comparison = await readJson<{
     comparison_id: string;
@@ -642,7 +696,23 @@ test("worked example saves atomic requirements and exports the same honest gap a
   await page
     .getByRole("button", { name: "Specular gloss", exact: true })
     .click();
-  const gap = page.getByText("Capability gap", { exact: true });
+  await page.screenshot({
+    path: testInfo.outputPath("worked-report-summary.png"),
+    animations: "disabled",
+    fullPage: true,
+  });
+  await page
+    .getByRole("button", {
+      name: "Acceptance criteria / reporting",
+      exact: true,
+    })
+    .click();
+  const gap = page
+    .getByRole("rowgroup", {
+      name: "Specular gloss acceptance criteria / reporting comparison",
+      exact: true,
+    })
+    .getByText("Gap", { exact: true });
   await gap.scrollIntoViewIfNeeded();
   await expect(gap).toBeVisible();
   await page.getByRole("tab", { name: "PDF & download", exact: true }).click();

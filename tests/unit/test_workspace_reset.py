@@ -60,6 +60,18 @@ def test_second_reset_is_noop_and_keeps_existing_backup(workspace: Path) -> None
     assert first.backup_path is not None and (first.backup_path / "lab.json").is_file()
 
 
+def test_derived_document_text_is_preserved_with_the_source_reset(workspace: Path) -> None:
+    cached = workspace / "derived_documents" / "source" / "geometric_v1.json"
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(b'{"document": "derived private source text"}')
+    result = reset_demo_workspace(workspace)
+    assert "derived_documents" in result.moved_names
+    assert not cached.exists()
+    assert (result.backup_path / cached.relative_to(workspace)).read_bytes() == (
+        b'{"document": "derived private source text"}'
+    )
+
+
 def test_absent_workspace_is_not_created(tmp_path: Path) -> None:
     root = tmp_path / "local_data"
     result = reset_demo_workspace(root)

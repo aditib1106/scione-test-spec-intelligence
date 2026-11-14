@@ -216,7 +216,7 @@ def test_unrecognized_clause_is_retained_and_not_automatically_supported():
 
 
 def test_model_atomic_claim_is_grounded_in_source_and_numeric_values():
-    good = atom(raw_text="23 °C")
+    good = atom(raw_text="23 °C", stage="general")
     normalized = normalize_requirement(requirement(conditions=["23 °C"], atoms=[good]))
     assert len(normalized.claims) == 1
     assert normalized.claims[0].parameter_id == "temperature"
@@ -552,6 +552,36 @@ def test_grounded_separate_ai_parameter_can_explain_qualifier_fallback_does_not_
     assert compare_requirement(requested, declared).status == "fully_matched"
 
 
+@pytest.mark.parametrize("extra", ["using fixture GX-7", "仅限铝板", "except oxygen exposure"])
+def test_grounded_atmosphere_value_never_owns_neighboring_restrictions(extra):
+    raw = f"23 °C in nitrogen atmosphere, {extra}"
+    temperature = atom(stage="general", raw_text="23 °C")
+    atmosphere = atom(
+        parameter_id="test_atmosphere",
+        label="Test atmosphere",
+        stage="general",
+        operator="text",
+        value=None,
+        unit=None,
+        text_value="nitrogen",
+        # Deliberately broad: this quotation must not certify the other words.
+        raw_text=f"nitrogen atmosphere, {extra}",
+    )
+    normalized = normalize_requirement(
+        requirement(conditions=[raw], atoms=[temperature, atmosphere])
+    )
+    residuals = [
+        claim.text_value or "" for claim in normalized.claims if claim.parameter_id is None
+    ]
+    assert residuals
+    assert all(
+        token.casefold() in " ".join(residuals).casefold()
+        for token in extra.split()
+        if token != "using"
+    )
+    assert compare_requirement(normalized, [temperature, atmosphere]).status == "needs_information"
+
+
 def test_ai_temperature_quoting_entire_clause_does_not_claim_to_understand_qualifier():
     supplied = atom(stage="general", raw_text="23 °C in nitrogen atmosphere")
     requested = normalize_requirement(
@@ -671,6 +701,13 @@ def test_equal_model_values_keep_distinct_configurations_and_source_pages():
     requested = normalize_requirement(source)
     temperatures = [item for item in requested.claims if item.parameter_id == "temperature"]
     assert len(temperatures) == 3
+    assert [item.configuration for item in temperatures] == ["water", "air", "water"]
+    assert [item.source_pages for item in temperatures] == [[1], [1], [2]]
+    # All original source views remain, but their invented configuration labels
+    # cannot establish support merely because a numeric copy was suppressed.
+    assert requested.review_issues
+    assert compare_requirement(requested, temperatures).status == "needs_information"
+    assert [item.source_pages for item in source.atomic_claims] == [[1], [1], [2]]
 
 
 def test_between_two_cycle_steps_is_syntax_but_its_qualifiers_are_preserved():

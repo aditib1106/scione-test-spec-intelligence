@@ -6,10 +6,20 @@ that different methods are interchangeable or that a lab meets a customer spec.
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
+
+from scione.structured.models import AtomicClaim
 
 
 class CatalogError(ValueError):
@@ -161,11 +171,12 @@ class LabOperatingLimit(CatalogModel):
 class LabCapability(CatalogModel):
     """A lab's own declaration, not verification or accreditation evidence."""
 
-    id: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    id: str = Field(pattern=r"^[a-z][a-z0-9_]*$", max_length=100)
     canonical_test_id: str = Field(min_length=1)
     method_ids: list[str] = Field(default_factory=list)
     declared_constraints: str | None = None
     structured_limits: list[LabOperatingLimit] = Field(default_factory=list)
+    atomic_claims: list[AtomicClaim] = Field(default_factory=list)
     notes: str | None = None
     price: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
     currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
@@ -180,28 +191,62 @@ class LabCapability(CatalogModel):
 
     @model_validator(mode="after")
     def complete_pricing(self) -> Self:
+        identifiers = [claim.id for claim in self.atomic_claims]
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("Capability claim IDs must be unique within each capability.")
         if self.price is not None and (not self.currency or not self.pricing_basis):
             raise ValueError("A price requires both currency and pricing_basis.")
         return self
 
 
 class LabProfile(CatalogModel):
-    id: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
-    name: str = Field(min_length=1)
+    id: str = Field(pattern=r"^[a-z][a-z0-9_]*$", max_length=200)
+    name: str = Field(min_length=1, max_length=300)
     description: str = ""
     version: int = Field(default=1, ge=1)
     capabilities: list[LabCapability] = Field(default_factory=list)
+    custom_tests: list[CanonicalTest] = Field(default_factory=list)
+    custom_methods: list[TestMethod] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def unique_capability_ids(self) -> Self:
         ids = [item.id for item in self.capabilities]
         if len(ids) != len(set(ids)):
             raise ValueError("Lab capability IDs must be unique.")
+        for entries, prefix in (
+            (self.custom_tests, "labtest_"),
+            (self.custom_methods, "labmethod_"),
+        ):
+            identifiers = [item.id for item in entries]
+            if len(identifiers) != len(set(identifiers)):
+                raise ValueError("Private lab identity IDs must be unique.")
+            if any(
+                not re.fullmatch(prefix + r"[a-f0-9]{32}", identifier) for identifier in identifiers
+            ):
+                raise ValueError("Private lab identities require a server-generated identifier.")
         return self
+
+    @model_serializer(mode="wrap")
+    def retain_existing_profile_shape(self, handler):
+        data = handler(self)
+        if not self.custom_tests:
+            data.pop("custom_tests", None)
+        if not self.custom_methods:
+            data.pop("custom_methods", None)
+        return data
 
 
 def validate_lab_references(lab: LabProfile, catalog: ReferenceCatalog) -> None:
     """Check identity references without inferring support or method equivalence."""
+
+    from scione.catalogs.private import compose_lab_catalog
+
+    if (
+        lab.custom_tests or lab.custom_methods
+        or any(item.id.startswith("labtest_") for item in catalog.tests)
+        or any(item.id.startswith("labmethod_") for item in catalog.methods)
+    ):
+        catalog = compose_lab_catalog(catalog, lab)
 
     for capability in lab.capabilities:
         test = catalog.test_by_id(capability.canonical_test_id)

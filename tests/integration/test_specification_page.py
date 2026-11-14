@@ -165,7 +165,9 @@ def test_demo_import_is_explicit_and_persists_across_sessions(
     app = open_specifications()
     store = FileSpecStore(tmp_path / "workspace")
     assert not store.list_documents()
-    app = app.button(key="spec_import_sample").click().run()
+    assert not any(button.key == "spec_import_sample" for button in app.button)
+    store.import_pdf(sample.name, sample.read_bytes())
+    app = open_specifications()
     assert not app.exception
     saved = store.list_documents()
     assert len(saved) == 1
@@ -201,10 +203,11 @@ def test_fresh_clone_can_import_bundled_demo_without_api_or_existing_documents(
     assert store.list_documents() == []
     app = open_specifications()
     assert not app.exception
-    assert app.button(key="spec_import_sample").label == "Import supplied demo spec"
+    assert not any(button.key == "spec_import_sample" for button in app.button)
     assert store.list_documents() == [], "Opening Specifications must not import automatically."
 
-    app = app.button(key="spec_import_sample").click().run()
+    store.import_pdf(specifications.SAMPLE_SPEC_PATH.name, sample_bytes)
+    app = open_specifications()
 
     assert not app.exception
     saved = store.list_documents()

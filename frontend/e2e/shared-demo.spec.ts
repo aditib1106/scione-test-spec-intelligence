@@ -37,6 +37,21 @@ test("shared PDF walkthrough keeps source review, declarations and gap results s
   expect(original.run?.prompt_version).toBe(
     "hand_authored_partial_shared_demo_fixture",
   );
+  // Both viewport projects share this disposable server. Start this scenario
+  // with an explicit pending review instead of inheriting the other project's
+  // confirmation and then waiting for a button that correctly disappeared.
+  const prepared = await request.post(`${sourceUrl}/review`, {
+    data: {
+      run_id: original.run!.run_id,
+      version: original.review!.version,
+      facts_version: original.facts_version ?? 0,
+      requirement_ids: ["req_demo_pencil", "req_demo_crosscut"],
+      decision: "needs_review",
+      note: "Begin this offline browser scenario with pending source checks.",
+      acknowledged: true,
+    },
+  });
+  expect(prepared.ok()).toBeTruthy();
 
   await page.goto(
     `${base}/specifications?document=${id}&requirement=req_demo_pencil`,
@@ -46,7 +61,7 @@ test("shared PDF walkthrough keeps source review, declarations and gap results s
     page.getByRole("heading", { name: "Pencil hardness", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText(/Review customer requirements against the source PDF/),
+    page.getByRole("table", { name: "Test details", exact: true }),
   ).toBeVisible();
   if (testInfo.project.name === "narrow") {
     await page.getByRole("button", { name: /Source PDF preview/ }).click();
@@ -69,13 +84,11 @@ test("shared PDF walkthrough keeps source review, declarations and gap results s
   await expect(
     page.getByRole("heading", { name: "Cross-cut adhesion", exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Source quotations & review note" })
-    .click();
+  await page.getByRole("button", { name: "View extraction evidence" }).click();
   const pendingNote =
     "Check all bake conditions and substrate scope against the shared PDF.";
   await page
-    .getByRole("textbox", { name: "Review note / corrections to resolve" })
+    .getByRole("textbox", { name: "Review note (optional)" })
     .fill(pendingNote);
   let releaseSave!: () => void;
   const savedResponse = new Promise<void>((resolve) => {
@@ -98,17 +111,18 @@ test("shared PDF walkthrough keeps source review, declarations and gap results s
     // The persisted write can finish before its response reaches the browser.
     // Navigation must wait for that response to avoid an old review navigating back.
     await expect(
-      page.getByRole("button", { name: "Continue to lab review" }),
+      page.getByRole("button", { name: "Generate report" }),
     ).toBeDisabled();
   } finally {
     releaseSave();
   }
 
   await expect(
-    page.getByRole("button", { name: "Continue to lab review" }),
+    page.getByRole("button", { name: "Generate report" }),
   ).toBeEnabled();
-  await page.getByRole("button", { name: "Continue to lab review" }).click();
-  await page.getByRole("tab", { name: "Advanced review", exact: true }).click();
+  // The automatic generation entry is covered separately; this offline fixture
+  // exercises the retained manual scope review without invoking a provider.
+  await page.goto(`${base}/reports/advanced?document=${id}`);
   await expect(
     page.getByRole("tab", { name: "Review & confirm" }),
   ).toBeVisible();

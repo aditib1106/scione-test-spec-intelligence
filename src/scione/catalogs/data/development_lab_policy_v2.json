@@ -1,0 +1,4865 @@
+{
+  "policy_id": "multi_discipline_lab_services_v2",
+  "synthetic": true,
+  "frozen_date": "2026-11-10",
+  "authoring_status": "Model-authored independent synthetic lab configuration, frozen before inference against the22 readable customer documents. Not client-validated capability or evaluation gold.",
+  "method_scope": "Each listed method is separately declared. Shared service modules do not establish equivalence of different method IDs.",
+  "capacity_policy": "Bounded department-wide instrument and reporting capacities, not customer specimen acceptance thresholds.",
+  "methods": [
+    {
+      "identifier": "ASTM C3884-18",
+      "family": "CON-01",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM D1012-17",
+      "family": "PLR-03",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM D1025-19",
+      "family": "PLR-11",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM D1037-20",
+      "family": "COR-02",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM D1065-26",
+      "family": "PLR-11",
+      "offered": false
+    },
+    {
+      "identifier": "ASTM D1136-20",
+      "family": "TEX-05",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM D1592-25",
+      "family": "ENV-02",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM D1627-16",
+      "family": "COR-06",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM D1779-25",
+      "family": "COR-06",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM D2680-24",
+      "family": "COR-02",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM D2884-19",
+      "family": "COR-01",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM D2944-24",
+      "family": "COR-07",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM D3520-17",
+      "family": "COR-01",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM D3600-20",
+      "family": "COR-11",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM E1075-25",
+      "family": "MET-05",
+      "offered": false
+    },
+    {
+      "identifier": "ASTM E1353-17",
+      "family": "MET-02",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM E2381-22",
+      "family": "MET-01",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM F1070-20",
+      "family": "ENE-03",
+      "offered": true
+    },
+    {
+      "identifier": "ASTM F1151-24",
+      "family": "CSG-01",
+      "offered": false
+    },
+    {
+      "identifier": "ASTM F1558-24",
+      "family": "CSG-02",
+      "offered": true
+    },
+    {
+      "identifier": "DIN EN 45333:2019-10",
+      "family": "COR-06",
+      "offered": true
+    },
+    {
+      "identifier": "DIN EN 47883:2017-04",
+      "family": "CON-01",
+      "offered": true
+    },
+    {
+      "identifier": "DIN EN ISO 60070:2026-05",
+      "family": "ENE-03",
+      "offered": true
+    },
+    {
+      "identifier": "DIN EN ISO 60099:2020-08",
+      "family": "COR-02",
+      "offered": true
+    },
+    {
+      "identifier": "DIN EN ISO 60147:2022-06",
+      "family": "TEX-05",
+      "offered": true
+    },
+    {
+      "identifier": "DIN EN ISO 60357:2018-06",
+      "family": "MET-02",
+      "offered": true
+    },
+    {
+      "identifier": "DIN EN ISO 60682:2024-08",
+      "family": "ENV-01",
+      "offered": true
+    },
+    {
+      "identifier": "DIN EN ISO 60763:2021-08",
+      "family": "COR-06",
+      "offered": true
+    },
+    {
+      "identifier": "DIN EN ISO 61689:2026-02",
+      "family": "COR-02",
+      "offered": true
+    },
+    {
+      "identifier": "GB/T 50019-2024",
+      "family": "COR-14",
+      "offered": true
+    },
+    {
+      "identifier": "GB/T 50057-2018",
+      "family": "MET-04",
+      "offered": true
+    },
+    {
+      "identifier": "GB/T 50096-2024",
+      "family": "COR-02",
+      "offered": true
+    },
+    {
+      "identifier": "GB/T 50139-2023",
+      "family": "TEX-05",
+      "offered": true
+    },
+    {
+      "identifier": "GB/T 50205-2023",
+      "family": "COR-08",
+      "offered": false
+    },
+    {
+      "identifier": "GB/T 50775-2021",
+      "family": "COR-06",
+      "offered": true
+    },
+    {
+      "identifier": "GB/T 51693-2026",
+      "family": "COR-02",
+      "offered": true
+    },
+    {
+      "identifier": "GB/T 52877-2022",
+      "family": "CON-01",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60016:2021",
+      "family": "ENV-01",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60017:2022",
+      "family": "COR-14",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60038:2021",
+      "family": "COR-02",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60070:2020",
+      "family": "ENE-03",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60096:2024",
+      "family": "ELE-01",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60134:2018",
+      "family": "COR-07",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60147:2020",
+      "family": "TEX-05",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60152:2025",
+      "family": "COR-04",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60174:2025",
+      "family": "COR-04",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60181:2021",
+      "family": "PLR-10",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60197:2026",
+      "family": "ENV-03",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60212:2019",
+      "family": "COR-08",
+      "offered": false
+    },
+    {
+      "identifier": "ISO 60221:2017",
+      "family": "PLR-06",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60250:2024",
+      "family": "COR-04",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60288:2018",
+      "family": "COR-14",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60343:2018",
+      "family": "TEX-06",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60357:2021",
+      "family": "MET-02",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60358:2022",
+      "family": "COR-11",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60408:2017",
+      "family": "TEX-11",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60465:2019",
+      "family": "ELE-04",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60570:2025",
+      "family": "COR-11",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60591:2024",
+      "family": "ENV-02",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60653:2020",
+      "family": "COR-06",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60679:2024",
+      "family": "COR-04",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60706:2018",
+      "family": "COR-04",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60763:2020",
+      "family": "COR-06",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60951:2021",
+      "family": "TEX-01",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 60967:2026",
+      "family": "ELE-03",
+      "offered": false
+    },
+    {
+      "identifier": "ISO 61030:2023",
+      "family": "TEX-07",
+      "offered": false
+    },
+    {
+      "identifier": "ISO 61380:2021",
+      "family": "MET-01",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 61689:2022",
+      "family": "COR-02",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 61882:2017",
+      "family": "COR-01",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 61951:2020",
+      "family": "COR-07",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 62525:2022",
+      "family": "COR-01",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 62600:2020",
+      "family": "COR-11",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 62894:2017",
+      "family": "CON-01",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 63883-2:2016",
+      "family": "COR-04",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 64094:2018",
+      "family": "COR-02",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 65772:2024",
+      "family": "TEX-06",
+      "offered": true
+    },
+    {
+      "identifier": "ISO 67064:2018",
+      "family": "COR-04",
+      "offered": true
+    }
+  ],
+  "not_offered_families": {
+    "COR-08": "No xenon-arc chamber service is offered.",
+    "MET-05": "Vickers microhardness traverses are not offered; Rockwell is not a replacement.",
+    "TEX-07": "Martindale pilling is not offered.",
+    "ELE-03": "Dielectric breakdown testing is not offered; insulation resistance is a different test.",
+    "CSG-01": "Finished-toy product-impact rig testing is not offered."
+  },
+  "not_offered_methods": {
+    "ASTM D1065-26": "The separate aged-coupon compression-set method is not offered."
+  },
+  "intentional_missing_services": [
+    "Customer punched-edge appearance acceptance where satisfactory is undefined.",
+    "Assembled-unit power/display/switch/communications functional checks and resistance voltage unspecified by customer.",
+    "Water leak fixture for complete EPDM seal assemblies.",
+    "Separator edge-curl stand-off measurement fixture."
+  ],
+  "family_modules": {
+    "CON-01": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Concrete specimens",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Cylindrical drilled concrete cores from precast structural panels.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "core_diameter",
+        "label": "Core diameter",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "150",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "length_diameter_ratio",
+        "label": "Core height-to-diameter ratio",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "2.5",
+        "unit": null
+      },
+      {
+        "parameter_id": "compressive_strength",
+        "label": "Concrete compressive strength",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "150",
+        "unit": "MPa"
+      },
+      {
+        "parameter_id": "compression_record",
+        "label": "Compression raw record",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Record core age, location, orientation, mass, dimensions, end condition, load curve, Fmax, measured area, uncorrected strength, approved correction factors and corrected strength; individual values and per-lot mean to one decimal place.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "fracture_mode",
+        "label": "Observed fracture mode",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Photograph end crushing, diagonal shear, axial splitting and aggregate spalling after compression, including eccentricity and end-flatness observations; fracture mode is an observation of compression, not a separate method.",
+        "availability": "supported"
+      }
+    ],
+    "COR-01": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Panel substrates and coating systems",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Mild or low-carbon steel, phosphated or grit-blasted steel, aluminium alloy panels; production-equivalent e-coat, primer, basecoat, clearcoat or polyester powder finishes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_shape",
+        "label": "Panel shape",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Flat rectangular panels, including formed-panel and bend-edge measurements where accessible.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_length",
+        "label": "Panel length capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "panel_width",
+        "label": "Panel width capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "substrate_thickness",
+        "label": "Panel substrate thickness capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "0.5",
+        "maximum": "5",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Actual panel-metal curing temperature",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "100",
+        "maximum": "200",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Curing dwell",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "60",
+        "unit": "min"
+      },
+      {
+        "parameter_id": "curing_record",
+        "label": "Curing record",
+        "kind": "instruction",
+        "stage": "curing",
+        "operator": "text",
+        "text_value": "Record actual panel-metal temperature trace, paint and substrate batches, preparation, instrument IDs and coating application history.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Salt-fog exposure capacity",
+        "kind": "condition",
+        "stage": "exposure",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "600",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Salt-fog cabinet temperature",
+        "kind": "condition",
+        "stage": "exposure",
+        "operator": "range",
+        "minimum": "25",
+        "maximum": "50",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "scribe_length",
+        "label": "Through-film scribe length",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "20",
+        "maximum": "120",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "salt_fog_records",
+        "label": "Cabinet and witness records",
+        "kind": "reporting",
+        "stage": "exposure",
+        "operator": "text",
+        "text_value": "Continuous cabinet logs, interruption reason and duration, timepoint photographs with ruler, scribed and non-scribed witnesses, specimen angle and face-rust/blister observations.",
+        "availability": "supported"
+      }
+    ],
+    "COR-02": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Panel substrates and coating systems",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Mild or low-carbon steel, phosphated or grit-blasted steel, aluminium alloy panels; production-equivalent e-coat, primer, basecoat, clearcoat or polyester powder finishes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_shape",
+        "label": "Panel shape",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Flat rectangular panels, including formed-panel and bend-edge measurements where accessible.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_length",
+        "label": "Panel length capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "panel_width",
+        "label": "Panel width capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "substrate_thickness",
+        "label": "Panel substrate thickness capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "0.5",
+        "maximum": "5",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Actual panel-metal curing temperature",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "100",
+        "maximum": "200",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Curing dwell",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "60",
+        "unit": "min"
+      },
+      {
+        "parameter_id": "curing_record",
+        "label": "Curing record",
+        "kind": "instruction",
+        "stage": "curing",
+        "operator": "text",
+        "text_value": "Record actual panel-metal temperature trace, paint and substrate batches, preparation, instrument IDs and coating application history.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Thermal cycle temperature",
+        "kind": "condition",
+        "stage": "thermal_cycle",
+        "operator": "range",
+        "minimum": "-30",
+        "maximum": "90",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Dwell duration per thermal step",
+        "kind": "condition",
+        "stage": "thermal_cycle",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "8",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "cycles",
+        "label": "Thermal cycle count",
+        "kind": "condition",
+        "stage": "thermal_cycle",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "30",
+        "unit": "cycles"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Ambient recovery temperature",
+        "kind": "condition",
+        "stage": "cycle_recovery",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Ambient recovery duration",
+        "kind": "condition",
+        "stage": "cycle_recovery",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "72",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "water_temperature",
+        "label": "Immersion water temperature",
+        "kind": "condition",
+        "stage": "immersion",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "60",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Immersion duration",
+        "kind": "condition",
+        "stage": "immersion",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "168",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "spacing",
+        "label": "Cross-cut grid spacing",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "3",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Grid locations per panel",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "10",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "adhesion_class",
+        "label": "Native ISO-style adhesion class",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "5",
+        "unit": "class"
+      },
+      {
+        "parameter_id": "detached_grid_area",
+        "label": "Detached grid area",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "100",
+        "unit": "%"
+      },
+      {
+        "parameter_id": "exposed_metal_length",
+        "label": "Continuous exposed-metal length",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "20",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "grid_image_record",
+        "label": "Grid image record",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "text",
+        "text_value": "Photograph grids before and after tape removal with a scale; calculate detached area per location and report individual classes without converting incompatible national scales.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "spacing",
+        "label": "Cross-cut grid spacing",
+        "kind": "condition",
+        "stage": "after_cycle",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "3",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Grid locations per panel",
+        "kind": "condition",
+        "stage": "after_cycle",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "10",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "adhesion_class",
+        "label": "Native ISO-style adhesion class",
+        "kind": "reporting",
+        "stage": "after_cycle",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "5",
+        "unit": "class"
+      },
+      {
+        "parameter_id": "detached_grid_area",
+        "label": "Detached grid area",
+        "kind": "reporting",
+        "stage": "after_cycle",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "100",
+        "unit": "%"
+      },
+      {
+        "parameter_id": "exposed_metal_length",
+        "label": "Continuous exposed-metal length",
+        "kind": "reporting",
+        "stage": "after_cycle",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "20",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "grid_image_record",
+        "label": "Grid image record",
+        "kind": "reporting",
+        "stage": "after_cycle",
+        "operator": "text",
+        "text_value": "Photograph grids before and after tape removal with a scale; calculate detached area per location and report individual classes without converting incompatible national scales.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "spacing",
+        "label": "Cross-cut grid spacing",
+        "kind": "condition",
+        "stage": "after_immersion",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "3",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Grid locations per panel",
+        "kind": "condition",
+        "stage": "after_immersion",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "10",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "adhesion_class",
+        "label": "Native ISO-style adhesion class",
+        "kind": "reporting",
+        "stage": "after_immersion",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "5",
+        "unit": "class"
+      },
+      {
+        "parameter_id": "detached_grid_area",
+        "label": "Detached grid area",
+        "kind": "reporting",
+        "stage": "after_immersion",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "100",
+        "unit": "%"
+      },
+      {
+        "parameter_id": "exposed_metal_length",
+        "label": "Continuous exposed-metal length",
+        "kind": "reporting",
+        "stage": "after_immersion",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "20",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "grid_image_record",
+        "label": "Grid image record",
+        "kind": "reporting",
+        "stage": "after_immersion",
+        "operator": "text",
+        "text_value": "Photograph grids before and after tape removal with a scale; calculate detached area per location and report individual classes without converting incompatible national scales.",
+        "availability": "supported"
+      }
+    ],
+    "COR-04": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Panel substrates and coating systems",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Mild or low-carbon steel, phosphated or grit-blasted steel, aluminium alloy panels; production-equivalent e-coat, primer, basecoat, clearcoat or polyester powder finishes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_shape",
+        "label": "Panel shape",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Flat rectangular panels, including formed-panel and bend-edge measurements where accessible.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_length",
+        "label": "Panel length capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "panel_width",
+        "label": "Panel width capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "substrate_thickness",
+        "label": "Panel substrate thickness capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "0.5",
+        "maximum": "5",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Actual panel-metal curing temperature",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "100",
+        "maximum": "200",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Curing dwell",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "60",
+        "unit": "min"
+      },
+      {
+        "parameter_id": "curing_record",
+        "label": "Curing record",
+        "kind": "instruction",
+        "stage": "curing",
+        "operator": "text",
+        "text_value": "Record actual panel-metal temperature trace, paint and substrate batches, preparation, instrument IDs and coating application history.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "film_thickness",
+        "label": "Total dry film thickness",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "1000",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "topcoat_thickness",
+        "label": "Separate topcoat thickness",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "300",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Measurement locations per panel",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "25",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "measurement_resolution",
+        "label": "Film thickness resolution",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "0.1",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "distance",
+        "label": "Distance from edge or bend",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "30",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "measurement_principle",
+        "label": "Film measurement principle",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "text",
+        "text_value": "Non-destructive magnetic/eddy-current total film measurement; cross-section microscopy for a separately requested layer.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "film_thickness",
+        "label": "Total dry film thickness",
+        "kind": "reporting",
+        "stage": "after_cycle",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "1000",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "topcoat_thickness",
+        "label": "Separate topcoat thickness",
+        "kind": "reporting",
+        "stage": "after_cycle",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "300",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Measurement locations per panel",
+        "kind": "condition",
+        "stage": "after_cycle",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "25",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "measurement_resolution",
+        "label": "Film thickness resolution",
+        "kind": "reporting",
+        "stage": "after_cycle",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "0.1",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "distance",
+        "label": "Distance from edge or bend",
+        "kind": "condition",
+        "stage": "after_cycle",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "30",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "measurement_principle",
+        "label": "Film measurement principle",
+        "kind": "reporting",
+        "stage": "after_cycle",
+        "operator": "text",
+        "text_value": "Non-destructive magnetic/eddy-current total film measurement; cross-section microscopy for a separately requested layer.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "film_thickness",
+        "label": "Total dry film thickness",
+        "kind": "reporting",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "1000",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "topcoat_thickness",
+        "label": "Separate topcoat thickness",
+        "kind": "reporting",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "300",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Measurement locations per panel",
+        "kind": "condition",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "25",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "measurement_resolution",
+        "label": "Film thickness resolution",
+        "kind": "reporting",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "0.1",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "distance",
+        "label": "Distance from edge or bend",
+        "kind": "condition",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "30",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "measurement_principle",
+        "label": "Film measurement principle",
+        "kind": "reporting",
+        "stage": "after_humidity",
+        "operator": "text",
+        "text_value": "Non-destructive magnetic/eddy-current total film measurement; cross-section microscopy for a separately requested layer.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "film_thickness",
+        "label": "Total dry film thickness",
+        "kind": "reporting",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "1000",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "topcoat_thickness",
+        "label": "Separate topcoat thickness",
+        "kind": "reporting",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "300",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Measurement locations per panel",
+        "kind": "condition",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "25",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "measurement_resolution",
+        "label": "Film thickness resolution",
+        "kind": "reporting",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "0.1",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "distance",
+        "label": "Distance from edge or bend",
+        "kind": "condition",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "30",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "measurement_principle",
+        "label": "Film measurement principle",
+        "kind": "reporting",
+        "stage": "after_exposure",
+        "operator": "text",
+        "text_value": "Non-destructive magnetic/eddy-current total film measurement; cross-section microscopy for a separately requested layer.",
+        "availability": "supported"
+      }
+    ],
+    "COR-06": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Panel substrates and coating systems",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Mild or low-carbon steel, phosphated or grit-blasted steel, aluminium alloy panels; production-equivalent e-coat, primer, basecoat, clearcoat or polyester powder finishes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_shape",
+        "label": "Panel shape",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Flat rectangular panels, including formed-panel and bend-edge measurements where accessible.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_length",
+        "label": "Panel length capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "panel_width",
+        "label": "Panel width capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "substrate_thickness",
+        "label": "Panel substrate thickness capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "0.5",
+        "maximum": "5",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Actual panel-metal curing temperature",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "100",
+        "maximum": "200",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Curing dwell",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "60",
+        "unit": "min"
+      },
+      {
+        "parameter_id": "curing_record",
+        "label": "Curing record",
+        "kind": "instruction",
+        "stage": "curing",
+        "operator": "text",
+        "text_value": "Record actual panel-metal temperature trace, paint and substrate batches, preparation, instrument IDs and coating application history.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "measurement_angle",
+        "label": "Gloss measurement angle",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "60",
+        "maximum": "60",
+        "unit": "°"
+      },
+      {
+        "parameter_id": "gloss",
+        "label": "60 degree specular gloss",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "200",
+        "unit": "GU"
+      },
+      {
+        "parameter_id": "gloss_spread",
+        "label": "Gloss spread across points",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "200",
+        "unit": "GU"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Marked gloss locations",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "25",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "measurement_angle",
+        "label": "Gloss measurement angle",
+        "kind": "condition",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "60",
+        "maximum": "60",
+        "unit": "°"
+      },
+      {
+        "parameter_id": "gloss",
+        "label": "60 degree specular gloss",
+        "kind": "reporting",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "200",
+        "unit": "GU"
+      },
+      {
+        "parameter_id": "gloss_spread",
+        "label": "Gloss spread across points",
+        "kind": "reporting",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "200",
+        "unit": "GU"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Marked gloss locations",
+        "kind": "condition",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "25",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "measurement_angle",
+        "label": "Gloss measurement angle",
+        "kind": "condition",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "60",
+        "maximum": "60",
+        "unit": "°"
+      },
+      {
+        "parameter_id": "gloss",
+        "label": "60 degree specular gloss",
+        "kind": "reporting",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "200",
+        "unit": "GU"
+      },
+      {
+        "parameter_id": "gloss_spread",
+        "label": "Gloss spread across points",
+        "kind": "reporting",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "200",
+        "unit": "GU"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Marked gloss locations",
+        "kind": "condition",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "25",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "gloss",
+        "label": "Post-thermal-cycle gloss measurement",
+        "kind": "reporting",
+        "stage": "after_cycle",
+        "operator": "text",
+        "text_value": "Post-thermal-cycle gloss readings are not offered on this line.",
+        "availability": "unsupported"
+      },
+      {
+        "parameter_id": "gloss_retention",
+        "label": "Post-cycle gloss retention",
+        "kind": "reporting",
+        "stage": "after_cycle",
+        "operator": "text",
+        "text_value": "Post-thermal-cycle site-wise retention and before/after cycle gloss calculations are not offered.",
+        "availability": "unsupported"
+      },
+      {
+        "parameter_id": "gloss_retention",
+        "label": "Humidity exposure gloss retention",
+        "kind": "reporting",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "200",
+        "unit": "%",
+        "source_context": "panel mean"
+      },
+      {
+        "parameter_id": "gloss_retention",
+        "label": "Per-site humidity retention",
+        "kind": "reporting",
+        "stage": "after_humidity",
+        "operator": "text",
+        "text_value": "Humidity retention can be calculated from panel means only; individual-site retention is not offered.",
+        "availability": "unsupported",
+        "source_context": "individual marked site"
+      }
+    ],
+    "COR-07": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Panel substrates and coating systems",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Mild or low-carbon steel, phosphated or grit-blasted steel, aluminium alloy panels; production-equivalent e-coat, primer, basecoat, clearcoat or polyester powder finishes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_shape",
+        "label": "Panel shape",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Flat rectangular panels, including formed-panel and bend-edge measurements where accessible.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_length",
+        "label": "Panel length capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "panel_width",
+        "label": "Panel width capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "substrate_thickness",
+        "label": "Panel substrate thickness capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "0.5",
+        "maximum": "5",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Actual panel-metal curing temperature",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "100",
+        "maximum": "200",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Curing dwell",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "60",
+        "unit": "min"
+      },
+      {
+        "parameter_id": "curing_record",
+        "label": "Curing record",
+        "kind": "instruction",
+        "stage": "curing",
+        "operator": "text",
+        "text_value": "Record actual panel-metal temperature trace, paint and substrate batches, preparation, instrument IDs and coating application history.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Humidity chamber temperature",
+        "kind": "condition",
+        "stage": "exposure",
+        "operator": "range",
+        "minimum": "30",
+        "maximum": "60",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Chamber humidity",
+        "kind": "condition",
+        "stage": "exposure",
+        "operator": "range",
+        "minimum": "90",
+        "maximum": "100",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Humidity exposure duration",
+        "kind": "condition",
+        "stage": "exposure",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "500",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Ambient recovery temperature",
+        "kind": "condition",
+        "stage": "cycle_recovery",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Ambient recovery duration",
+        "kind": "condition",
+        "stage": "cycle_recovery",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "72",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "appearance_record",
+        "label": "Humidity appearance observation",
+        "kind": "reporting",
+        "stage": "after_humidity",
+        "operator": "text",
+        "text_value": "Photograph and individually report blistering, whitening, cracking and edge lifting at 1 h and 24 h recovery; differentiate coating and substrate defects.",
+        "availability": "supported"
+      }
+    ],
+    "COR-11": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Panel substrates and coating systems",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Mild or low-carbon steel, phosphated or grit-blasted steel, aluminium alloy panels; production-equivalent e-coat, primer, basecoat, clearcoat or polyester powder finishes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_shape",
+        "label": "Panel shape",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Flat rectangular panels, including formed-panel and bend-edge measurements where accessible.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_length",
+        "label": "Panel length capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "panel_width",
+        "label": "Panel width capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "substrate_thickness",
+        "label": "Panel substrate thickness capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "0.5",
+        "maximum": "5",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Actual panel-metal curing temperature",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "100",
+        "maximum": "200",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Curing dwell",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "60",
+        "unit": "min"
+      },
+      {
+        "parameter_id": "curing_record",
+        "label": "Curing record",
+        "kind": "instruction",
+        "stage": "curing",
+        "operator": "text",
+        "text_value": "Record actual panel-metal temperature trace, paint and substrate batches, preparation, instrument IDs and coating application history.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "illuminant",
+        "label": "Illuminant",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "text",
+        "text_value": "D65",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "observer_angle",
+        "label": "Observer angle",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "10",
+        "maximum": "10",
+        "unit": "°"
+      },
+      {
+        "parameter_id": "measurement_angle",
+        "label": "Colour reading geometry",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "45",
+        "unit": "°"
+      },
+      {
+        "parameter_id": "color_difference",
+        "label": "CIE L*a*b* colour difference",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "20",
+        "unit": "ΔE*ab"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Colour measurement locations",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "25",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "reference_panel",
+        "label": "Reference panels",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "text",
+        "text_value": "Customer-approved master panel or unexposed companion panel from the same coating lot and curing window; identify the selected reference.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "colour_coordinates",
+        "label": "Colour coordinates",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "text",
+        "text_value": "Report L*, a*, b* and DeltaE*ab separately for each angle, point, panel and phase; never average different angles.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "illuminant",
+        "label": "Illuminant",
+        "kind": "condition",
+        "stage": "after_humidity",
+        "operator": "text",
+        "text_value": "D65",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "observer_angle",
+        "label": "Observer angle",
+        "kind": "condition",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "10",
+        "maximum": "10",
+        "unit": "°"
+      },
+      {
+        "parameter_id": "measurement_angle",
+        "label": "Colour reading geometry",
+        "kind": "condition",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "45",
+        "unit": "°"
+      },
+      {
+        "parameter_id": "color_difference",
+        "label": "CIE L*a*b* colour difference",
+        "kind": "reporting",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "20",
+        "unit": "ΔE*ab"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Colour measurement locations",
+        "kind": "condition",
+        "stage": "after_humidity",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "25",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "reference_panel",
+        "label": "Reference panels",
+        "kind": "condition",
+        "stage": "after_humidity",
+        "operator": "text",
+        "text_value": "Customer-approved master panel or unexposed companion panel from the same coating lot and curing window; identify the selected reference.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "colour_coordinates",
+        "label": "Colour coordinates",
+        "kind": "reporting",
+        "stage": "after_humidity",
+        "operator": "text",
+        "text_value": "Report L*, a*, b* and DeltaE*ab separately for each angle, point, panel and phase; never average different angles.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "illuminant",
+        "label": "Illuminant",
+        "kind": "condition",
+        "stage": "after_exposure",
+        "operator": "text",
+        "text_value": "D65",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "observer_angle",
+        "label": "Observer angle",
+        "kind": "condition",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "10",
+        "maximum": "10",
+        "unit": "°"
+      },
+      {
+        "parameter_id": "measurement_angle",
+        "label": "Colour reading geometry",
+        "kind": "condition",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "45",
+        "unit": "°"
+      },
+      {
+        "parameter_id": "color_difference",
+        "label": "CIE L*a*b* colour difference",
+        "kind": "reporting",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "20",
+        "unit": "ΔE*ab"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Colour measurement locations",
+        "kind": "condition",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "25",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "reference_panel",
+        "label": "Reference panels",
+        "kind": "condition",
+        "stage": "after_exposure",
+        "operator": "text",
+        "text_value": "Customer-approved master panel or unexposed companion panel from the same coating lot and curing window; identify the selected reference.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "colour_coordinates",
+        "label": "Colour coordinates",
+        "kind": "reporting",
+        "stage": "after_exposure",
+        "operator": "text",
+        "text_value": "Report L*, a*, b* and DeltaE*ab separately for each angle, point, panel and phase; never average different angles.",
+        "availability": "supported"
+      }
+    ],
+    "COR-14": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Panel substrates and coating systems",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Mild or low-carbon steel, phosphated or grit-blasted steel, aluminium alloy panels; production-equivalent e-coat, primer, basecoat, clearcoat or polyester powder finishes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_shape",
+        "label": "Panel shape",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Flat rectangular panels, including formed-panel and bend-edge measurements where accessible.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "panel_length",
+        "label": "Panel length capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "panel_width",
+        "label": "Panel width capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "400",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "substrate_thickness",
+        "label": "Panel substrate thickness capacity",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "0.5",
+        "maximum": "5",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Actual panel-metal curing temperature",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "100",
+        "maximum": "200",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Curing dwell",
+        "kind": "condition",
+        "stage": "curing",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "60",
+        "unit": "min"
+      },
+      {
+        "parameter_id": "curing_record",
+        "label": "Curing record",
+        "kind": "instruction",
+        "stage": "curing",
+        "operator": "text",
+        "text_value": "Record actual panel-metal temperature trace, paint and substrate batches, preparation, instrument IDs and coating application history.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Prior salt-fog exposure capacity",
+        "kind": "condition",
+        "stage": "exposure",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "600",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "scribe_length",
+        "label": "Through-film scribe length",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "20",
+        "maximum": "120",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "coating_creep",
+        "label": "Scribe corrosion creep",
+        "kind": "reporting",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "20",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Creep stations per panel",
+        "kind": "condition",
+        "stage": "after_exposure",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "20",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "creep_reporting",
+        "label": "Creep reporting",
+        "kind": "reporting",
+        "stage": "after_exposure",
+        "operator": "text",
+        "text_value": "Remove loose coating; image intact-film corrosion advance from the cut line; report each station, both-side arithmetic mean, panel mean and maximum, with edge/end exclusions recorded.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "edge_lift_record",
+        "label": "Edge lift and rust observations",
+        "kind": "reporting",
+        "stage": "after_exposure",
+        "operator": "text",
+        "text_value": "Record face rust, edge blistering, lifting and rust-water before/after ambient recovery using photographs with lengths and positions.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "coating_creep",
+        "label": "Scribe corrosion creep",
+        "kind": "reporting",
+        "stage": "after_salt_fog",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "20",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Creep stations per panel",
+        "kind": "condition",
+        "stage": "after_salt_fog",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "20",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "creep_reporting",
+        "label": "Creep reporting",
+        "kind": "reporting",
+        "stage": "after_salt_fog",
+        "operator": "text",
+        "text_value": "Remove loose coating; image intact-film corrosion advance from the cut line; report each station, both-side arithmetic mean, panel mean and maximum, with edge/end exclusions recorded.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "edge_lift_record",
+        "label": "Edge lift and rust observations",
+        "kind": "reporting",
+        "stage": "after_salt_fog",
+        "operator": "text",
+        "text_value": "Record face rust, edge blistering, lifting and rust-water before/after ambient recovery using photographs with lengths and positions.",
+        "availability": "supported"
+      }
+    ],
+    "CSG-02": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "lead_concentration",
+        "label": "Extractable lead",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "1000",
+        "unit": "mg/kg"
+      },
+      {
+        "parameter_id": "cadmium_concentration",
+        "label": "Extractable cadmium",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "1000",
+        "unit": "mg/kg"
+      },
+      {
+        "parameter_id": "chromium_concentration",
+        "label": "Extractable chromium",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "0.5",
+        "maximum": "1000",
+        "unit": "mg/kg"
+      },
+      {
+        "parameter_id": "extraction_record",
+        "label": "Toy extractable-element record",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Use as-received finished plastic housing portions; record area-to-volume ratio, specimen mass, blank, dilution, individual Pb/Cd/Cr values and actual detection/reporting limits; retain surface residues.",
+        "availability": "supported"
+      }
+    ],
+    "ELE-01": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "ingress_rating",
+        "label": "Ingress service",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "IP54 enclosure dust and spray testing on assembled units; record spray direction, duration, flow, fixture shadow, cable entry and lid orientation.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "water_mass_gain",
+        "label": "Absorbent-paper water mass gain",
+        "kind": "reporting",
+        "stage": "after_ingress",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "1000",
+        "unit": "mg"
+      },
+      {
+        "parameter_id": "measurement_resolution",
+        "label": "Water mass balance resolution",
+        "kind": "reporting",
+        "stage": "after_ingress",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "1",
+        "unit": "mg"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Opening delay after ingress",
+        "kind": "condition",
+        "stage": "after_ingress",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "30",
+        "unit": "min"
+      },
+      {
+        "parameter_id": "ingress_record",
+        "label": "Ingress observation record",
+        "kind": "reporting",
+        "stage": "after_ingress",
+        "operator": "text",
+        "text_value": "Photograph internal electronics and absorbent paper, compare before/after mass using consistently dried equal-size paper, record visible droplets and connector corrosion.",
+        "availability": "supported"
+      }
+    ],
+    "ELE-04": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Insulation sample type",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Cable jacket insulation with conductor and contact-wrap electrodes; humidity-conditioned or water-soaked samples.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "water_temperature",
+        "label": "Water conditioning temperature",
+        "kind": "condition",
+        "stage": "water_aging",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "60",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Water conditioning duration",
+        "kind": "condition",
+        "stage": "water_aging",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "240",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "test_voltage",
+        "label": "DC insulation test voltage",
+        "kind": "condition",
+        "stage": "measurement",
+        "operator": "range",
+        "minimum": "100",
+        "maximum": "1000",
+        "unit": "V"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Insulation resistance reading time",
+        "kind": "condition",
+        "stage": "measurement",
+        "operator": "range",
+        "minimum": "10",
+        "maximum": "120",
+        "unit": "s"
+      },
+      {
+        "parameter_id": "insulation_resistance",
+        "label": "Insulation resistance",
+        "kind": "reporting",
+        "stage": "after_water_aging",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "100000",
+        "unit": "MΩ"
+      },
+      {
+        "parameter_id": "insulation_record",
+        "label": "Resistance measurement record",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "100 mm wrap, conductor connection, smallest wall-thickness map, individual resistance, time since removal from water and visible longitudinal splits/tracking.",
+        "availability": "supported"
+      }
+    ],
+    "ENE-03": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Separator specimen",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Microporous production-roll battery separator film with MD, TD and roll-position identifiers.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Separator cycling temperature",
+        "kind": "condition",
+        "stage": "thermal_cycle",
+        "operator": "range",
+        "minimum": "20",
+        "maximum": "100",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "cycles",
+        "label": "Separator thermal cycle count",
+        "kind": "condition",
+        "stage": "thermal_cycle",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "20",
+        "unit": "cycles"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Unrestrained hot-hold capacity",
+        "kind": "condition",
+        "stage": "hot_hold",
+        "operator": "range",
+        "minimum": "20",
+        "maximum": "100",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Unrestrained hot-hold duration",
+        "kind": "condition",
+        "stage": "hot_hold",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "120",
+        "unit": "min"
+      },
+      {
+        "parameter_id": "film_thickness",
+        "label": "As-received separator thickness",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "100",
+        "unit": "µm"
+      },
+      {
+        "parameter_id": "dimensional_retention",
+        "label": "MD dimensional retention",
+        "kind": "reporting",
+        "stage": "after_cycle",
+        "operator": "range",
+        "minimum": "80",
+        "maximum": "120",
+        "unit": "%",
+        "source_context": "machine direction"
+      },
+      {
+        "parameter_id": "dimensional_retention",
+        "label": "TD dimensional retention",
+        "kind": "reporting",
+        "stage": "after_cycle",
+        "operator": "range",
+        "minimum": "80",
+        "maximum": "120",
+        "unit": "%",
+        "source_context": "transverse direction"
+      },
+      {
+        "parameter_id": "measurement_resolution",
+        "label": "Gauge-length reading resolution",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "0.1",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "separator_record",
+        "label": "Separator direction and shape record",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Before/after MD and TD gauge lengths, absolute change and 100*final/initial retention for each specimen, film-thickness map, thermal trace and hole/tear photographs.",
+        "availability": "supported"
+      }
+    ],
+    "ENV-01": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "iron_concentration",
+        "label": "Dissolved iron concentration",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "10000",
+        "unit": "µg/L"
+      },
+      {
+        "parameter_id": "copper_concentration",
+        "label": "Dissolved copper concentration",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "10000",
+        "unit": "µg/L"
+      },
+      {
+        "parameter_id": "zinc_concentration",
+        "label": "Dissolved zinc concentration",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "10000",
+        "unit": "µg/L"
+      },
+      {
+        "parameter_id": "lead_concentration",
+        "label": "Dissolved lead concentration",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "10",
+        "maximum": "10000",
+        "unit": "µg/L"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Metals sample cold storage",
+        "kind": "condition",
+        "stage": "storage",
+        "operator": "range",
+        "minimum": "2",
+        "maximum": "8",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "metals_protocol",
+        "label": "Metals preparation and QC",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "0.45 µm filtered dissolved aliquot and separate total fraction; acid/preservation record, dilution, blanks, spikes and reporting limits; below-LOQ results retain the reporting limit rather than zero.",
+        "availability": "supported"
+      }
+    ],
+    "ENV-02": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Water pH measurement temperature",
+        "kind": "condition",
+        "stage": "measurement",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "ph",
+        "label": "Water pH",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "14",
+        "unit": "pH"
+      },
+      {
+        "parameter_id": "ph_protocol",
+        "label": "pH reporting and custody",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Measure unfiltered water without added preservative within two hours of collection; record sample temperature, calibration, individual unrounded pH and start-to-end drift, with timestamps and sample IDs.",
+        "availability": "supported"
+      }
+    ],
+    "ENV-03": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "turbidity",
+        "label": "Nephelometric turbidity",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "0.02",
+        "maximum": "1000",
+        "unit": "NTU"
+      },
+      {
+        "parameter_id": "turbidity_protocol",
+        "label": "Turbidity reporting and custody",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Measure unfiltered water within two hours of collection, check bubbles and sediment, provide individual NTU and daily statistics with calibration and sample IDs.",
+        "availability": "supported"
+      }
+    ],
+    "MET-01": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Tensile material",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Heat-treated alloy steel bars and machined tensile specimens.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "tensile_strength",
+        "label": "Ultimate tensile strength",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "2000",
+        "unit": "MPa"
+      },
+      {
+        "parameter_id": "elongation_at_break",
+        "label": "Elongation at break",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "100",
+        "unit": "%"
+      },
+      {
+        "parameter_id": "tensile_record",
+        "label": "Tensile specimen record",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Gauge length, original cross-section, extraction direction, force-displacement curve, individual specimen values and batch statistics.",
+        "availability": "supported"
+      }
+    ],
+    "MET-02": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Charpy specimen material",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Machined notched steel bars from heat-treated bar stock or forged brackets.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Charpy conditioning temperature",
+        "kind": "condition",
+        "stage": "cold_conditioning",
+        "operator": "range",
+        "minimum": "-40",
+        "maximum": "30",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "transfer_time",
+        "label": "Supported chamber-to-impact transfer time",
+        "kind": "condition",
+        "stage": "cold_conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "3",
+        "unit": "s"
+      },
+      {
+        "parameter_id": "impact_energy",
+        "label": "Charpy absorbed energy",
+        "kind": "reporting",
+        "stage": "cold_conditioning",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "300",
+        "unit": "J"
+      },
+      {
+        "parameter_id": "charpy_record",
+        "label": "Charpy specimen record",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Notch, extraction direction, specimen dimensions, absorbed energy per bar, fracture photographs, appearance and per-source-bracket/batch mean.",
+        "availability": "supported"
+      }
+    ],
+    "MET-04": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "rockwell_hardness",
+        "label": "Rockwell C hardness",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "20",
+        "maximum": "70",
+        "unit": "HRC"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Hardness points per section",
+        "kind": "condition",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "25",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "hardness_spread",
+        "label": "Hardness reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Report individual Rockwell C values and within-section max-minus-min, point map and batch identifiers; no conversion to Vickers hardness.",
+        "availability": "supported"
+      }
+    ],
+    "PLR-03": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Impact specimen material",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Notched injection-moulded ABS beams or bars, with production resin and moulding history recorded.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "specimen_thickness",
+        "label": "Impact bar thickness",
+        "kind": "condition",
+        "stage": "preparation",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "10",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Ambient impact conditioning",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "cold_impact",
+        "label": "Cold-conditioned impact service",
+        "kind": "scope",
+        "stage": "cold_conditioning",
+        "operator": "text",
+        "text_value": "Impact specimens conditioned below 0 °C are not offered.",
+        "availability": "unsupported"
+      },
+      {
+        "parameter_id": "impact_strength",
+        "label": "Notched impact strength",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "100",
+        "unit": "kJ/m²"
+      },
+      {
+        "parameter_id": "impact_records",
+        "label": "Impact raw data",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Pendulum capacity, notch geometry, energy, actual cross-section, individual result, lot mean and break location are reported.",
+        "availability": "supported"
+      }
+    ],
+    "PLR-06": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "HDT material",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Injection-moulded ABS beams.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "pressure",
+        "label": "Flexural stress",
+        "kind": "condition",
+        "stage": "measurement",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "2",
+        "unit": "MPa"
+      },
+      {
+        "parameter_id": "heating_rate",
+        "label": "HDT heating rate",
+        "kind": "condition",
+        "stage": "measurement",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "3",
+        "unit": "°C/min"
+      },
+      {
+        "parameter_id": "deflection",
+        "label": "Additional midpoint deflection",
+        "kind": "condition",
+        "stage": "measurement",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "1",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "heat_deflection_temperature",
+        "label": "Heat-deflection temperature",
+        "kind": "reporting",
+        "stage": "measurement",
+        "operator": "range",
+        "minimum": "20",
+        "maximum": "180",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "hdt_raw_trace",
+        "label": "HDT reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Report each beam's dimensions, applied stress and raw midpoint-deflection/temperature trace; record temperature at specified additional deflection.",
+        "availability": "supported"
+      }
+    ],
+    "PLR-10": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "shore_a_hardness",
+        "label": "Shore A hardness",
+        "kind": "reporting",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "10",
+        "maximum": "95",
+        "unit": "Shore A"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Hardness locations",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "20",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "shore_a_hardness",
+        "label": "Shore A hardness",
+        "kind": "reporting",
+        "stage": "after_aging",
+        "operator": "range",
+        "minimum": "10",
+        "maximum": "95",
+        "unit": "Shore A"
+      },
+      {
+        "parameter_id": "measurement_locations",
+        "label": "Hardness locations",
+        "kind": "condition",
+        "stage": "after_aging",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "20",
+        "unit": "points"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Unloaded oven-aging temperature",
+        "kind": "condition",
+        "stage": "aging",
+        "operator": "range",
+        "minimum": "30",
+        "maximum": "120",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Unloaded oven-aging duration",
+        "kind": "condition",
+        "stage": "aging",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "240",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "hardness_change",
+        "label": "Hardness change reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Record before/after Shore-A readings at the same marked points and report absolute change per specimen and visible cracking/tackiness.",
+        "availability": "supported"
+      }
+    ],
+    "PLR-11": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "specimen_material",
+        "label": "Compression specimen material",
+        "kind": "scope",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Flat EPDM gasket coupons between parallel plates; no assembled-door fixture service.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "compression",
+        "label": "Nominal compression fraction",
+        "kind": "condition",
+        "stage": "compression",
+        "operator": "range",
+        "minimum": "10",
+        "maximum": "40",
+        "unit": "%"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Compression oven temperature",
+        "kind": "condition",
+        "stage": "compression",
+        "operator": "range",
+        "minimum": "50",
+        "maximum": "150",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Hot compression dwell",
+        "kind": "condition",
+        "stage": "compression",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "100",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Ambient recovery temperature",
+        "kind": "condition",
+        "stage": "cycle_recovery",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Ambient recovery duration",
+        "kind": "condition",
+        "stage": "cycle_recovery",
+        "operator": "range",
+        "minimum": "0.1",
+        "maximum": "72",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "compression_set",
+        "label": "Compression set",
+        "kind": "reporting",
+        "stage": "after_recovery",
+        "operator": "range",
+        "minimum": "0",
+        "maximum": "100",
+        "unit": "%"
+      },
+      {
+        "parameter_id": "compression_readings",
+        "label": "Compression thickness record",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Record individual t0, compressed spacer thickness ts and recovered thickness tr; calculate 100*(t0-tr)/(t0-ts), and report each result and per-lot mean.",
+        "availability": "supported"
+      }
+    ],
+    "TEX-01": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "tensile_force",
+        "label": "Strip break force",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "5000",
+        "unit": "N"
+      },
+      {
+        "parameter_id": "strip_tensile_record",
+        "label": "Strip tensile reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Warp and weft separately, five or more valid specimens per direction, grip spacing, break type and original force-extension curves.",
+        "availability": "supported"
+      }
+    ],
+    "TEX-05": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "cycles",
+        "label": "Rub strokes",
+        "kind": "condition",
+        "stage": "rubbing",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "50",
+        "unit": "cycles"
+      },
+      {
+        "parameter_id": "force",
+        "label": "Rubbing force",
+        "kind": "condition",
+        "stage": "rubbing",
+        "operator": "range",
+        "minimum": "5",
+        "maximum": "15",
+        "unit": "N"
+      },
+      {
+        "parameter_id": "distance",
+        "label": "Rubbing track length",
+        "kind": "condition",
+        "stage": "rubbing",
+        "operator": "range",
+        "minimum": "20",
+        "maximum": "150",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "moisture_pickup",
+        "label": "Wet rubbing-pad moisture pickup",
+        "kind": "condition",
+        "stage": "wet",
+        "operator": "range",
+        "minimum": "80",
+        "maximum": "120",
+        "unit": "%"
+      },
+      {
+        "parameter_id": "rub_protocol",
+        "label": "Rub states and grading",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Test dry and wet cotton pads separately, photograph each site, record native five-step colour-transfer and colour-change scales including half grades, individual observations and medians.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "staining_grade",
+        "label": "Dry staining grade",
+        "kind": "reporting",
+        "stage": "dry",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "5",
+        "unit": "grade"
+      },
+      {
+        "parameter_id": "staining_grade",
+        "label": "Wet staining grade",
+        "kind": "reporting",
+        "stage": "wet",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "5",
+        "unit": "grade"
+      }
+    ],
+    "TEX-06": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Laundering temperature",
+        "kind": "condition",
+        "stage": "laundering",
+        "operator": "range",
+        "minimum": "20",
+        "maximum": "60",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "cycles",
+        "label": "Laundering cycle count",
+        "kind": "condition",
+        "stage": "laundering",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "10",
+        "unit": "cycles"
+      },
+      {
+        "parameter_id": "gauge_length",
+        "label": "Reference gauge length",
+        "kind": "condition",
+        "stage": "initial",
+        "operator": "range",
+        "minimum": "100",
+        "maximum": "500",
+        "unit": "mm"
+      },
+      {
+        "parameter_id": "dimensional_change",
+        "label": "Warp dimensional change",
+        "kind": "reporting",
+        "stage": "after_laundering",
+        "operator": "range",
+        "minimum": "-20",
+        "maximum": "20",
+        "unit": "%",
+        "source_context": "warp"
+      },
+      {
+        "parameter_id": "dimensional_change",
+        "label": "Weft dimensional change",
+        "kind": "reporting",
+        "stage": "after_laundering",
+        "operator": "range",
+        "minimum": "-20",
+        "maximum": "20",
+        "unit": "%",
+        "source_context": "weft"
+      },
+      {
+        "parameter_id": "laundering_record",
+        "label": "Laundering and direction record",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Customer-supplied detergent, line drying, separate warp and weft gauge lengths, before/after images and 100*(final-original)/original calculations per specimen.",
+        "availability": "supported"
+      }
+    ],
+    "TEX-11": [
+      {
+        "parameter_id": "measurement_reporting",
+        "label": "Individual measurement reporting",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Provide individual readings with specimen, lot, point and phase identifiers; per-specimen mean, minimum, maximum and spread; keep different lots, methods, directions and phases separate.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "customer_acceptance_evaluation",
+        "label": "Customer acceptance evaluation",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Evaluate supplied numeric or explicit visual acceptance rules against measured results for each required specimen or lot; identify failures. This service does not guarantee a specimen passes.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "source_records",
+        "label": "Traceable raw records",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Signed PDF and machine-readable individual results, raw curves, formulas, calibration records, timestamps, chamber logs, before/after photographs and deviations are available.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "valid_failure_retention",
+        "label": "Valid failure retention",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Retain valid failing results; never pool lots to conceal failures, replace a specimen mid-run, or overwrite results with retests. Invalid tests and requested deviations require recorded customer approval.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "sample_traceability",
+        "label": "Sample handling and allocation",
+        "kind": "instruction",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Accept customer-supplied labelled lots, preserve material and process traceability, reserve unexposed controls and retention specimens, follow stated preparation prohibitions and sample allocation; record shortages before testing.",
+        "availability": "supported"
+      },
+      {
+        "parameter_id": "temperature",
+        "label": "Conditioning temperature",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "15",
+        "maximum": "35",
+        "unit": "°C"
+      },
+      {
+        "parameter_id": "relative_humidity",
+        "label": "Conditioning relative humidity",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "40",
+        "maximum": "75",
+        "unit": "% RH"
+      },
+      {
+        "parameter_id": "duration",
+        "label": "Conditioning duration",
+        "kind": "condition",
+        "stage": "conditioning",
+        "operator": "range",
+        "minimum": "1",
+        "maximum": "336",
+        "unit": "h"
+      },
+      {
+        "parameter_id": "fabric_areal_mass",
+        "label": "Conditioned fabric areal mass",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "range",
+        "minimum": "20",
+        "maximum": "1000",
+        "unit": "g/m²"
+      },
+      {
+        "parameter_id": "mass_sampling",
+        "label": "Fabric mass sampling",
+        "kind": "reporting",
+        "stage": "general",
+        "operator": "text",
+        "text_value": "Individually weigh cut fabric squares and report mass, area and per-roll mean with roll/direction identifiers.",
+        "availability": "supported"
+      }
+    ]
+  }
+}

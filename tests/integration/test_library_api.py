@@ -16,6 +16,7 @@ from sqlalchemy.exc import OperationalError
 from scione.api.app import create_app
 from scione.catalogs import FileLabStore, load_reference_catalog
 from scione.catalogs.seed import default_csp301_lab
+from scione.catalogs.sql_lab_store import SQLLabStore
 from scione.config import Settings
 from scione.library.store import LibraryStore, comparisons
 from scione.providers.gemini import GeminiModelProvider
@@ -28,6 +29,13 @@ GLOSS = (
     "Post-cycle gloss retention at least 90%."
 )
 THICKNESS = "Dry film thickness: ISO 60152:2025. Separate topcoat thickness 42-55 um."
+
+
+def _machine_snapshot(live):
+    return {
+        key: value for key, value in live.items()
+        if key not in {"export_snapshot_id", "explanation_sources", "document_notes_review"}
+    }
 
 
 class LocalClient:
@@ -223,15 +231,69 @@ def test_comparison_exposes_explicit_limit_and_missing_layer_capability(client):
     )
 
 
+def test_unretained_article_scope_remains_visible_in_saved_comparison(client, monkeypatch):
+    """A correct measured limit does not establish full document coverage."""
+    http, root = client
+    original_pdf = _pdf
+
+    def source_with_article(revision="Issue A"):
+        with pymupdf.open(stream=original_pdf(revision), filetype="pdf") as document:
+            document[0].insert_text(
+                (35, 720), "Covered supply: Mild-steel witness panels", fontsize=10
+            )
+            return document.tobytes(no_new_id=True)
+
+    monkeypatch.setitem(_seed.__globals__, "_pdf", source_with_article)
+    source, original_run = _seed(root)
+    response = http.get(f"/api/comparisons/{source.document_id}")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert "Mild-steel witness panels" in " ".join(data["source_coverage_issues"])
+    assert all(hint in data["notes"] for hint in data["source_coverage_issues"])
+    assert data["summary"]["partially_matched"] == 1
+    assert FileSpecStore(root).load_latest_extraction(source.document_id) == original_run
+    saved = http.get(f"/api/comparison-snapshots/{data['comparison_id']}/json")
+    assert saved.status_code == 200
+    assert saved.json()["source_coverage_issues"] == data["source_coverage_issues"]
+
+
+def test_new_coverage_policy_creates_a_new_immutable_snapshot_with_same_inputs(client, monkeypatch):
+    """New software hints must not cause a 409 or rewrite a previous report."""
+    import scione.library.workspace as library_workspace
+
+    http, root = client
+    source, original_run = _seed(root)
+    before_response = http.get(f"/api/comparisons/{source.document_id}")
+    assert before_response.status_code == 200
+    before = before_response.json()
+    monkeypatch.setattr(
+        library_workspace,
+        "coverage_issues",
+        lambda *_args: ["Check source context: an additional policy cue needs review."],
+    )
+    after_response = http.get(f"/api/comparisons/{source.document_id}")
+    assert after_response.status_code == 200, after_response.text
+    after = after_response.json()
+    assert before["source_run_id"] == after["source_run_id"] == original_run.run_id
+    assert before["report_input_fingerprint"] == after["report_input_fingerprint"]
+    assert before["comparison_id"] != after["comparison_id"]
+    assert before["requirements"] == after["requirements"]
+    assert http.get(f"/api/comparisons/{source.document_id}").json() == after
+    assert http.get(f"/api/comparison-snapshots/{before['comparison_id']}/json").json() == (
+        _machine_snapshot(before)
+    )
+    assert FileSpecStore(root).load_latest_extraction(source.document_id) == original_run
+
+
 def test_pending_method_identity_does_not_report_lab_values_as_missing(client, monkeypatch):
     from scione.api.workspace import Workspace
 
     http, root = client
     source, _ = _seed(root)
-    draft = Workspace.draft
+    draft = Workspace.draft_from_inputs
 
-    def ambiguous_method(workspace, document_id):
-        report = draft(workspace, document_id).model_copy(deep=True)
+    def ambiguous_method(workspace, inputs):
+        report = draft(workspace, inputs).model_copy(deep=True)
         line = report.lines[0]
         # The lab has a gloss declaration, but no declaration can be selected
         # until this test's ambiguous method identity is resolved.
@@ -240,18 +302,25 @@ def test_pending_method_identity_does_not_report_lab_values_as_missing(client, m
         line.capability = None
         line.unknown_methods = ["Method identity needs confirmation"]
         line.requirement.special_instructions.append("Use the buyer's special sample holder.")
+        # A report line is a detached presentation copy. Keep the captured
+        # source consistent with the simulated input; derived comparisons now
+        # normalize that captured source with its physical PDF evidence.
+        captured = next(
+            row
+            for row in report.source_run.extraction.requirements
+            if row.id == line.requirement.id
+        )
+        captured.special_instructions.append("Use the buyer's special sample holder.")
         return report
 
-    monkeypatch.setattr(Workspace, "draft", ambiguous_method)
+    monkeypatch.setattr(Workspace, "draft_from_inputs", ambiguous_method)
     response = http.get(f"/api/comparisons/{source.document_id}")
 
     assert response.status_code == 200, response.text
     result = response.json()["requirements"][0]["comparison"]
     assert result["checks"][0]["status"] == "unknown"
     parsed = [
-        check
-        for check in result["checks"]
-        if check["parameter_id"] in {"gloss", "gloss_retention"}
+        check for check in result["checks"] if check["parameter_id"] in {"gloss", "gloss_retention"}
     ]
     assert parsed
     assert all(check["declared"] == "Not compared: confirm test/method" for check in parsed)
@@ -286,7 +355,7 @@ def test_lab_update_changes_new_comparison_without_reextracting_or_rewriting_his
     assert new["comparison"]["status"] == "fully_matched"
     frozen = http.get(f"/api/comparison-snapshots/{before['comparison_id']}/json")
     assert frozen.status_code == 200
-    assert frozen.json() == before
+    assert frozen.json() == _machine_snapshot(before)
     assert FileSpecStore(root).load_extraction(source.document_id, run.run_id) == run
     assert len(FileSpecStore(root).list_extractions(source.document_id)) == 1
 
@@ -295,7 +364,7 @@ def test_saved_comparison_exports_use_same_frozen_json_and_pdf(client, monkeypat
     http, root = client
     source, _ = _seed(root)
     saved = http.get(f"/api/comparisons/{source.document_id}").json()
-    comparison_id = saved["comparison_id"]
+    comparison_id = saved["export_snapshot_id"]
     endpoint = f"/api/comparison-snapshots/{comparison_id}"
     first = http.get(endpoint + "/pdf?download=true")
     assert first.status_code == 200
@@ -304,7 +373,10 @@ def test_saved_comparison_exports_use_same_frozen_json_and_pdf(client, monkeypat
     assert first.content.startswith(b"%PDF-")
     info = http.get(endpoint)
     assert info.status_code == 200
-    assert info.json()["comparison"] == saved
+    exported = info.json()["comparison"]
+    assert exported["machine_comparison_id"] == saved["comparison_id"]
+    assert exported["requirements"] == saved["requirements"]
+    assert exported["summary"] == saved["summary"]
     assert 1 <= info.json()["page_count"] <= 6
     preview = http.get(endpoint + "/pages/1")
     assert preview.status_code == 200
@@ -312,7 +384,7 @@ def test_saved_comparison_exports_use_same_frozen_json_and_pdf(client, monkeypat
     rendered_page = pymupdf.Pixmap(preview.content)
     assert 1000 <= rendered_page.width <= 2000
     assert 1000 <= rendered_page.height <= 2000
-    assert http.get(endpoint + "/json").json() == saved
+    assert http.get(endpoint + "/json").json() == exported
 
     def reject_rerender(_payload):
         pytest.fail("Downloading a saved PDF must reuse its frozen bytes.")
@@ -442,23 +514,23 @@ def test_comparison_rejects_concurrent_input_changes_without_publishing_mixed_sn
     client, monkeypatch, changed
 ):
     """An analysis/edit completing during comparison must not mix source versions."""
-    import scione.library.workspace as library_workspace
+    from scione.api.workspace import Workspace
 
     http, root = client
     source, initial = _seed(root)
     newer = initial.model_copy(update={"run_id": str(uuid4())}, deep=True)
     specs = FileSpecStore(root)
-    original_normalize = library_workspace.normalize_requirement
+    original_source = Workspace.comparison_source
     changed_once = False
 
-    def change_while_normalizing(requirement):
+    def change_while_normalizing(workspace, document_id, run, **normalization_options):
         nonlocal changed_once
         if not changed_once:
             changed_once = True
             if changed == "extraction":
                 specs.save_extraction(source.document_id, newer)
             elif changed == "lab":
-                labs = FileLabStore(root, load_reference_catalog(), seed_demo=False)
+                labs = SQLLabStore(LibraryStore(root), load_reference_catalog(), legacy_root=root)
                 lab = labs.load_or_create()
                 lab.description = "A concurrent lab edit."
                 labs.save(lab)
@@ -481,9 +553,9 @@ def test_comparison_rejects_concurrent_input_changes_without_publishing_mixed_sn
                     record["version"],
                 )
                 archive.close()
-        return original_normalize(requirement)
+        return original_source(workspace, document_id, run, **normalization_options)
 
-    monkeypatch.setattr(library_workspace, "normalize_requirement", change_while_normalizing)
+    monkeypatch.setattr(Workspace, "comparison_source", change_while_normalizing)
     rejected = http.get(f"/api/comparisons/{source.document_id}")
     assert changed_once
     assert rejected.status_code == 409, rejected.text
@@ -493,10 +565,158 @@ def test_comparison_rejects_concurrent_input_changes_without_publishing_mixed_sn
     archive.close()
 
     # Retrying once inputs are stable produces one source-consistent snapshot.
-    monkeypatch.setattr(library_workspace, "normalize_requirement", original_normalize)
+    monkeypatch.setattr(Workspace, "comparison_source", original_source)
     retried = http.get(f"/api/comparisons/{source.document_id}")
     assert retried.status_code == 200, retried.text
     saved = retried.json()
     expected_run = newer.run_id if changed == "extraction" else initial.run_id
     assert saved["document"]["run_id"] == saved["source_run_id"] == expected_run
-    assert http.get(f"/api/comparison-snapshots/{saved['comparison_id']}/json").json() == saved
+    assert http.get(f"/api/comparison-snapshots/{saved['comparison_id']}/json").json() == (
+        _machine_snapshot(saved)
+    )
+
+
+def test_remove_library_version_hides_selectors_and_preserves_history(client):
+    http, root = client
+    source, run = _seed(root)
+    before = http.get(f"/api/library/{source.document_id}").json()
+    report = http.get(f"/api/comparisons/{source.document_id}").json()
+    original = FileSpecStore(root).read_pdf(source.document_id)
+    removal = http.request(
+        "DELETE",
+        f"/api/library/{source.document_id}",
+        json={"version": before["document"]["version"]},
+    )
+    assert removal.status_code == 200, removal.text
+    assert removal.json()["archived"] is True
+    assert http.get("/api/library").json()["documents"] == []
+    assert http.get("/api/workspace").json()["documents"] == []
+    assert http.get("/api/specifications").json() == []
+    assert FileSpecStore(root).read_pdf(source.document_id) == original
+    assert FileSpecStore(root).load_extraction(source.document_id, run.run_id) == run
+    saved = http.get(f"/api/comparison-snapshots/{report['comparison_id']}/json")
+    assert saved.status_code == 200
+    assert saved.json() == _machine_snapshot(report)
+    stale = http.request(
+        "DELETE",
+        f"/api/library/{source.document_id}",
+        json={"version": before["document"]["version"]},
+    )
+    assert stale.status_code == 409
+    reopened = LibraryStore(root)
+    assert reopened.archived_document_ids() == {source.document_id}
+    reopened.close()
+    restored = http.post(
+        f"/api/library/{source.document_id}/restore", json={"version": removal.json()["version"]}
+    )
+    assert restored.status_code == 200
+    assert http.get("/api/library").json()["documents"][0]["document_id"] == source.document_id
+
+
+def test_removing_one_version_keeps_the_other_version_and_reupload_restores(client):
+    http, root = client
+    first, _ = _seed(root, "Issue A")
+    second, _ = _seed(root, "Issue B")
+    first_meta = http.get(f"/api/library/{first.document_id}").json()["document"]
+    http.get(f"/api/library/{second.document_id}")
+    removed = http.request(
+        "DELETE", f"/api/library/{first.document_id}", json={"version": first_meta["version"]}
+    )
+    assert removed.status_code == 200
+    assert {r["document_id"] for r in http.get("/api/library").json()["documents"]} == {
+        second.document_id
+    }
+    pdf = FileSpecStore(root).read_pdf(first.document_id)
+    imported = http.post(
+        "/api/specifications", files={"file": ("customer-Issue-A.pdf", pdf, "application/pdf")}
+    )
+    assert imported.status_code == 200
+    assert imported.json()["document_id"] == first.document_id
+    assert len(http.get("/api/specifications").json()) == 2
+
+
+def _assessment_review_body(assessment, requirement_id, **changes):
+    return {
+        "comparison_id": assessment["comparison_id"],
+        "input_fingerprint": assessment["report_input_fingerprint"],
+        "requirement_id": requirement_id,
+        "expected_version": 0,
+        "review_status": "accepted",
+        "decision": "keep",
+        "note": "",
+        **changes,
+    }
+
+
+def test_assessment_review_persists_without_overwriting_machine_checks(client):
+    http, root = client
+    source, run = _seed(root)
+    path = f"/api/comparisons/{source.document_id}"
+    original = http.get(path).json()
+    target = original["requirements"][0]
+    before_source = http.get(f"/api/specifications/{source.document_id}").json()["run"]
+    body = _assessment_review_body(original, target["requirement_id"])
+    accepted = http.post(path + "/reviews", json=body)
+    assert accepted.status_code == 200, accepted.text
+    updated = accepted.json()
+    assert updated["comparison_id"] == original["comparison_id"]
+    assert updated["requirements"] == original["requirements"]
+    assert updated["summary"] == original["summary"]
+    review = updated["assessment_reviews"][target["requirement_id"]]
+    assert review["review_status"] == "accepted"
+    assert review["machine_status"] == target["comparison"]["status"]
+    assert review["version"] == 1
+    assert http.get(path).json()["assessment_reviews"] == updated["assessment_reviews"]
+    assert http.get(f"/api/specifications/{source.document_id}").json()["run"] == before_source
+    # Stored machine JSON remains immutable, including after later reviewer decisions.
+    frozen = http.get(f"/api/comparison-snapshots/{original['comparison_id']}/json").json()
+    assert frozen == _machine_snapshot(original)
+    followup = http.post(
+        path + "/reviews",
+        json={
+            **body,
+            "expected_version": 1,
+            "decision": "outsource",
+            "note": "Ask a partner about the missing post-cycle output; price not confirmed.",
+        },
+    )
+    assert followup.status_code == 200, followup.text
+    assert followup.json()["requirements"] == original["requirements"]
+    history = http.get(path + "/reviews?download=true")
+    assert history.status_code == 200
+    assert "attachment" in history.headers["content-disposition"]
+    assert [row["version"] for row in history.json()["events"]] == [1, 2]
+    assert history.json()["events"][-1]["decision"] == "outsource"
+    assert http.post(path + "/reviews", json=body).status_code == 409
+    assert len(http.get(path + "/reviews").json()["events"]) == 2
+
+
+def test_assessment_review_invalidates_on_changed_lab_and_rejects_stale_acceptance(client):
+    http, root = client
+    source, _run = _seed(root)
+    path = f"/api/comparisons/{source.document_id}"
+    original = http.get(path).json()
+    body = _assessment_review_body(original, original["requirements"][0]["requirement_id"])
+    assert http.post(path + "/reviews", json=body).status_code == 200
+    lab = http.get("/api/lab").json()
+    lab["description"] = "Updated lab declaration invalidates the old assessment review."
+    saved = http.put("/api/lab", json=lab)
+    assert saved.status_code == 200, saved.text
+    current = http.get(path).json()
+    assert current["comparison_id"] != original["comparison_id"]
+    assert not current.get("assessment_reviews")
+    assert http.post(path + "/reviews", json={**body, "expected_version": 1}).status_code == 409
+
+
+def test_assessment_followup_requires_note_and_valid_owned_test(client):
+    http, root = client
+    source, _run = _seed(root)
+    path = f"/api/comparisons/{source.document_id}"
+    original = http.get(path).json()
+    body = _assessment_review_body(original, original["requirements"][0]["requirement_id"])
+    assert http.post(path + "/reviews", json={**body, "decision": "decline"}).status_code == 422
+    assert (
+        http.post(path + "/reviews", json={**body, "requirement_id": "other-test"}).status_code
+        == 400
+    )
+    assert http.get(path + "/reviews").json()["events"] == []

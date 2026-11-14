@@ -6,6 +6,7 @@ from scione.config import ConfigurationError, Settings
 from scione.providers.base import ModelProvider
 from scione.providers.gemini import GeminiModelProvider
 from scione.providers.groq import GroqModelProvider
+from scione.providers.openai_compatible import OpenAICompatibleModelProvider
 
 
 def create_configured_provider(
@@ -38,6 +39,20 @@ def create_configured_provider(
             max_output_tokens=settings.gemini_max_output_tokens,
             temperature=settings.gemini_temperature,
             thinking_level=settings.gemini_thinking_level,
+        )
+    if selected_provider in {"fireworks", "sail"}:
+        return OpenAICompatibleModelProvider(
+            provider_name=selected_provider,
+            api_key=settings.require_api_key(selected_provider),
+            model_name=model_name or getattr(settings, f"{selected_provider}_model"),
+            timeout_seconds=getattr(settings, f"{selected_provider}_timeout_seconds"),
+            max_output_tokens=getattr(settings, f"{selected_provider}_max_output_tokens"),
+            temperature=getattr(settings, f"{selected_provider}_temperature"),
+            **(
+                {"reasoning_effort": settings.fireworks_reasoning_effort}
+                if selected_provider == "fireworks"
+                else {}
+            ),
         )
     raise ConfigurationError(
         f"Unsupported provider={selected_provider!r}. "

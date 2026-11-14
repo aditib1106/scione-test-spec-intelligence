@@ -19,11 +19,18 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    from scione.auth.accounts_cli import configure_cli
+
+    configure_cli(subparsers)
 
     serve_parser = subparsers.add_parser(
         "serve", help="Run the local MUI workspace and its Python API. Build frontend first."
     )
     serve_parser.add_argument("--port", type=int, default=8000, help="Local HTTP port.")
+
+    subparsers.add_parser(
+        "database-upgrade", help="Apply additive SQL lab-storage migrations; preserve saved data."
+    )
 
     ingest_parser = subparsers.add_parser(
         "ingest",
@@ -57,10 +64,84 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
+    if args.command == "accounts":
+        import os
+
+        from sqlalchemy.exc import SQLAlchemyError
+
+        from scione.api.tenancy import TenantWorkspaceRegistry
+        from scione.auth.accounts_cli import run_command
+        from scione.auth.store import AuthStoreError
+        from scione.config import ConfigurationError, Settings
+        from scione.deployment import (
+            prepare_data_directory,
+            prepare_host_environment,
+            provision_callback,
+        )
+
+        registry = None
+        try:
+            if os.environ.get("RAILWAY_SERVICE_ID") or (
+                os.environ.get("SCIONE_ENVIRONMENT") == "production"
+            ):
+                prepare_host_environment()
+            settings = Settings()
+            if settings.scione_environment == "production":
+                # An operator's new Docker exec process starts with its own
+                # environment and UID. Match hosted startup before any account
+                # or tenant files are created, including the privilege drop.
+                prepare_data_directory(settings)
+            registry = TenantWorkspaceRegistry(settings)
+            return run_command(args, settings, provision_callback(registry))
+        except (
+            ConfigurationError,
+            AuthStoreError,
+            ValueError,
+            SQLAlchemyError,
+            OSError,
+        ):
+            print("Account operation failed. Check the private server and storage configuration.")
+            return 1
+        finally:
+            if registry is not None:
+                registry.close_all()
+
     if args.command == "serve":
         import uvicorn
 
         uvicorn.run("scione.api.app:app", host="127.0.0.1", port=args.port)
+        return 0
+
+    if args.command == "database-upgrade":
+        from sqlalchemy.exc import SQLAlchemyError
+
+        from scione.catalogs.sql_lab_store import upgrade_lab_schema
+        from scione.config import Settings
+        from scione.library.assessment_reviews import upgrade_assessment_reviews_schema
+        from scione.library.store import LibraryStore, LibraryStoreError
+        from scione.matching.store import upgrade_matching_schema
+        from scione.monitoring.store import upgrade_monitoring_schema
+        from scione.specifications.corrections import upgrade_corrections_schema
+
+        settings = Settings()
+        store = LibraryStore(
+            settings.scione_workspace_dir,
+            settings.scione_database_url.get_secret_value()
+            if settings.scione_database_url
+            else None,
+        )
+        try:
+            upgrade_lab_schema(store)
+            upgrade_matching_schema(store)
+            upgrade_corrections_schema(store)
+            upgrade_assessment_reviews_schema(store)
+            upgrade_monitoring_schema(store)
+        except (LibraryStoreError, SQLAlchemyError):
+            print("Database upgrade failed. Check connection settings; saved data is preserved.")
+            return 1
+        finally:
+            store.close()
+        print("SQL lab-storage schema is up to date. Existing archive records were preserved.")
         return 0
 
     if args.command == "reset-demo":

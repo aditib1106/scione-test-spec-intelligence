@@ -1,0 +1,747 @@
+{
+  "schema_version": "1.0",
+  "reference_id": "model_authored_corpus_lab_v2",
+  "authoring_status": "Codex/source-authored development reference; not human/client-validated gold.",
+  "scope": "Selected source-cited business assertions, not exhaustive extraction accuracy labels or a forced per-document distribution.",
+  "frozen_before_inference": true,
+  "lab_policy_sha256": "88cb4c9018c6ed376ed8444278627aadf8efb3b1bfaf4925cabb686d4e8f3a5f",
+  "baseline_sha256": "8f080d07213e4a402ea8f75c15aefed0bc0d73b4411cbb3778e3134d2c5be7f2",
+  "documents": [
+    {
+      "document_code": "CSP-EN-301",
+      "file_name": "CSP-EN-301.pdf",
+      "source_sha256": "f2e64188ba1a3c61357df7956c4b456e1bc914ff2fe2a17b0552978c2f5b830c",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "csp-en-301_01",
+          "parameter": "cycles",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "five cycles between -20 °C for two hours and 70 °C for two hours",
+          "reason": "Thermal chamber supports1–30cycles and−30..90°C;5cycles is within its declared range."
+        },
+        {
+          "id": "csp-en-301_02",
+          "parameter": "gloss_retention",
+          "expected": "gap",
+          "source_page": 2,
+          "source_quote": "each location must retain at least 90%",
+          "reason": "The lab explicitly does not offer post-cycle site-wise gloss retention."
+        },
+        {
+          "id": "csp-en-301_03",
+          "parameter": "color_difference",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "ISO 60570:2025",
+          "reason": "Exact colour method registered, D65/reference-panel service and CIE reporting offered."
+        },
+        {
+          "id": "csp-en-301_04",
+          "parameter": "film_thickness",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "ISO 60152:2025",
+          "reason": "Exact dry-film method and separate topcoat measurement service are registered."
+        }
+      ]
+    },
+    {
+      "document_code": "CSP-EN-302",
+      "file_name": "CSP-EN-302.pdf",
+      "source_sha256": "d8286cdddc6708e5f38af8e95b445c9b3f4db0a94d5f55395a8e2a996257bba8",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "csp-en-302_01",
+          "parameter": "duration",
+          "expected": "gap",
+          "source_page": 2,
+          "source_quote": "720 cumulative hours",
+          "reason": "Salt-fog cabinet is limited to600h;720h cannot be marked covered."
+        },
+        {
+          "id": "csp-en-302_02",
+          "parameter": "film_thickness",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "160-210 μm",
+          "reason": "Dry-film thickness reporting5–1000µm covers the customer measurement window."
+        },
+        {
+          "id": "csp-en-302_03",
+          "parameter": "coating_creep",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "the panel mean may not exceed 1.5 mm",
+          "reason": "Creep imaging reports0–20mm per station with panel means/maxima; this alone does not resolve the upstream720h exposure gap."
+        },
+        {
+          "id": "csp-en-302_04",
+          "parameter": "custom_appearance",
+          "expected": "needs_information",
+          "source_page": 2,
+          "source_quote": "satisfactory review",
+          "reason": "Satisfactory punched-edge appearance has no defined criterion or lab declaration."
+        }
+      ]
+    },
+    {
+      "document_code": "CSP-EN-303",
+      "file_name": "CSP-EN-303.pdf",
+      "source_sha256": "e61de70fa20a949fa20655240e6548d9727912647f867b14d44767d6689be58f",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "csp-en-303_01",
+          "parameter": "compression_set",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "25% nominal compression for 22 hours at 100 ± 2 °C",
+          "reason": "BaselineASTMD1025 is registered;10–40%compression,50–150°C and1–100h limits cover the operating condition."
+        },
+        {
+          "id": "csp-en-303_02",
+          "parameter": "method",
+          "expected": "not_offered",
+          "source_page": 1,
+          "source_quote": "ASTM D1065-26",
+          "reason": "The separately requested aged-coupon method is intentionally not registered; it must not borrow baseline method support."
+        },
+        {
+          "id": "csp-en-303_03",
+          "parameter": "test_identity",
+          "expected": "informational",
+          "source_page": 1,
+          "source_quote": "rings for identification and geometry records only",
+          "reason": "Retained door rings are not a separate assembled-door fit test."
+        }
+      ]
+    },
+    {
+      "document_code": "CSP-EN-304",
+      "file_name": "CSP-EN-304.pdf",
+      "source_sha256": "90b0dcf45238f5789fde94df9d25fdf6437d843a865147b55960ce0e8d4f63e3",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "csp-en-304_01",
+          "parameter": "temperature",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "tests at -20 ± 2 °C",
+          "reason": "Charpy coldconditioning−40..30°C covers the stated interval."
+        },
+        {
+          "id": "csp-en-304_02",
+          "parameter": "transfer_time",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "within five seconds",
+          "reason": "A1–3s transfer service can satisfy a maximum5s transfer deadline."
+        },
+        {
+          "id": "csp-en-304_03",
+          "parameter": "method",
+          "expected": "not_offered",
+          "source_page": 2,
+          "source_quote": "ASTM E1075-25",
+          "reason": "Vickers microhardness is intentionally absent; Rockwell must not substitute."
+        }
+      ]
+    },
+    {
+      "document_code": "CSP-EN-305",
+      "file_name": "CSP-EN-305.pdf",
+      "source_sha256": "e9819ea952d28bd98e2f5d00ec87cabdb11bf4a18889729fa6918fcc8fa6a732",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "csp-en-305_01",
+          "parameter": "cycles",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "ten back-and-forth strokes",
+          "reason": "Rub apparatus supports1–50strokes; dry/wet states and half grades can be reported."
+        },
+        {
+          "id": "csp-en-305_02",
+          "parameter": "method",
+          "expected": "not_offered",
+          "source_page": 1,
+          "source_quote": "ISO 61030:2023",
+          "reason": "Martindale pilling is intentionally not offered."
+        },
+        {
+          "id": "csp-en-305_03",
+          "parameter": "laundering",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "five times using our supplied detergent at a 40 °C cycle",
+          "reason": "Laundry service20–60°C and1–10cycles with customer detergent and line drying is offered."
+        }
+      ]
+    },
+    {
+      "document_code": "CSP-EN-306",
+      "file_name": "CSP-EN-306.pdf",
+      "source_sha256": "a037345a99e1771eac8a6a4cd8dc77191c09425bb5388655ba9943d0e6fe4836",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "csp-en-306_01",
+          "parameter": "method",
+          "expected": "not_offered",
+          "source_page": 2,
+          "source_quote": "ISO 60967:2026",
+          "reason": "Dielectric breakdown is intentionally not offered and cannot borrow resistance support."
+        },
+        {
+          "id": "csp-en-306_02",
+          "parameter": "insulation_resistance",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "apply 500 V DC, and read after 60 s",
+          "reason": "Resistance service100–1000V and10–120s covers this voltage/time."
+        },
+        {
+          "id": "csp-en-306_03",
+          "parameter": "water_aging",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "40 ± 2 °C for 168 hours",
+          "reason": "Resistance conditioning supports15–60°C water and1–240h; water exposure is not silently equated to a humidity-only procedure."
+        }
+      ]
+    },
+    {
+      "document_code": "CSP-EN-307",
+      "file_name": "CSP-EN-307.pdf",
+      "source_sha256": "a79a449e198ea99ad80a0401f05971635f53b0898a80599ad0e99d8b26c07dc0",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "csp-en-307_01",
+          "parameter": "ph",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "acceptable pH interval is 6.8-7.6",
+          "reason": "pH0–14 reporting at15–35°C supports assessing the customer window, not predicting sample compliance."
+        },
+        {
+          "id": "csp-en-307_02",
+          "parameter": "lead_concentration",
+          "expected": "gap",
+          "source_page": 2,
+          "source_quote": "Pb <=5 μg/L",
+          "reason": "Dissolvedlead reportinglimit is10µg/L, insufficient to assess a5µg/L threshold."
+        },
+        {
+          "id": "csp-en-307_03",
+          "parameter": "turbidity",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "Cloudiness may not exceed 1.2 NTU",
+          "reason": "Unfiltered nephelometric turbidity reporting0.02–1000NTU includes1.2NTU."
+        }
+      ]
+    },
+    {
+      "document_code": "CSP-EN-308",
+      "file_name": "CSP-EN-308.pdf",
+      "source_sha256": "a4dc78216fa9ee3afee17ca260d39b864a6bf9c0b51ef082f3c7ac0830596351",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "csp-en-308_01",
+          "parameter": "method",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "ASTM D1012-17",
+          "reason": "Ambient notchedABS impact service is registered."
+        },
+        {
+          "id": "csp-en-308_02",
+          "parameter": "pressure",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "0.45 MPa flexural stress",
+          "reason": "HDT stress0.1–2MPa covers0.45MPa."
+        },
+        {
+          "id": "csp-en-308_03",
+          "parameter": "heat_deflection_temperature",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "at least 87 °C",
+          "reason": "HDT reporting20–180°C can assess87°C; the lab does not guarantee that ABS passes."
+        }
+      ]
+    },
+    {
+      "document_code": "CSP-EN-309",
+      "file_name": "CSP-EN-309.pdf",
+      "source_sha256": "73f6f526da77a98409cea75dd5d34ed6a36be7d696fa472103e45797b28b1c79",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "csp-en-309_01",
+          "parameter": "element_migration",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "Pb <=12 mg/kg, Cd <=3 mg/kg and Cr <=25 mg/kg",
+          "reason": "Pb/Cd0.1–1000mg/kg andCr0.5–1000mg/kg reporting can assess the stated thresholds."
+        },
+        {
+          "id": "csp-en-309_02",
+          "parameter": "method",
+          "expected": "not_offered",
+          "source_page": 1,
+          "source_quote": "ASTM F1151-24",
+          "reason": "Finished-toy mechanical impact rig is intentionally not offered."
+        },
+        {
+          "id": "csp-en-309_03",
+          "parameter": "test_identity",
+          "expected": "informational",
+          "source_page": 2,
+          "source_quote": "not separate compression, torque or cotton-swab test methods",
+          "reason": "These rejected interpretations must not become invented requested tests."
+        }
+      ]
+    },
+    {
+      "document_code": "CSP-EN-310",
+      "file_name": "CSP-EN-310.pdf",
+      "source_sha256": "66b421e340a281a137e998aa7c067338fa010a92f6fd551e93145f3324a589bd",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "csp-en-310_01",
+          "parameter": "cycles",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "five cycles between 25 °C and 90 °C",
+          "reason": "Separator line supports1–20cycles at20–100°C."
+        },
+        {
+          "id": "csp-en-310_02",
+          "parameter": "temperature",
+          "expected": "gap",
+          "source_page": 2,
+          "source_quote": "105 ± 2 °C",
+          "reason": "Unrestrained hold capacity ends at100°C and cannot meet103–107°C."
+        },
+        {
+          "id": "csp-en-310_03",
+          "parameter": "edge_curl",
+          "expected": "needs_information",
+          "source_page": 2,
+          "source_quote": "edge curl standing more than 3 mm",
+          "reason": "No stand-off edge-curl measurement fixture/service is declared."
+        }
+      ]
+    },
+    {
+      "document_code": "CQS-ALC-026",
+      "file_name": "CQS-ALC-026 .pdf",
+      "source_sha256": "2dc4c1e45ced944791b0abe1913aa54409a27f4b5da89138ebd8d1d8c1a767f6",
+      "page_count": 3,
+      "assertions": [
+        {
+          "id": "cqs-alc-026_01",
+          "parameter": "film_thickness",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "单板均值须为 52–66 μm",
+          "reason": "Total-film reporting5–1000µm covers the mean measurement window; layer targets are process records."
+        },
+        {
+          "id": "cqs-alc-026_02",
+          "parameter": "duration",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "连续放置 240 h",
+          "reason": "Humidity line supports up to500h."
+        },
+        {
+          "id": "cqs-alc-026_03",
+          "parameter": "detached_grid_area",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "每一位置的涂层脱落面积不得超过 5.0 %",
+          "reason": "Cross-cut service includes per-location detached-area measurement0–100%, not merely a native grade."
+        }
+      ]
+    },
+    {
+      "document_code": "CQS-CON-033",
+      "file_name": "CQS-CON-033.pdf",
+      "source_sha256": "f814b41b82e754fb38cd37ca62d735d283d2779a47a773e7a54e779b2be5ab1b",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "cqs-con-033_01",
+          "parameter": "method",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "GB/T 52877-2022",
+          "reason": "The preferred concrete compression method is explicitly registered."
+        },
+        {
+          "id": "cqs-con-033_02",
+          "parameter": "compressive_strength",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "平均值不小于 38.0 MPa",
+          "reason": "Concrete strength1–150MPa reports individual readings and lot mean; this assesses the limit, not a pass promise."
+        },
+        {
+          "id": "cqs-con-033_03",
+          "parameter": "test_identity",
+          "expected": "informational",
+          "source_page": 2,
+          "source_quote": "Fracture mode is observed after compression, not a separate test method",
+          "reason": "Fracture-mode recording belongs to the compression test, not a second independent method."
+        }
+      ]
+    },
+    {
+      "document_code": "CQS-MAR-117",
+      "file_name": "CQS-MAR-117.pdf",
+      "source_sha256": "1a044991d27a3491cb2d078e99df2744077e72c5941485f54b950c4614602bdf",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "cqs-mar-117_01",
+          "parameter": "duration",
+          "expected": "gap",
+          "source_page": 1,
+          "source_quote": "连续暴露 720 h",
+          "reason": "The sharedsalt-fog service is limited to600h across all customers."
+        },
+        {
+          "id": "cqs-mar-117_02",
+          "parameter": "film_thickness",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "150–190 μm",
+          "reason": "Thickness measurement range5–1000µm covers the stated window."
+        },
+        {
+          "id": "cqs-mar-117_03",
+          "parameter": "coating_creep",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "平均蔓延值不大于 1.8 mm",
+          "reason": "Creep imaging0–20mm can assess this mean threshold; prior720h exposure remains a gap."
+        }
+      ]
+    },
+    {
+      "document_code": "CS-ABS-069",
+      "file_name": "CS-ABS-069.pdf",
+      "source_sha256": "d91f59d3563616ff11b51afe1a107027e843b1aa142eedfe6802e293d7400cc3",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "cs-abs-069_01",
+          "parameter": "cold_impact",
+          "expected": "gap",
+          "source_page": 1,
+          "source_quote": "each cold-conditioned specimen",
+          "reason": "The line explicitly does not offer impact specimens conditioned below0°C."
+        },
+        {
+          "id": "cs-abs-069_02",
+          "parameter": "impact_strength",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "each room-temperature specimen",
+          "reason": "Ambient Izod reporting0–100kJ/m² can assess9kJ/m²."
+        },
+        {
+          "id": "cs-abs-069_03",
+          "parameter": "heat_deflection_temperature",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "Every valid result must be at least 87 °C",
+          "reason": "HDT20–180°C and0.45MPa/2°C/min/0.25mm-capable setup cover the specified beam test."
+        }
+      ]
+    },
+    {
+      "document_code": "CS-AFT-241",
+      "file_name": "CS-AFT-241.pdf",
+      "source_sha256": "61e379776dd5f1e3438ff226ad9305e21cf36fa8656bc5252e2e8c25fd7e5d2a",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "cs-aft-241_01",
+          "parameter": "method",
+          "expected": "not_offered",
+          "source_page": 2,
+          "source_quote": "ISO 60212:2019",
+          "reason": "No xenon chamber is offered; a colour meter alone cannot deliver the exposure."
+        },
+        {
+          "id": "cs-aft-241_02",
+          "parameter": "color_difference",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "45° ΔE*ab is at most 0.75",
+          "reason": "Explicit multiangleD65/10° colour service with0–20DeltaE reporting can assess the threshold."
+        },
+        {
+          "id": "cs-aft-241_03",
+          "parameter": "topcoat_thickness",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "42–52 μm",
+          "reason": "Separatelayer5–300µm and total-film5–1000µm services are both offered."
+        }
+      ]
+    },
+    {
+      "document_code": "CS-PEL-218",
+      "file_name": "CS-PEL-218.pdf",
+      "source_sha256": "ca6da5e61273eb016837fb3ad5340657805f20f01331168ba0cea1d4761019b0",
+      "page_count": 3,
+      "assertions": [
+        {
+          "id": "cs-pel-218_01",
+          "parameter": "immersion",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "40 ± 2 °C for 72 h",
+          "reason": "Cross-cut preparation immersion15–60°C and1–168h covers the required water conditioning."
+        },
+        {
+          "id": "cs-pel-218_02",
+          "parameter": "duration",
+          "expected": "supported",
+          "source_page": 3,
+          "source_quote": "240 continuous hours",
+          "reason": "Humidity chamber supports1–500h and30–60°C."
+        },
+        {
+          "id": "cs-pel-218_03",
+          "parameter": "gloss_retention",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "R not less than 90.0 %",
+          "reason": "Humidity retention from panel means is offered; this must not be confused with unavailable thermal-cycle site retention."
+        }
+      ]
+    },
+    {
+      "document_code": "ESP-MET-044",
+      "file_name": "ESP-MET-044.pdf",
+      "source_sha256": "f042e51ea2c064f86d47677abfb7e242a727ad49800957a439bb8134c12677ce",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "esp-met-044_01",
+          "parameter": "tensile_strength",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "860 ≤ Rm ≤ 1.020 MPa",
+          "reason": "Strength reporting50–2000MPa can assess the Spanish grouped1020MPa upperbound."
+        },
+        {
+          "id": "esp-met-044_02",
+          "parameter": "rockwell_hardness",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "29 a 34 HRC",
+          "reason": "RockwellC20–70HRC is declared independently from Vickers."
+        },
+        {
+          "id": "esp-met-044_03",
+          "parameter": "temperature",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "−20 ± 2 °C",
+          "reason": "ColdCharpy range−40..30°C covers this customer conditioning."
+        }
+      ]
+    },
+    {
+      "document_code": "JCS-ELC-153",
+      "file_name": "JCS-ELC-153.pdf",
+      "source_sha256": "1c1a562ffcfd9ff423ef42c721323c80cb6ccf4a327642929569b3778e8fabba",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "jcs-elc-153_01",
+          "parameter": "method",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "ISO 60096:2024",
+          "reason": "IP54 assembled-enclosure dust/spray service is registered."
+        },
+        {
+          "id": "jcs-elc-153_02",
+          "parameter": "measurement_resolution",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "最小表示 1 mg",
+          "reason": "A1mg balance and0–1000mg paper-mass reporting are explicitly declared."
+        },
+        {
+          "id": "jcs-elc-153_03",
+          "parameter": "custom_resistance_voltage",
+          "expected": "needs_information",
+          "source_page": 2,
+          "source_quote": "規定の測定電圧",
+          "reason": "The assembled-unit resistance test voltage is unspecified and cannot borrow a cable-jacket service without review."
+        },
+        {
+          "id": "jcs-elc-153_04",
+          "parameter": "custom_functional_checks",
+          "expected": "needs_information",
+          "source_page": 2,
+          "source_quote": "電源投入、表示、スイッチ入力および通信",
+          "reason": "No customer-specific electronic functional fixture/protocol is declared."
+        }
+      ]
+    },
+    {
+      "document_code": "KSV-COR-071",
+      "file_name": "KSV-COR-071.pdf",
+      "source_sha256": "b0da6f4200a77d239ee192375d571d167809dd7d1cc82da0c6dd4da7c24906aa",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "ksv-cor-071_01",
+          "parameter": "duration",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "Soll-Beanspruchungsdauer von 600 h",
+          "reason": "Salt-fog capacity reaches600h; this differs from the720h marine customer."
+        },
+        {
+          "id": "ksv-cor-071_02",
+          "parameter": "cycles",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "acht Zyklen zwischen −20 ± 2 °C",
+          "reason": "Thermal line supports1–30cycles across−30..90°C."
+        },
+        {
+          "id": "ksv-cor-071_03",
+          "parameter": "detached_grid_area",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "höchstens 4,0 % je Messort",
+          "reason": "Per-site area0–100% can be reported alongside native class without grade conversion."
+        }
+      ]
+    },
+    {
+      "document_code": "KSV-RUB-082",
+      "file_name": "KSV-RUB-082.pdf",
+      "source_sha256": "1cb5ab30bf07adbee181a56e32a504bbba244878d45577cb493cf5b1755f1cd0",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "ksv-rub-082_01",
+          "parameter": "shore_a_hardness",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "67 bis 73 Shore A",
+          "reason": "ShoreA10–95 reporting covers the customer acceptance interval."
+        },
+        {
+          "id": "ksv-rub-082_02",
+          "parameter": "compression_set",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "70 h bei 100 ± 2 °C",
+          "reason": "Compressiondwell1–100h and50–150°C support this independent German request."
+        },
+        {
+          "id": "ksv-rub-082_03",
+          "parameter": "aging",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "90 ± 2 °C gealtert",
+          "reason": "Unloadedhardness aging30–120°C up to240h covers168h."
+        },
+        {
+          "id": "ksv-rub-082_04",
+          "parameter": "custom_water_leak",
+          "expected": "needs_information",
+          "source_page": 2,
+          "source_quote": "Differenzdruck von 30 kPa über 20 min",
+          "reason": "No complete-seal water-leak fixture and clamp geometry are declared."
+        }
+      ]
+    },
+    {
+      "document_code": "SPC-EAU-095",
+      "file_name": "SPC-EAU-095.pdf",
+      "source_sha256": "5efa34eada7b59e89a75dc32954db6b5d94ae087125d59bca8dddaf033e46738",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "spc-eau-095_01",
+          "parameter": "ph",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "pH compris entre 6,8 et 7,6",
+          "reason": "pH0–14 reporting at sample temperature is declared; comma decimals are not separate numbers."
+        },
+        {
+          "id": "spc-eau-095_02",
+          "parameter": "turbidity",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "limite est fixée à 0,80 NTU",
+          "reason": "Reportinglowerlimit0.02NTU permits comparison with0.80NTU."
+        },
+        {
+          "id": "spc-eau-095_03",
+          "parameter": "metals",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "Fe ≤ 80 μg/L, Cu ≤ 30 μg/L et Zn ≤ 120 μg/L",
+          "reason": "Fe/Cu/Zn reporting1–10000µg/L is sufficient; no Pb5µg/L limit is requested here."
+        }
+      ]
+    },
+    {
+      "document_code": "SPC-TEX-064",
+      "file_name": "SPC-TEX-064.pdf",
+      "source_sha256": "760a35a5c2843e20a0b539c658e8716941e13b06d0c44287e8efdc20e09948ef",
+      "page_count": 2,
+      "assertions": [
+        {
+          "id": "spc-tex-064_01",
+          "parameter": "staining_grade",
+          "expected": "supported",
+          "source_page": 1,
+          "source_quote": "au minimum 4,0 à sec et 3,5 en humide",
+          "reason": "Dry/wet five-step nativegrades include halfsteps and separate specimen records."
+        },
+        {
+          "id": "spc-tex-064_02",
+          "parameter": "tensile_force",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "au moins 820 N en chaîne et 510 N en trame",
+          "reason": "Stripforce1–5000N and separatewarp/weft rawrecords support assessment."
+        },
+        {
+          "id": "spc-tex-064_03",
+          "parameter": "laundering",
+          "expected": "supported",
+          "source_page": 2,
+          "source_quote": "cinq cycles d’entretien à 40 °C",
+          "reason": "Laundry service1–10cycles at20–60°C covers this customer schedule."
+        }
+      ]
+    }
+  ]
+}

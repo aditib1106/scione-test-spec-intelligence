@@ -6,6 +6,7 @@ import json
 from time import perf_counter
 from typing import Any, Literal
 
+import httpx
 from google import genai
 from google.genai import errors, types
 
@@ -16,6 +17,7 @@ from scione.providers.base import (
     StructuredGenerationResponse,
     TokenUsage,
 )
+from scione.providers.json_output import loads_exact
 
 
 def _prepare_gemini_schema(value: Any) -> Any:
@@ -46,11 +48,27 @@ def _safe_api_error_message(exc: errors.APIError) -> str:
 
     details = [f"HTTP {code}"] if code is not None else []
     status = getattr(exc, "status", None)
-    if status:
-        details.append(str(status))
-    message = getattr(exc, "message", None)
-    if isinstance(message, str) and message:
-        details.append(message[:500])
+    if isinstance(status, str) and status in {
+        "CANCELLED",
+        "UNKNOWN",
+        "INVALID_ARGUMENT",
+        "DEADLINE_EXCEEDED",
+        "NOT_FOUND",
+        "ALREADY_EXISTS",
+        "PERMISSION_DENIED",
+        "UNAUTHENTICATED",
+        "RESOURCE_EXHAUSTED",
+        "FAILED_PRECONDITION",
+        "ABORTED",
+        "OUT_OF_RANGE",
+        "UNIMPLEMENTED",
+        "INTERNAL",
+        "UNAVAILABLE",
+        "DATA_LOSS",
+    }:
+        details.append(status)
+    # API error messages can quote prompts, URLs or supplied credentials.
+    # Keep only recognized status metadata in the user-visible message.
     return ", ".join(details) or type(exc).__name__
 
 
@@ -109,57 +127,116 @@ class GeminiModelProvider(ModelProvider):
                 contents=request.user_prompt,
                 config=config,
             )
-            candidates = getattr(response, "candidates", None)
-            finish_reason = getattr(candidates[0], "finish_reason", None) if candidates else None
-            reason_value = getattr(finish_reason, "value", finish_reason)
-            if reason_value is not None and reason_value != "STOP":
-                # Restrict error text to SDK-defined metadata; never echo source output.
-                safe_reason = (
-                    reason_value
-                    if isinstance(reason_value, str)
-                    and reason_value in {reason.value for reason in types.FinishReason}
-                    else "UNKNOWN"
-                )
-                raise ProviderError(
-                    "Gemini did not complete structured generation "
-                    f"(finish_reason={safe_reason}). No structured result was accepted."
-                )
-            content = response.text
         except errors.APIError as exc:
             raise ProviderError(
-                f"Gemini API request failed ({_safe_api_error_message(exc)})."
+                f"Gemini API request failed ({_safe_api_error_message(exc)}).",
+                latency_ms=(perf_counter() - started) * 1000,
+                provider=self.provider_name,
+                model=self.model_name,
             ) from exc
+        except httpx.TransportError as exc:
+            # SDK transport failures may contain request URLs or headers. They
+            # still represent a failed attempt, not an exception that bypasses
+            # persistence. Do not expose or serialize the underlying request.
+            message = (
+                "Gemini request timed out without a usable response."
+                if isinstance(exc, httpx.TimeoutException)
+                else "Gemini request failed because of a network connection error."
+            )
+            raise ProviderError(
+                message,
+                latency_ms=(perf_counter() - started) * 1000,
+                provider=self.provider_name,
+                model=self.model_name,
+            ) from None
         except (TypeError, ValueError) as exc:
-            raise ProviderError(f"Gemini returned an unusable response: {exc}") from exc
+            raise ProviderError(
+                "Gemini returned an unusable response.",
+                latency_ms=(perf_counter() - started) * 1000,
+                provider=self.provider_name,
+                model=self.model_name,
+            ) from exc
 
         latency_ms = (perf_counter() - started) * 1000
-        if not content:
-            raise ProviderError("Gemini returned an empty structured response.")
-
-        try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError as exc:
-            raise ProviderError(f"Gemini returned invalid JSON: {exc}") from exc
-        if not isinstance(parsed, dict):
-            raise ProviderError("Gemini structured response must be a JSON object.")
-
         usage = getattr(response, "usage_metadata", None)
         candidate_tokens = getattr(usage, "candidates_token_count", None)
         thought_tokens = getattr(usage, "thoughts_token_count", None)
         output_tokens = None
         if candidate_tokens is not None or thought_tokens is not None:
             output_tokens = (candidate_tokens or 0) + (thought_tokens or 0)
-
-        return StructuredGenerationResponse(
-            provider=self.provider_name,
-            model=getattr(response, "model_version", None) or self.model_name,
-            raw_text=content,
-            parsed=parsed,
-            latency_ms=latency_ms,
-            usage=TokenUsage(
+        metadata = {
+            "provider": self.provider_name,
+            "model": getattr(response, "model_version", None) or self.model_name,
+            "latency_ms": latency_ms,
+            "usage": TokenUsage(
                 input_tokens=getattr(usage, "prompt_token_count", None),
                 output_tokens=output_tokens,
                 total_tokens=getattr(usage, "total_token_count", None),
             ),
-            provider_request_id=getattr(response, "response_id", None),
+            "provider_request_id": getattr(response, "response_id", None),
+        }
+        candidates = getattr(response, "candidates", None)
+        try:
+            content = response.text
+        except (AttributeError, TypeError, ValueError) as exc:
+            # Some SDK response.text accessors reject blocked/partial output.
+            # Retain only answer text parts, never thinking parts or the SDK object.
+            parts = (
+                getattr(getattr(candidates[0], "content", None), "parts", []) if candidates else []
+            )
+            text = "".join(
+                part.text
+                for part in (parts or [])
+                if isinstance(getattr(part, "text", None), str)
+                and not getattr(part, "thought", False)
+            )
+            raise ProviderError(
+                "Gemini returned an unusable structured response.",
+                raw_text=text or None,
+                **metadata,
+            ) from exc
+        if content is not None and not isinstance(content, str):
+            raise ProviderError("Gemini returned an unusable structured response.", **metadata)
+        finish_reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+        reason_value = getattr(finish_reason, "value", finish_reason)
+        if reason_value is not None and reason_value != "STOP":
+            # Restrict error text to SDK-defined metadata; never echo source output.
+            safe_reason = (
+                reason_value
+                if isinstance(reason_value, str)
+                and reason_value in {reason.value for reason in types.FinishReason}
+                else "UNKNOWN"
+            )
+            raise ProviderError(
+                "Gemini did not complete structured generation "
+                f"(finish_reason={safe_reason}). No structured result was accepted.",
+                raw_text=content,
+                **metadata,
+            )
+        if not content:
+            raise ProviderError(
+                "Gemini returned an empty structured response.", raw_text=content, **metadata
+            )
+
+        try:
+            parsed = loads_exact(content)
+        except ValueError as exc:
+            raise ProviderError(
+                (
+                    f"Gemini returned invalid JSON (line {exc.lineno}, column {exc.colno})."
+                    if isinstance(exc, json.JSONDecodeError)
+                    else "Gemini returned invalid or ambiguous JSON."
+                ),
+                raw_text=content,
+                **metadata,
+            ) from exc
+        if not isinstance(parsed, dict):
+            raise ProviderError(
+                "Gemini structured response must be a JSON object.", raw_text=content, **metadata
+            )
+
+        return StructuredGenerationResponse(
+            raw_text=content,
+            parsed=parsed,
+            **metadata,
         )

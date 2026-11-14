@@ -1,0 +1,5355 @@
+{
+  "annotation_status": "manual_selected_source_matching_only",
+  "source_pdf": "docs/Generated Customer Spec/CSP-EN-301.pdf",
+  "source_pdf_sha256": "f2e64188ba1a3c61357df7956c4b456e1bc914ff2fe2a17b0552978c2f5b830c",
+  "limitations": [
+    "Selected business facts only; not exhaustive document extraction or client lab capability.",
+    "Lab values independently authored; no runtime user data is modified.",
+    "Expectations frozen before this fixture is sent to a matching model."
+  ],
+  "snapshot": {
+    "schema_version": "0.1",
+    "lab_id": "independent_workflow_lab",
+    "extraction_run_id": "manual_workflow_reference_v2",
+    "catalog_revision": "ms_pnt_410_pilot:4",
+    "capability_revision": "independent_manual_lab_v2",
+    "review_revision": "unreviewed",
+    "catalog": {
+      "id": "ms_pnt_410_pilot",
+      "name": "Capstone synthetic test identity catalog",
+      "version": 4,
+      "synthetic": true,
+      "source_note": "Manually curated pilot metadata for the supplied MS-PNT-410 sample, not an authoritative standards database. Chinese aliases are demonstration terminology. Editions are unknown; method associations do not imply equivalence. Customer procedures are labeled separately from formal standard identifiers. Fluid names are not global test aliases; family mapping also requires the source chemical/fluid section and its stated procedure or conditions. The four explicitly fictional CSP-EN-301 methods retain their source-stated editions and are not equivalent to earlier catalog methods. No standard body text or lab capability claims are included. The data team's synthetic bank adds all 71 family names and 77 explicitly selected method identities; full 32,000-row metadata is separately queryable and is not sent wholesale to a model. Exact pilot IDs are retained. Bank metadata does not populate any lab declaration or establish method equivalence. Source CSV SHA-256: c66684bdea3df054b792ade15100a83208da06f95750b6d8dfc588a4720c6a91.",
+      "tests": [
+        {
+          "id": "cross_cut_adhesion",
+          "name": "Cross-cut adhesion",
+          "description": "Pilot identity for cross-cut adhesion; inspect the requested method and conditions separately. This record does not contain standard requirements.",
+          "aliases": [
+            {
+              "text": "Cross-cut adhesion",
+              "language": "en"
+            },
+            {
+              "text": "划格附着力",
+              "language": "zh"
+            },
+            {
+              "text": "Cross cut adhesion",
+              "language": "en"
+            },
+            {
+              "text": "Cross-hatch adhesion",
+              "language": "en"
+            }
+          ],
+          "method_ids": [
+            "iso_2409",
+            "astm_d3359",
+            "gb_t_9286",
+            "synthetic_iso_60038_2021",
+            "bank_sc_astm_00037",
+            "bank_sc_astm_01680",
+            "bank_sc_din_00103",
+            "bank_sc_din_01693",
+            "bank_sc_gb_00096",
+            "bank_sc_gb_01693",
+            "bank_sc_iso_01689",
+            "bank_sc_iso_04094"
+          ]
+        },
+        {
+          "id": "gloss",
+          "name": "Gloss",
+          "description": "Pilot identity for gloss; inspect the requested method and conditions separately. This record does not contain standard requirements.",
+          "aliases": [
+            {
+              "text": "Gloss",
+              "language": "en"
+            },
+            {
+              "text": "光泽度",
+              "language": "zh"
+            },
+            {
+              "text": "Gloss measurement",
+              "language": "en"
+            },
+            {
+              "text": "Specular gloss",
+              "language": "en"
+            }
+          ],
+          "method_ids": [
+            "iso_2813",
+            "synthetic_astm_d1627_16",
+            "bank_sc_astm_00779",
+            "bank_sc_din_00333",
+            "bank_sc_din_00775",
+            "bank_sc_gb_00775",
+            "bank_sc_iso_00653",
+            "bank_sc_iso_00763"
+          ]
+        },
+        {
+          "id": "color_difference",
+          "name": "Color difference",
+          "description": "Pilot identity for color difference; inspect the requested method and conditions separately. This record does not contain standard requirements.",
+          "aliases": [
+            {
+              "text": "Color difference",
+              "language": "en"
+            },
+            {
+              "text": "色差",
+              "language": "zh"
+            },
+            {
+              "text": "Color difference (ΔE)",
+              "language": "en"
+            },
+            {
+              "text": "Delta E",
+              "language": "en"
+            },
+            {
+              "text": "Color difference (ΔE) vs master",
+              "language": "en"
+            },
+            {
+              "text": "Color difference (ΔE) after weathering",
+              "language": "en"
+            },
+            {
+              "text": "Colour difference",
+              "language": "en"
+            }
+          ],
+          "method_ids": [
+            "astm_e2194",
+            "iso_11664_4",
+            "din_6175_2",
+            "synthetic_iso_60570_2025",
+            "bank_sc_astm_02600",
+            "bank_sc_iso_00358",
+            "bank_sc_iso_02600"
+          ]
+        },
+        {
+          "id": "dry_film_thickness",
+          "name": "Dry film thickness",
+          "description": "Coating-thickness test identity from the synthetic CSP-EN-301 sample; a generic thickness declaration does not establish separate-layer measurement.",
+          "aliases": [
+            {
+              "text": "Dry film thickness",
+              "language": "en"
+            },
+            {
+              "text": "Dry-film thickness",
+              "language": "en"
+            },
+            {
+              "text": "Topcoat film thickness",
+              "language": "en"
+            },
+            {
+              "text": "干膜厚度",
+              "language": "zh"
+            }
+          ],
+          "method_ids": [
+            "synthetic_iso_60152_2025",
+            "bank_sc_iso_00174",
+            "bank_sc_iso_00250",
+            "bank_sc_iso_00679",
+            "bank_sc_iso_00706",
+            "bank_sc_iso_03883",
+            "bank_sc_iso_07064"
+          ]
+        }
+      ],
+      "methods": [
+        {
+          "id": "iso_2409",
+          "identifier": "ISO 2409",
+          "name": "Cross-cut adhesion",
+          "edition": null,
+          "aliases": [
+            {
+              "text": "ISO 2409",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "astm_d3359",
+          "identifier": "ASTM D3359",
+          "name": "Tape adhesion",
+          "edition": null,
+          "aliases": [
+            {
+              "text": "ASTM D3359",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "gb_t_9286",
+          "identifier": "GB/T 9286",
+          "name": "Cross-cut adhesion",
+          "edition": null,
+          "aliases": [
+            {
+              "text": "GB/T 9286",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "iso_2813",
+          "identifier": "ISO 2813",
+          "name": "Gloss measurement",
+          "edition": null,
+          "aliases": [
+            {
+              "text": "ISO 2813",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "astm_e2194",
+          "identifier": "ASTM E2194",
+          "name": "Multi-angle color measurement",
+          "edition": null,
+          "aliases": [
+            {
+              "text": "ASTM E2194",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "iso_11664_4",
+          "identifier": "ISO 11664-4",
+          "name": "CIELAB colorimetry",
+          "edition": null,
+          "aliases": [
+            {
+              "text": "ISO 11664-4",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "din_6175_2",
+          "identifier": "DIN 6175-2",
+          "name": "Color-tolerance assessment",
+          "edition": null,
+          "aliases": [
+            {
+              "text": "DIN 6175-2",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "synthetic_iso_60038_2021",
+          "identifier": "ISO 60038:2021",
+          "name": "Synthetic scored-grid adhesion method",
+          "edition": "2021",
+          "aliases": [
+            {
+              "text": "ISO 60038:2021",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "synthetic_astm_d1627_16",
+          "identifier": "ASTM D1627-16",
+          "name": "Synthetic specular-gloss method",
+          "edition": "16",
+          "aliases": [
+            {
+              "text": "ASTM D1627-16",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "synthetic_iso_60570_2025",
+          "identifier": "ISO 60570:2025",
+          "name": "Synthetic colour-difference method",
+          "edition": "2025",
+          "aliases": [
+            {
+              "text": "ISO 60570:2025",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "synthetic_iso_60152_2025",
+          "identifier": "ISO 60152:2025",
+          "name": "Synthetic dry-film-thickness method",
+          "edition": "2025",
+          "aliases": [
+            {
+              "text": "ISO 60152:2025",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_astm_00037",
+          "identifier": "ASTM D1037-20",
+          "name": "Standard Test Method for cross-cut adhesion of Multilayer OEM finish on steel using cross-hatch cutter and tape",
+          "edition": "20",
+          "aliases": [
+            {
+              "text": "ASTM D1037-20",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_astm_00779",
+          "identifier": "ASTM D1779-25",
+          "name": "Standard Test Method for specular gloss of Powder-coated steel sheet using glossmeter",
+          "edition": "25",
+          "aliases": [
+            {
+              "text": "ASTM D1779-25",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_astm_01680",
+          "identifier": "ASTM D2680-24",
+          "name": "Standard Test Method for cross-cut adhesion of Powder-coated steel sheet using cross-hatch cutter and tape",
+          "edition": "24",
+          "aliases": [
+            {
+              "text": "ASTM D2680-24",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_astm_02600",
+          "identifier": "ASTM D3600-20",
+          "name": "Standard Test Method for color difference of Clear-coated automotive panel using spectrophotometer",
+          "edition": "20",
+          "aliases": [
+            {
+              "text": "ASTM D3600-20",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_din_00333",
+          "identifier": "DIN EN 45333:2019-10",
+          "name": "Coating — Evaluation of specular gloss on Clear-coated automotive panel, verification",
+          "edition": "2019",
+          "aliases": [
+            {
+              "text": "DIN EN 45333:2019-10",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_din_00103",
+          "identifier": "DIN EN ISO 60099:2020-08",
+          "name": "Coating — Evaluation of cross-cut adhesion on E-coated mild steel panel, reference procedure",
+          "edition": "2020",
+          "aliases": [
+            {
+              "text": "DIN EN ISO 60099:2020-08",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_din_00775",
+          "identifier": "DIN EN ISO 60763:2021-08",
+          "name": "Coating — Evaluation of specular gloss on Powder-coated steel sheet, automated",
+          "edition": "2021",
+          "aliases": [
+            {
+              "text": "DIN EN ISO 60763:2021-08",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_din_01693",
+          "identifier": "DIN EN ISO 61689:2026-02",
+          "name": "Coating — Evaluation of cross-cut adhesion on Powder-coated steel sheet, automated",
+          "edition": "2026",
+          "aliases": [
+            {
+              "text": "DIN EN ISO 61689:2026-02",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_gb_00096",
+          "identifier": "GB/T 50096-2024",
+          "name": "E-coated mild steel panel — Test procedure for cross-cut adhesion in coating materials (reference procedure)",
+          "edition": "2024",
+          "aliases": [
+            {
+              "text": "GB/T 50096-2024",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_gb_00775",
+          "identifier": "GB/T 50775-2021",
+          "name": "Powder-coated steel sheet — Test procedure for specular gloss in coating materials (automated)",
+          "edition": "2021",
+          "aliases": [
+            {
+              "text": "GB/T 50775-2021",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_gb_01693",
+          "identifier": "GB/T 51693-2026",
+          "name": "Powder-coated steel sheet — Test procedure for cross-cut adhesion in coating materials (automated)",
+          "edition": "2026",
+          "aliases": [
+            {
+              "text": "GB/T 51693-2026",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_iso_00174",
+          "identifier": "ISO 60174:2025",
+          "name": "Coating — Determination of dry-film thickness for Marine anti-corrosive coating panel (instrumental)",
+          "edition": "2025",
+          "aliases": [
+            {
+              "text": "ISO 60174:2025",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_iso_00250",
+          "identifier": "ISO 60250:2024",
+          "name": "Coating — Determination of dry-film thickness for Clear-coated automotive panel (instrumental)",
+          "edition": "2024",
+          "aliases": [
+            {
+              "text": "ISO 60250:2024",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_iso_00358",
+          "identifier": "ISO 60358:2022",
+          "name": "Coating — Determination of total color difference δe* for Metallic base-coat aluminum panel (method A)",
+          "edition": "2022",
+          "aliases": [
+            {
+              "text": "ISO 60358:2022",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_iso_00653",
+          "identifier": "ISO 60653:2020",
+          "name": "Coating — Determination of specular gloss for Metallic base-coat aluminum panel (method B)",
+          "edition": "2020",
+          "aliases": [
+            {
+              "text": "ISO 60653:2020",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_iso_00679",
+          "identifier": "ISO 60679:2024",
+          "name": "Coating — Determination of dry-film thickness for Metallic base-coat aluminum panel (method A)",
+          "edition": "2024",
+          "aliases": [
+            {
+              "text": "ISO 60679:2024",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_iso_00706",
+          "identifier": "ISO 60706:2018",
+          "name": "Coating — Determination of dry-film thickness for Marine anti-corrosive coating panel (visual)",
+          "edition": "2018",
+          "aliases": [
+            {
+              "text": "ISO 60706:2018",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_iso_00763",
+          "identifier": "ISO 60763:2020",
+          "name": "Coating — Determination of specular gloss for Powder-coated steel sheet (automated)",
+          "edition": "2020",
+          "aliases": [
+            {
+              "text": "ISO 60763:2020",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_iso_01689",
+          "identifier": "ISO 61689:2022",
+          "name": "Coating — Determination of cross-cut adhesion classification for Powder-coated steel sheet (automated)",
+          "edition": "2022",
+          "aliases": [
+            {
+              "text": "ISO 61689:2022",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_iso_02600",
+          "identifier": "ISO 62600:2020",
+          "name": "Coating — Determination of total color difference δe* for Clear-coated automotive panel (visual)",
+          "edition": "2020",
+          "aliases": [
+            {
+              "text": "ISO 62600:2020",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_iso_03883",
+          "identifier": "ISO 63883-2:2016",
+          "name": "Coating — Determination of dry-film thickness for Powder-coated steel sheet (screening)",
+          "edition": "2016",
+          "aliases": [
+            {
+              "text": "ISO 63883-2:2016",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_iso_04094",
+          "identifier": "ISO 64094:2018",
+          "name": "Coating — Determination of cross-cut adhesion classification for Metallic base-coat aluminum panel (verification)",
+          "edition": "2018",
+          "aliases": [
+            {
+              "text": "ISO 64094:2018",
+              "language": "und"
+            }
+          ]
+        },
+        {
+          "id": "bank_sc_iso_07064",
+          "identifier": "ISO 67064:2018",
+          "name": "Coating — Determination of dry-film thickness for E-coated mild steel panel (reference procedure)",
+          "edition": "2018",
+          "aliases": [
+            {
+              "text": "ISO 67064:2018",
+              "language": "und"
+            }
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      {
+        "capability": {
+          "id": "workflow_cap_1",
+          "canonical_test_id": "cross_cut_adhesion",
+          "method_ids": [
+            "synthetic_iso_60038_2021"
+          ],
+          "declared_constraints": null,
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "lab_req_workflow_1_shared_0",
+              "parameter_id": "temperature",
+              "label": "Actual metal temperature",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "range",
+              "value": null,
+              "minimum": "100",
+              "maximum": "180",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_1_shared_1",
+              "parameter_id": "duration",
+              "label": "Cure duration",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "120",
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_1_shared_2",
+              "parameter_id": "temperature",
+              "label": "Conditioning temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "range",
+              "value": null,
+              "minimum": "15",
+              "maximum": "35",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_1_shared_3",
+              "parameter_id": "relative_humidity",
+              "label": "Conditioning humidity",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "range",
+              "value": null,
+              "minimum": "20",
+              "maximum": "80",
+              "tolerance": null,
+              "values": [],
+              "unit": "% RH",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_1_shared_4",
+              "parameter_id": "duration",
+              "label": "Conditioning duration",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "30",
+              "tolerance": null,
+              "values": [],
+              "unit": "days",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_1_test_0",
+              "parameter_id": "cycles",
+              "label": "Cycle count",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "20",
+              "tolerance": null,
+              "values": [],
+              "unit": "cycles",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_1_test_1",
+              "parameter_id": "temperature",
+              "label": "Cold step temperature",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "range",
+              "value": null,
+              "minimum": "-40",
+              "maximum": "0",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 1
+            },
+            {
+              "id": "lab_req_workflow_1_test_2",
+              "parameter_id": "duration",
+              "label": "Cold step duration",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "4",
+              "tolerance": null,
+              "values": [],
+              "unit": "h",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 1
+            },
+            {
+              "id": "lab_req_workflow_1_test_3",
+              "parameter_id": "temperature",
+              "label": "Hot step temperature",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "range",
+              "value": null,
+              "minimum": "20",
+              "maximum": "100",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 2
+            },
+            {
+              "id": "lab_req_workflow_1_test_4",
+              "parameter_id": "duration",
+              "label": "Hot step duration",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "4",
+              "tolerance": null,
+              "values": [],
+              "unit": "h",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 2
+            },
+            {
+              "id": "lab_req_workflow_1_test_5",
+              "parameter_id": "duration",
+              "label": "Recovery duration",
+              "kind": "condition",
+              "stage": "cycle_recovery",
+              "operator": "range",
+              "value": null,
+              "minimum": "10",
+              "maximum": "60",
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_1_class_initial",
+              "parameter_id": "adhesion_class",
+              "label": "Adhesion class",
+              "kind": "reporting",
+              "stage": "initial",
+              "operator": "range",
+              "value": null,
+              "minimum": "0",
+              "maximum": "5",
+              "tolerance": null,
+              "values": [],
+              "unit": "class",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_1_class_after_cycle",
+              "parameter_id": "adhesion_class",
+              "label": "Adhesion class",
+              "kind": "reporting",
+              "stage": "after_cycle",
+              "operator": "range",
+              "value": null,
+              "minimum": "0",
+              "maximum": "5",
+              "tolerance": null,
+              "values": [],
+              "unit": "class",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": "Independently authored synthetic lab capability for controlled matching tests. No client capability implied.",
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        },
+        "claims": [
+          {
+            "id": "lab_req_workflow_1_shared_0",
+            "parameter_id": "temperature",
+            "label": "Actual metal temperature",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "100",
+            "maximum": "180",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_shared_1",
+            "parameter_id": "duration",
+            "label": "Cure duration",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "120",
+            "tolerance": null,
+            "values": [],
+            "unit": "min",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_shared_2",
+            "parameter_id": "temperature",
+            "label": "Conditioning temperature",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "15",
+            "maximum": "35",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_shared_3",
+            "parameter_id": "relative_humidity",
+            "label": "Conditioning humidity",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "20",
+            "maximum": "80",
+            "tolerance": null,
+            "values": [],
+            "unit": "% RH",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_shared_4",
+            "parameter_id": "duration",
+            "label": "Conditioning duration",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "30",
+            "tolerance": null,
+            "values": [],
+            "unit": "days",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_test_0",
+            "parameter_id": "cycles",
+            "label": "Cycle count",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "20",
+            "tolerance": null,
+            "values": [],
+            "unit": "cycles",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_test_1",
+            "parameter_id": "temperature",
+            "label": "Cold step temperature",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "range",
+            "value": null,
+            "minimum": "-40",
+            "maximum": "0",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 1
+          },
+          {
+            "id": "lab_req_workflow_1_test_2",
+            "parameter_id": "duration",
+            "label": "Cold step duration",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "4",
+            "tolerance": null,
+            "values": [],
+            "unit": "h",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 1
+          },
+          {
+            "id": "lab_req_workflow_1_test_3",
+            "parameter_id": "temperature",
+            "label": "Hot step temperature",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "range",
+            "value": null,
+            "minimum": "20",
+            "maximum": "100",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 2
+          },
+          {
+            "id": "lab_req_workflow_1_test_4",
+            "parameter_id": "duration",
+            "label": "Hot step duration",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "4",
+            "tolerance": null,
+            "values": [],
+            "unit": "h",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 2
+          },
+          {
+            "id": "lab_req_workflow_1_test_5",
+            "parameter_id": "duration",
+            "label": "Recovery duration",
+            "kind": "condition",
+            "stage": "cycle_recovery",
+            "operator": "range",
+            "value": null,
+            "minimum": "10",
+            "maximum": "60",
+            "tolerance": null,
+            "values": [],
+            "unit": "min",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_class_initial",
+            "parameter_id": "adhesion_class",
+            "label": "Adhesion class",
+            "kind": "reporting",
+            "stage": "initial",
+            "operator": "range",
+            "value": null,
+            "minimum": "0",
+            "maximum": "5",
+            "tolerance": null,
+            "values": [],
+            "unit": "class",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_class_after_cycle",
+            "parameter_id": "adhesion_class",
+            "label": "Adhesion class",
+            "kind": "reporting",
+            "stage": "after_cycle",
+            "operator": "range",
+            "value": null,
+            "minimum": "0",
+            "maximum": "5",
+            "tolerance": null,
+            "values": [],
+            "unit": "class",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      {
+        "capability": {
+          "id": "workflow_cap_2",
+          "canonical_test_id": "gloss",
+          "method_ids": [
+            "synthetic_astm_d1627_16"
+          ],
+          "declared_constraints": null,
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "lab_req_workflow_2_shared_0",
+              "parameter_id": "temperature",
+              "label": "Actual metal temperature",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "range",
+              "value": null,
+              "minimum": "100",
+              "maximum": "180",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_2_shared_1",
+              "parameter_id": "duration",
+              "label": "Cure duration",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "120",
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_2_shared_2",
+              "parameter_id": "temperature",
+              "label": "Conditioning temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "range",
+              "value": null,
+              "minimum": "15",
+              "maximum": "35",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_2_shared_3",
+              "parameter_id": "relative_humidity",
+              "label": "Conditioning humidity",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "range",
+              "value": null,
+              "minimum": "20",
+              "maximum": "80",
+              "tolerance": null,
+              "values": [],
+              "unit": "% RH",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_2_shared_4",
+              "parameter_id": "duration",
+              "label": "Conditioning duration",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "30",
+              "tolerance": null,
+              "values": [],
+              "unit": "days",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_2_angle",
+              "parameter_id": "measurement_angle",
+              "label": "Measurement angle",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_2_initial",
+              "parameter_id": "gloss",
+              "label": "Initial mean gloss",
+              "kind": "reporting",
+              "stage": "initial",
+              "operator": "range",
+              "value": null,
+              "minimum": "0",
+              "maximum": "200",
+              "tolerance": null,
+              "values": [],
+              "unit": "GU",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": "arithmetic mean",
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_2_retention",
+              "parameter_id": "gloss_retention",
+              "label": "Post-cycle site retention",
+              "kind": "reporting",
+              "stage": "after_cycle",
+              "operator": "required",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "%",
+              "text_value": "Not reportable",
+              "availability": "unsupported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": "each location relative to its own initial value",
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": "Independently authored synthetic lab capability for controlled matching tests. No client capability implied.",
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        },
+        "claims": [
+          {
+            "id": "lab_req_workflow_2_shared_0",
+            "parameter_id": "temperature",
+            "label": "Actual metal temperature",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "100",
+            "maximum": "180",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_shared_1",
+            "parameter_id": "duration",
+            "label": "Cure duration",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "120",
+            "tolerance": null,
+            "values": [],
+            "unit": "min",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_shared_2",
+            "parameter_id": "temperature",
+            "label": "Conditioning temperature",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "15",
+            "maximum": "35",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_shared_3",
+            "parameter_id": "relative_humidity",
+            "label": "Conditioning humidity",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "20",
+            "maximum": "80",
+            "tolerance": null,
+            "values": [],
+            "unit": "% RH",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_shared_4",
+            "parameter_id": "duration",
+            "label": "Conditioning duration",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "30",
+            "tolerance": null,
+            "values": [],
+            "unit": "days",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_angle",
+            "parameter_id": "measurement_angle",
+            "label": "Measurement angle",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "=",
+            "value": "60",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_initial",
+            "parameter_id": "gloss",
+            "label": "Initial mean gloss",
+            "kind": "reporting",
+            "stage": "initial",
+            "operator": "range",
+            "value": null,
+            "minimum": "0",
+            "maximum": "200",
+            "tolerance": null,
+            "values": [],
+            "unit": "GU",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": "arithmetic mean",
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_retention",
+            "parameter_id": "gloss_retention",
+            "label": "Post-cycle site retention",
+            "kind": "reporting",
+            "stage": "after_cycle",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "%",
+            "text_value": "Not reportable",
+            "availability": "unsupported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": "each location relative to its own initial value",
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      {
+        "capability": {
+          "id": "workflow_cap_3",
+          "canonical_test_id": "color_difference",
+          "method_ids": [
+            "synthetic_iso_60570_2025"
+          ],
+          "declared_constraints": null,
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "lab_req_workflow_3_shared_0",
+              "parameter_id": "temperature",
+              "label": "Actual metal temperature",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "range",
+              "value": null,
+              "minimum": "100",
+              "maximum": "180",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_3_shared_1",
+              "parameter_id": "duration",
+              "label": "Cure duration",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "120",
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_3_shared_2",
+              "parameter_id": "temperature",
+              "label": "Conditioning temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "range",
+              "value": null,
+              "minimum": "15",
+              "maximum": "35",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_3_shared_3",
+              "parameter_id": "relative_humidity",
+              "label": "Conditioning humidity",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "range",
+              "value": null,
+              "minimum": "20",
+              "maximum": "80",
+              "tolerance": null,
+              "values": [],
+              "unit": "% RH",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_3_shared_4",
+              "parameter_id": "duration",
+              "label": "Conditioning duration",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "30",
+              "tolerance": null,
+              "values": [],
+              "unit": "days",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_3_illuminant",
+              "parameter_id": "illuminant",
+              "label": "Illuminant",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "text",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "D65",
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_3_reference_panel",
+              "parameter_id": "reference_panel",
+              "label": "Reference panel",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "required",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "Master panel",
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_3_colour",
+              "parameter_id": "color_difference",
+              "label": "Overall colour difference",
+              "kind": "reporting",
+              "stage": "measurement",
+              "operator": "range",
+              "value": null,
+              "minimum": "0",
+              "maximum": "5",
+              "tolerance": null,
+              "values": [],
+              "unit": "ΔE*ab",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": "Independently authored synthetic lab capability for controlled matching tests. No client capability implied.",
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        },
+        "claims": [
+          {
+            "id": "lab_req_workflow_3_shared_0",
+            "parameter_id": "temperature",
+            "label": "Actual metal temperature",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "100",
+            "maximum": "180",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_shared_1",
+            "parameter_id": "duration",
+            "label": "Cure duration",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "120",
+            "tolerance": null,
+            "values": [],
+            "unit": "min",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_shared_2",
+            "parameter_id": "temperature",
+            "label": "Conditioning temperature",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "15",
+            "maximum": "35",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_shared_3",
+            "parameter_id": "relative_humidity",
+            "label": "Conditioning humidity",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "20",
+            "maximum": "80",
+            "tolerance": null,
+            "values": [],
+            "unit": "% RH",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_shared_4",
+            "parameter_id": "duration",
+            "label": "Conditioning duration",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "30",
+            "tolerance": null,
+            "values": [],
+            "unit": "days",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_illuminant",
+            "parameter_id": "illuminant",
+            "label": "Illuminant",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "text",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "D65",
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_reference_panel",
+            "parameter_id": "reference_panel",
+            "label": "Reference panel",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "Master panel",
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_colour",
+            "parameter_id": "color_difference",
+            "label": "Overall colour difference",
+            "kind": "reporting",
+            "stage": "measurement",
+            "operator": "range",
+            "value": null,
+            "minimum": "0",
+            "maximum": "5",
+            "tolerance": null,
+            "values": [],
+            "unit": "ΔE*ab",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      {
+        "capability": {
+          "id": "workflow_cap_4",
+          "canonical_test_id": "dry_film_thickness",
+          "method_ids": [
+            "synthetic_iso_60152_2025"
+          ],
+          "declared_constraints": null,
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "lab_req_workflow_4_shared_0",
+              "parameter_id": "temperature",
+              "label": "Actual metal temperature",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "range",
+              "value": null,
+              "minimum": "100",
+              "maximum": "180",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_4_shared_1",
+              "parameter_id": "duration",
+              "label": "Cure duration",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "120",
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_4_shared_2",
+              "parameter_id": "temperature",
+              "label": "Conditioning temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "range",
+              "value": null,
+              "minimum": "15",
+              "maximum": "35",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_4_shared_3",
+              "parameter_id": "relative_humidity",
+              "label": "Conditioning humidity",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "range",
+              "value": null,
+              "minimum": "20",
+              "maximum": "80",
+              "tolerance": null,
+              "values": [],
+              "unit": "% RH",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "lab_req_workflow_4_shared_4",
+              "parameter_id": "duration",
+              "label": "Conditioning duration",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "30",
+              "tolerance": null,
+              "values": [],
+              "unit": "days",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Independently authored synthetic lab declaration.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": "Independently authored synthetic lab capability for controlled matching tests. No client capability implied.",
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        },
+        "claims": [
+          {
+            "id": "lab_req_workflow_4_shared_0",
+            "parameter_id": "temperature",
+            "label": "Actual metal temperature",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "100",
+            "maximum": "180",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_4_shared_1",
+            "parameter_id": "duration",
+            "label": "Cure duration",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "120",
+            "tolerance": null,
+            "values": [],
+            "unit": "min",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_4_shared_2",
+            "parameter_id": "temperature",
+            "label": "Conditioning temperature",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "15",
+            "maximum": "35",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_4_shared_3",
+            "parameter_id": "relative_humidity",
+            "label": "Conditioning humidity",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "20",
+            "maximum": "80",
+            "tolerance": null,
+            "values": [],
+            "unit": "% RH",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_4_shared_4",
+            "parameter_id": "duration",
+            "label": "Conditioning duration",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "30",
+            "tolerance": null,
+            "values": [],
+            "unit": "days",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      }
+    ],
+    "requirements": [
+      {
+        "requirement": {
+          "id": "req_workflow_1",
+          "original_test_name": "Scored-grid paint retention",
+          "requested_methods": [
+            {
+              "code": "ISO 60038:2021",
+              "revision": null,
+              "role": "required"
+            }
+          ],
+          "conditions": [],
+          "acceptance_criteria": [],
+          "applicability": [],
+          "special_instructions": [],
+          "evidence": [
+            {
+              "page": 1,
+              "section": null,
+              "quote": "20 minutes at 140 ± 3 °C."
+            },
+            {
+              "page": 1,
+              "section": null,
+              "quote": "seven days at 23 ± 2 °C and 50 ± 5% RH"
+            },
+            {
+              "page": 1,
+              "section": null,
+              "quote": "Allow seven days at 23 ± 2 °C"
+            },
+            {
+              "page": 2,
+              "section": null,
+              "quote": "five cycles between -20 °C for two hours and 70 °C for two hours"
+            },
+            {
+              "page": 2,
+              "section": null,
+              "quote": "-20 °C for two hours"
+            },
+            {
+              "page": 2,
+              "section": null,
+              "quote": "70 °C for two hours"
+            },
+            {
+              "page": 2,
+              "section": null,
+              "quote": "30-minute room-temperature recovery between transfers"
+            },
+            {
+              "page": 2,
+              "section": null,
+              "quote": "only class 0 or 1 is acceptable"
+            }
+          ],
+          "atomic_claims": [
+            {
+              "id": "req_workflow_1_shared_0",
+              "parameter_id": "temperature",
+              "label": "Actual metal temperature",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "140",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "3",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_shared_1",
+              "parameter_id": "duration",
+              "label": "Cure duration",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "20",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_shared_2",
+              "parameter_id": "temperature",
+              "label": "Conditioning temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "23",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "2",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_shared_3",
+              "parameter_id": "relative_humidity",
+              "label": "Conditioning humidity",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "50",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "5",
+              "values": [],
+              "unit": "% RH",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_shared_4",
+              "parameter_id": "duration",
+              "label": "Conditioning duration",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "7",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "days",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Allow seven days at 23 ± 2 °C",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_test_0",
+              "parameter_id": "cycles",
+              "label": "Cycle count",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "=",
+              "value": "5",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "cycles",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "five cycles between -20 °C for two hours and 70 °C for two hours",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_test_1",
+              "parameter_id": "temperature",
+              "label": "Cold step temperature",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "=",
+              "value": "-20",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "-20 °C for two hours",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 1
+            },
+            {
+              "id": "req_workflow_1_test_2",
+              "parameter_id": "duration",
+              "label": "Cold step duration",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "=",
+              "value": "2",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "h",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "-20 °C for two hours",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 1
+            },
+            {
+              "id": "req_workflow_1_test_3",
+              "parameter_id": "temperature",
+              "label": "Hot step temperature",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "=",
+              "value": "70",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "70 °C for two hours",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 2
+            },
+            {
+              "id": "req_workflow_1_test_4",
+              "parameter_id": "duration",
+              "label": "Hot step duration",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "=",
+              "value": "2",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "h",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "70 °C for two hours",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 2
+            },
+            {
+              "id": "req_workflow_1_test_5",
+              "parameter_id": "duration",
+              "label": "Recovery duration",
+              "kind": "condition",
+              "stage": "cycle_recovery",
+              "operator": "=",
+              "value": "30",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "30-minute room-temperature recovery between transfers",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_class_initial",
+              "parameter_id": "adhesion_class",
+              "label": "Adhesion class",
+              "kind": "criterion",
+              "stage": "initial",
+              "operator": "one_of",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [
+                "0",
+                "1"
+              ],
+              "unit": "class",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "only class 0 or 1 is acceptable",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_class_after_cycle",
+              "parameter_id": "adhesion_class",
+              "label": "Adhesion class",
+              "kind": "criterion",
+              "stage": "after_cycle",
+              "operator": "one_of",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [
+                "0",
+                "1"
+              ],
+              "unit": "class",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "only class 0 or 1 is acceptable",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ]
+        },
+        "normalized": {
+          "requirement_id": "req_workflow_1",
+          "test_name": "Scored-grid paint retention",
+          "normalizer_version": "atomic_requirements_v0_18",
+          "claims": [
+            {
+              "id": "req_workflow_1_shared_0",
+              "parameter_id": "temperature",
+              "label": "Actual metal temperature",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "140",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "3",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_shared_1",
+              "parameter_id": "duration",
+              "label": "Cure duration",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "20",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_shared_2",
+              "parameter_id": "temperature",
+              "label": "Conditioning temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "23",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "2",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_shared_3",
+              "parameter_id": "relative_humidity",
+              "label": "Conditioning humidity",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "50",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "5",
+              "values": [],
+              "unit": "% RH",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_shared_4",
+              "parameter_id": "duration",
+              "label": "Conditioning duration",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "7",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "days",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Allow seven days at 23 ± 2 °C",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_test_0",
+              "parameter_id": "cycles",
+              "label": "Cycle count",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "=",
+              "value": "5",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "cycles",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "five cycles between -20 °C for two hours and 70 °C for two hours",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_test_1",
+              "parameter_id": "temperature",
+              "label": "Cold step temperature",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "=",
+              "value": "-20",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "-20 °C for two hours",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 1
+            },
+            {
+              "id": "req_workflow_1_test_2",
+              "parameter_id": "duration",
+              "label": "Cold step duration",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "=",
+              "value": "2",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "h",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "-20 °C for two hours",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 1
+            },
+            {
+              "id": "req_workflow_1_test_3",
+              "parameter_id": "temperature",
+              "label": "Hot step temperature",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "=",
+              "value": "70",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "70 °C for two hours",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 2
+            },
+            {
+              "id": "req_workflow_1_test_4",
+              "parameter_id": "duration",
+              "label": "Hot step duration",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "=",
+              "value": "2",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "h",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "70 °C for two hours",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 2
+            },
+            {
+              "id": "req_workflow_1_test_5",
+              "parameter_id": "duration",
+              "label": "Recovery duration",
+              "kind": "condition",
+              "stage": "cycle_recovery",
+              "operator": "=",
+              "value": "30",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "30-minute room-temperature recovery between transfers",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_class_initial",
+              "parameter_id": "adhesion_class",
+              "label": "Adhesion class",
+              "kind": "criterion",
+              "stage": "initial",
+              "operator": "one_of",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [
+                "0",
+                "1"
+              ],
+              "unit": "class",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "only class 0 or 1 is acceptable",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_1_class_after_cycle",
+              "parameter_id": "adhesion_class",
+              "label": "Adhesion class",
+              "kind": "criterion",
+              "stage": "after_cycle",
+              "operator": "one_of",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [
+                "0",
+                "1"
+              ],
+              "unit": "class",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "only class 0 or 1 is acceptable",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "review_issues": []
+        },
+        "catalog_test_ids": [
+          "cross_cut_adhesion"
+        ],
+        "capability_ids": [
+          "workflow_cap_1"
+        ]
+      },
+      {
+        "requirement": {
+          "id": "req_workflow_2",
+          "original_test_name": "60° specular gloss",
+          "requested_methods": [
+            {
+              "code": "ASTM D1627-16",
+              "revision": null,
+              "role": "required"
+            }
+          ],
+          "conditions": [],
+          "acceptance_criteria": [],
+          "applicability": [],
+          "special_instructions": [],
+          "evidence": [
+            {
+              "page": 1,
+              "section": null,
+              "quote": "20 minutes at 140 ± 3 °C."
+            },
+            {
+              "page": 1,
+              "section": null,
+              "quote": "seven days at 23 ± 2 °C and 50 ± 5% RH"
+            },
+            {
+              "page": 1,
+              "section": null,
+              "quote": "Allow seven days at 23 ± 2 °C"
+            },
+            {
+              "page": 2,
+              "section": null,
+              "quote": "60° specular-gloss"
+            },
+            {
+              "page": 2,
+              "section": null,
+              "quote": "The arithmetic mean must be 82-92 GU as delivered"
+            },
+            {
+              "page": 2,
+              "section": null,
+              "quote": "after cycling, each location must retain at least 90% of its own original value"
+            }
+          ],
+          "atomic_claims": [
+            {
+              "id": "req_workflow_2_shared_0",
+              "parameter_id": "temperature",
+              "label": "Actual metal temperature",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "140",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "3",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_shared_1",
+              "parameter_id": "duration",
+              "label": "Cure duration",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "20",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_shared_2",
+              "parameter_id": "temperature",
+              "label": "Conditioning temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "23",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "2",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_shared_3",
+              "parameter_id": "relative_humidity",
+              "label": "Conditioning humidity",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "50",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "5",
+              "values": [],
+              "unit": "% RH",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_shared_4",
+              "parameter_id": "duration",
+              "label": "Conditioning duration",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "7",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "days",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Allow seven days at 23 ± 2 °C",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_angle",
+              "parameter_id": "measurement_angle",
+              "label": "Measurement angle",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "60° specular-gloss",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_initial",
+              "parameter_id": "gloss",
+              "label": "Initial mean gloss",
+              "kind": "criterion",
+              "stage": "initial",
+              "operator": "range",
+              "value": null,
+              "minimum": "82",
+              "maximum": "92",
+              "tolerance": null,
+              "values": [],
+              "unit": "GU",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "The arithmetic mean must be 82-92 GU as delivered",
+              "source_context": "arithmetic mean",
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_retention",
+              "parameter_id": "gloss_retention",
+              "label": "Post-cycle site retention",
+              "kind": "criterion",
+              "stage": "after_cycle",
+              "operator": ">=",
+              "value": "90",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "%",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "after cycling, each location must retain at least 90% of its own original value",
+              "source_context": "each location relative to its own initial value",
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ]
+        },
+        "normalized": {
+          "requirement_id": "req_workflow_2",
+          "test_name": "60° specular gloss",
+          "normalizer_version": "atomic_requirements_v0_18",
+          "claims": [
+            {
+              "id": "req_workflow_2_shared_0",
+              "parameter_id": "temperature",
+              "label": "Actual metal temperature",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "140",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "3",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_shared_1",
+              "parameter_id": "duration",
+              "label": "Cure duration",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "20",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_shared_2",
+              "parameter_id": "temperature",
+              "label": "Conditioning temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "23",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "2",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_shared_3",
+              "parameter_id": "relative_humidity",
+              "label": "Conditioning humidity",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "50",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "5",
+              "values": [],
+              "unit": "% RH",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_shared_4",
+              "parameter_id": "duration",
+              "label": "Conditioning duration",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "7",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "days",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Allow seven days at 23 ± 2 °C",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_angle",
+              "parameter_id": "measurement_angle",
+              "label": "Measurement angle",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "°",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "60° specular-gloss",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_initial",
+              "parameter_id": "gloss",
+              "label": "Initial mean gloss",
+              "kind": "criterion",
+              "stage": "initial",
+              "operator": "range",
+              "value": null,
+              "minimum": "82",
+              "maximum": "92",
+              "tolerance": null,
+              "values": [],
+              "unit": "GU",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "The arithmetic mean must be 82-92 GU as delivered",
+              "source_context": "arithmetic mean",
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_2_retention",
+              "parameter_id": "gloss_retention",
+              "label": "Post-cycle site retention",
+              "kind": "criterion",
+              "stage": "after_cycle",
+              "operator": ">=",
+              "value": "90",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "%",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "after cycling, each location must retain at least 90% of its own original value",
+              "source_context": "each location relative to its own initial value",
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "review_issues": []
+        },
+        "catalog_test_ids": [
+          "gloss"
+        ],
+        "capability_ids": [
+          "workflow_cap_2"
+        ]
+      },
+      {
+        "requirement": {
+          "id": "req_workflow_3",
+          "original_test_name": "Master-panel colour difference",
+          "requested_methods": [
+            {
+              "code": "ISO 60570:2025",
+              "revision": null,
+              "role": "required"
+            }
+          ],
+          "conditions": [],
+          "acceptance_criteria": [],
+          "applicability": [],
+          "special_instructions": [],
+          "evidence": [
+            {
+              "page": 1,
+              "section": null,
+              "quote": "20 minutes at 140 ± 3 °C."
+            },
+            {
+              "page": 1,
+              "section": null,
+              "quote": "seven days at 23 ± 2 °C and 50 ± 5% RH"
+            },
+            {
+              "page": 1,
+              "section": null,
+              "quote": "Allow seven days at 23 ± 2 °C"
+            },
+            {
+              "page": 2,
+              "section": null,
+              "quote": "compare the same panel with an untouched master under D65 lighting"
+            },
+            {
+              "page": 2,
+              "section": null,
+              "quote": "the overall colour difference, calculated from measured\n  L*, a* and b*, may not exceed 1.0"
+            }
+          ],
+          "atomic_claims": [
+            {
+              "id": "req_workflow_3_shared_0",
+              "parameter_id": "temperature",
+              "label": "Actual metal temperature",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "140",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "3",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_shared_1",
+              "parameter_id": "duration",
+              "label": "Cure duration",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "20",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_shared_2",
+              "parameter_id": "temperature",
+              "label": "Conditioning temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "23",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "2",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_shared_3",
+              "parameter_id": "relative_humidity",
+              "label": "Conditioning humidity",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "50",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "5",
+              "values": [],
+              "unit": "% RH",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_shared_4",
+              "parameter_id": "duration",
+              "label": "Conditioning duration",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "7",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "days",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Allow seven days at 23 ± 2 °C",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_illuminant",
+              "parameter_id": "illuminant",
+              "label": "Illuminant",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "text",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "D65",
+              "availability": "supported",
+              "raw_text": "compare the same panel with an untouched master under D65 lighting",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_reference_panel",
+              "parameter_id": "reference_panel",
+              "label": "Reference panel",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "required",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "Master panel",
+              "availability": "supported",
+              "raw_text": "compare the same panel with an untouched master under D65 lighting",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_colour",
+              "parameter_id": "color_difference",
+              "label": "Overall colour difference",
+              "kind": "criterion",
+              "stage": "measurement",
+              "operator": "<=",
+              "value": "1",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "ΔE*ab",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "the overall colour difference, calculated from measured\n  L*, a* and b*, may not exceed 1.0",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ]
+        },
+        "normalized": {
+          "requirement_id": "req_workflow_3",
+          "test_name": "Master-panel colour difference",
+          "normalizer_version": "atomic_requirements_v0_18",
+          "claims": [
+            {
+              "id": "req_workflow_3_shared_0",
+              "parameter_id": "temperature",
+              "label": "Actual metal temperature",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "140",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "3",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_shared_1",
+              "parameter_id": "duration",
+              "label": "Cure duration",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "20",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_shared_2",
+              "parameter_id": "temperature",
+              "label": "Conditioning temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "23",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "2",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_shared_3",
+              "parameter_id": "relative_humidity",
+              "label": "Conditioning humidity",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "50",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "5",
+              "values": [],
+              "unit": "% RH",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_shared_4",
+              "parameter_id": "duration",
+              "label": "Conditioning duration",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "7",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "days",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Allow seven days at 23 ± 2 °C",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_illuminant",
+              "parameter_id": "illuminant",
+              "label": "Illuminant",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "text",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "D65",
+              "availability": "supported",
+              "raw_text": "compare the same panel with an untouched master under D65 lighting",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_reference_panel",
+              "parameter_id": "reference_panel",
+              "label": "Reference panel",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "required",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "Master panel",
+              "availability": "supported",
+              "raw_text": "compare the same panel with an untouched master under D65 lighting",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_3_colour",
+              "parameter_id": "color_difference",
+              "label": "Overall colour difference",
+              "kind": "criterion",
+              "stage": "measurement",
+              "operator": "<=",
+              "value": "1",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "ΔE*ab",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "the overall colour difference, calculated from measured\n  L*, a* and b*, may not exceed 1.0",
+              "source_context": null,
+              "source_pages": [
+                2
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "review_issues": []
+        },
+        "catalog_test_ids": [
+          "color_difference"
+        ],
+        "capability_ids": [
+          "workflow_cap_3"
+        ]
+      },
+      {
+        "requirement": {
+          "id": "req_workflow_4",
+          "original_test_name": "Topcoat film thickness",
+          "requested_methods": [
+            {
+              "code": "ISO 60152:2025",
+              "revision": null,
+              "role": "required"
+            }
+          ],
+          "conditions": [],
+          "acceptance_criteria": [],
+          "applicability": [],
+          "special_instructions": [],
+          "evidence": [
+            {
+              "page": 1,
+              "section": null,
+              "quote": "20 minutes at 140 ± 3 °C."
+            },
+            {
+              "page": 1,
+              "section": null,
+              "quote": "seven days at 23 ± 2 °C and 50 ± 5% RH"
+            },
+            {
+              "page": 1,
+              "section": null,
+              "quote": "Allow seven days at 23 ± 2 °C"
+            },
+            {
+              "page": 1,
+              "section": null,
+              "quote": "the latter must be between 42 and 55 µm on every panel"
+            }
+          ],
+          "atomic_claims": [
+            {
+              "id": "req_workflow_4_shared_0",
+              "parameter_id": "temperature",
+              "label": "Actual metal temperature",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "140",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "3",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_4_shared_1",
+              "parameter_id": "duration",
+              "label": "Cure duration",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "20",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_4_shared_2",
+              "parameter_id": "temperature",
+              "label": "Conditioning temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "23",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "2",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_4_shared_3",
+              "parameter_id": "relative_humidity",
+              "label": "Conditioning humidity",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "50",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "5",
+              "values": [],
+              "unit": "% RH",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_4_shared_4",
+              "parameter_id": "duration",
+              "label": "Conditioning duration",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "7",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "days",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Allow seven days at 23 ± 2 °C",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_4_topcoat",
+              "parameter_id": "topcoat_thickness",
+              "label": "Separate topcoat thickness",
+              "kind": "criterion",
+              "stage": "measurement",
+              "operator": "range",
+              "value": null,
+              "minimum": "42",
+              "maximum": "55",
+              "tolerance": null,
+              "values": [],
+              "unit": "µm",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "the latter must be between 42 and 55 µm on every panel",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ]
+        },
+        "normalized": {
+          "requirement_id": "req_workflow_4",
+          "test_name": "Topcoat film thickness",
+          "normalizer_version": "atomic_requirements_v0_18",
+          "claims": [
+            {
+              "id": "req_workflow_4_shared_0",
+              "parameter_id": "temperature",
+              "label": "Actual metal temperature",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "140",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "3",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_4_shared_1",
+              "parameter_id": "duration",
+              "label": "Cure duration",
+              "kind": "condition",
+              "stage": "curing",
+              "operator": "=",
+              "value": "20",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "min",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "20 minutes at 140 ± 3 °C.",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_4_shared_2",
+              "parameter_id": "temperature",
+              "label": "Conditioning temperature",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "23",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "2",
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_4_shared_3",
+              "parameter_id": "relative_humidity",
+              "label": "Conditioning humidity",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "50",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "5",
+              "values": [],
+              "unit": "% RH",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "seven days at 23 ± 2 °C and 50 ± 5% RH",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_4_shared_4",
+              "parameter_id": "duration",
+              "label": "Conditioning duration",
+              "kind": "condition",
+              "stage": "conditioning",
+              "operator": "=",
+              "value": "7",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "days",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Allow seven days at 23 ± 2 °C",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "req_workflow_4_topcoat",
+              "parameter_id": "topcoat_thickness",
+              "label": "Separate topcoat thickness",
+              "kind": "criterion",
+              "stage": "measurement",
+              "operator": "range",
+              "value": null,
+              "minimum": "42",
+              "maximum": "55",
+              "tolerance": null,
+              "values": [],
+              "unit": "µm",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "the latter must be between 42 and 55 µm on every panel",
+              "source_context": null,
+              "source_pages": [
+                1
+              ],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "review_issues": []
+        },
+        "catalog_test_ids": [
+          "dry_film_thickness"
+        ],
+        "capability_ids": [
+          "workflow_cap_4"
+        ]
+      }
+    ]
+  },
+  "expected_output": {
+    "schema_version": "0.1",
+    "items": [
+      {
+        "requirement_id": "req_workflow_1",
+        "identity_status": "aligned",
+        "canonical_test_id": "cross_cut_adhesion",
+        "capability_id": "workflow_cap_1",
+        "reason": "Exact synthetic method identity.",
+        "claim_alignments": [
+          {
+            "requirement_claim_id": "req_workflow_1_shared_0",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_shared_0"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_1_shared_1",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_shared_1"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_1_shared_2",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_shared_2"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_1_shared_3",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_shared_3"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_1_shared_4",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_shared_4"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_1_test_0",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_test_0"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_1_test_1",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_test_1"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_1_test_2",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_test_2"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_1_test_3",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_test_3"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_1_test_4",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_test_4"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_1_test_5",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_test_5"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_1_class_initial",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_class_initial"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_1_class_after_cycle",
+            "capability_claim_ids": [
+              "lab_req_workflow_1_class_after_cycle"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          }
+        ]
+      },
+      {
+        "requirement_id": "req_workflow_2",
+        "identity_status": "aligned",
+        "canonical_test_id": "gloss",
+        "capability_id": "workflow_cap_2",
+        "reason": "Exact synthetic method identity.",
+        "claim_alignments": [
+          {
+            "requirement_claim_id": "req_workflow_2_shared_0",
+            "capability_claim_ids": [
+              "lab_req_workflow_2_shared_0"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_2_shared_1",
+            "capability_claim_ids": [
+              "lab_req_workflow_2_shared_1"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_2_shared_2",
+            "capability_claim_ids": [
+              "lab_req_workflow_2_shared_2"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_2_shared_3",
+            "capability_claim_ids": [
+              "lab_req_workflow_2_shared_3"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_2_shared_4",
+            "capability_claim_ids": [
+              "lab_req_workflow_2_shared_4"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_2_angle",
+            "capability_claim_ids": [
+              "lab_req_workflow_2_angle"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_2_initial",
+            "capability_claim_ids": [
+              "lab_req_workflow_2_initial"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_2_retention",
+            "capability_claim_ids": [
+              "lab_req_workflow_2_retention"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          }
+        ]
+      },
+      {
+        "requirement_id": "req_workflow_3",
+        "identity_status": "aligned",
+        "canonical_test_id": "color_difference",
+        "capability_id": "workflow_cap_3",
+        "reason": "Exact synthetic method identity.",
+        "claim_alignments": [
+          {
+            "requirement_claim_id": "req_workflow_3_shared_0",
+            "capability_claim_ids": [
+              "lab_req_workflow_3_shared_0"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_3_shared_1",
+            "capability_claim_ids": [
+              "lab_req_workflow_3_shared_1"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_3_shared_2",
+            "capability_claim_ids": [
+              "lab_req_workflow_3_shared_2"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_3_shared_3",
+            "capability_claim_ids": [
+              "lab_req_workflow_3_shared_3"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_3_shared_4",
+            "capability_claim_ids": [
+              "lab_req_workflow_3_shared_4"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_3_illuminant",
+            "capability_claim_ids": [
+              "lab_req_workflow_3_illuminant"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_3_reference_panel",
+            "capability_claim_ids": [
+              "lab_req_workflow_3_reference_panel"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_3_colour",
+            "capability_claim_ids": [
+              "lab_req_workflow_3_colour"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          }
+        ]
+      },
+      {
+        "requirement_id": "req_workflow_4",
+        "identity_status": "aligned",
+        "canonical_test_id": "dry_film_thickness",
+        "capability_id": "workflow_cap_4",
+        "reason": "Exact synthetic method identity.",
+        "claim_alignments": [
+          {
+            "requirement_claim_id": "req_workflow_4_shared_0",
+            "capability_claim_ids": [
+              "lab_req_workflow_4_shared_0"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_4_shared_1",
+            "capability_claim_ids": [
+              "lab_req_workflow_4_shared_1"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_4_shared_2",
+            "capability_claim_ids": [
+              "lab_req_workflow_4_shared_2"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_4_shared_3",
+            "capability_claim_ids": [
+              "lab_req_workflow_4_shared_3"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_4_shared_4",
+            "capability_claim_ids": [
+              "lab_req_workflow_4_shared_4"
+            ],
+            "relation": "same_parameter",
+            "reason": "Manual source/lab correspondence.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          },
+          {
+            "requirement_claim_id": "req_workflow_4_topcoat",
+            "capability_claim_ids": [],
+            "relation": "unknown",
+            "reason": "The lab has no selected field.",
+            "context_equivalence": null,
+            "value_equivalence": null
+          }
+        ]
+      }
+    ],
+    "review_issues": []
+  },
+  "expected_checks": {
+    "req_workflow_1_shared_0": "supported",
+    "req_workflow_1_shared_1": "supported",
+    "req_workflow_1_shared_2": "supported",
+    "req_workflow_1_shared_3": "supported",
+    "req_workflow_1_shared_4": "supported",
+    "req_workflow_1_test_0": "supported",
+    "req_workflow_1_test_1": "supported",
+    "req_workflow_1_test_2": "supported",
+    "req_workflow_1_test_3": "supported",
+    "req_workflow_1_test_4": "supported",
+    "req_workflow_1_test_5": "supported",
+    "req_workflow_1_class_initial": "supported",
+    "req_workflow_1_class_after_cycle": "supported",
+    "req_workflow_2_shared_0": "supported",
+    "req_workflow_2_shared_1": "supported",
+    "req_workflow_2_shared_2": "supported",
+    "req_workflow_2_shared_3": "supported",
+    "req_workflow_2_shared_4": "supported",
+    "req_workflow_2_angle": "supported",
+    "req_workflow_2_initial": "supported",
+    "req_workflow_2_retention": "gap",
+    "req_workflow_3_shared_0": "supported",
+    "req_workflow_3_shared_1": "supported",
+    "req_workflow_3_shared_2": "supported",
+    "req_workflow_3_shared_3": "supported",
+    "req_workflow_3_shared_4": "supported",
+    "req_workflow_3_illuminant": "supported",
+    "req_workflow_3_reference_panel": "supported",
+    "req_workflow_3_colour": "supported",
+    "req_workflow_4_shared_0": "supported",
+    "req_workflow_4_shared_1": "supported",
+    "req_workflow_4_shared_2": "supported",
+    "req_workflow_4_shared_3": "supported",
+    "req_workflow_4_shared_4": "supported",
+    "req_workflow_4_topcoat": "unknown"
+  },
+  "expected_overall": {
+    "req_workflow_1": "fully_matched",
+    "req_workflow_2": "partially_matched",
+    "req_workflow_3": "fully_matched",
+    "req_workflow_4": "needs_information"
+  },
+  "lab": {
+    "id": "independent_workflow_lab",
+    "name": "Independent synthetic lab workflow fixture",
+    "description": "",
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "workflow_cap_1",
+        "canonical_test_id": "cross_cut_adhesion",
+        "method_ids": [
+          "synthetic_iso_60038_2021"
+        ],
+        "declared_constraints": null,
+        "structured_limits": [],
+        "atomic_claims": [
+          {
+            "id": "lab_req_workflow_1_shared_0",
+            "parameter_id": "temperature",
+            "label": "Actual metal temperature",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "100",
+            "maximum": "180",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_shared_1",
+            "parameter_id": "duration",
+            "label": "Cure duration",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "120",
+            "tolerance": null,
+            "values": [],
+            "unit": "min",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_shared_2",
+            "parameter_id": "temperature",
+            "label": "Conditioning temperature",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "15",
+            "maximum": "35",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_shared_3",
+            "parameter_id": "relative_humidity",
+            "label": "Conditioning humidity",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "20",
+            "maximum": "80",
+            "tolerance": null,
+            "values": [],
+            "unit": "% RH",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_shared_4",
+            "parameter_id": "duration",
+            "label": "Conditioning duration",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "30",
+            "tolerance": null,
+            "values": [],
+            "unit": "days",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_test_0",
+            "parameter_id": "cycles",
+            "label": "Cycle count",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "20",
+            "tolerance": null,
+            "values": [],
+            "unit": "cycles",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_test_1",
+            "parameter_id": "temperature",
+            "label": "Cold step temperature",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "range",
+            "value": null,
+            "minimum": "-40",
+            "maximum": "0",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 1
+          },
+          {
+            "id": "lab_req_workflow_1_test_2",
+            "parameter_id": "duration",
+            "label": "Cold step duration",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "4",
+            "tolerance": null,
+            "values": [],
+            "unit": "h",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 1
+          },
+          {
+            "id": "lab_req_workflow_1_test_3",
+            "parameter_id": "temperature",
+            "label": "Hot step temperature",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "range",
+            "value": null,
+            "minimum": "20",
+            "maximum": "100",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 2
+          },
+          {
+            "id": "lab_req_workflow_1_test_4",
+            "parameter_id": "duration",
+            "label": "Hot step duration",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "4",
+            "tolerance": null,
+            "values": [],
+            "unit": "h",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 2
+          },
+          {
+            "id": "lab_req_workflow_1_test_5",
+            "parameter_id": "duration",
+            "label": "Recovery duration",
+            "kind": "condition",
+            "stage": "cycle_recovery",
+            "operator": "range",
+            "value": null,
+            "minimum": "10",
+            "maximum": "60",
+            "tolerance": null,
+            "values": [],
+            "unit": "min",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_class_initial",
+            "parameter_id": "adhesion_class",
+            "label": "Adhesion class",
+            "kind": "reporting",
+            "stage": "initial",
+            "operator": "range",
+            "value": null,
+            "minimum": "0",
+            "maximum": "5",
+            "tolerance": null,
+            "values": [],
+            "unit": "class",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_1_class_after_cycle",
+            "parameter_id": "adhesion_class",
+            "label": "Adhesion class",
+            "kind": "reporting",
+            "stage": "after_cycle",
+            "operator": "range",
+            "value": null,
+            "minimum": "0",
+            "maximum": "5",
+            "tolerance": null,
+            "values": [],
+            "unit": "class",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ],
+        "notes": "Independently authored synthetic lab capability for controlled matching tests. No client capability implied.",
+        "price": null,
+        "currency": null,
+        "pricing_basis": null
+      },
+      {
+        "id": "workflow_cap_2",
+        "canonical_test_id": "gloss",
+        "method_ids": [
+          "synthetic_astm_d1627_16"
+        ],
+        "declared_constraints": null,
+        "structured_limits": [],
+        "atomic_claims": [
+          {
+            "id": "lab_req_workflow_2_shared_0",
+            "parameter_id": "temperature",
+            "label": "Actual metal temperature",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "100",
+            "maximum": "180",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_shared_1",
+            "parameter_id": "duration",
+            "label": "Cure duration",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "120",
+            "tolerance": null,
+            "values": [],
+            "unit": "min",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_shared_2",
+            "parameter_id": "temperature",
+            "label": "Conditioning temperature",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "15",
+            "maximum": "35",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_shared_3",
+            "parameter_id": "relative_humidity",
+            "label": "Conditioning humidity",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "20",
+            "maximum": "80",
+            "tolerance": null,
+            "values": [],
+            "unit": "% RH",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_shared_4",
+            "parameter_id": "duration",
+            "label": "Conditioning duration",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "30",
+            "tolerance": null,
+            "values": [],
+            "unit": "days",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_angle",
+            "parameter_id": "measurement_angle",
+            "label": "Measurement angle",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "=",
+            "value": "60",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_initial",
+            "parameter_id": "gloss",
+            "label": "Initial mean gloss",
+            "kind": "reporting",
+            "stage": "initial",
+            "operator": "range",
+            "value": null,
+            "minimum": "0",
+            "maximum": "200",
+            "tolerance": null,
+            "values": [],
+            "unit": "GU",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": "arithmetic mean",
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_2_retention",
+            "parameter_id": "gloss_retention",
+            "label": "Post-cycle site retention",
+            "kind": "reporting",
+            "stage": "after_cycle",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "%",
+            "text_value": "Not reportable",
+            "availability": "unsupported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": "each location relative to its own initial value",
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ],
+        "notes": "Independently authored synthetic lab capability for controlled matching tests. No client capability implied.",
+        "price": null,
+        "currency": null,
+        "pricing_basis": null
+      },
+      {
+        "id": "workflow_cap_3",
+        "canonical_test_id": "color_difference",
+        "method_ids": [
+          "synthetic_iso_60570_2025"
+        ],
+        "declared_constraints": null,
+        "structured_limits": [],
+        "atomic_claims": [
+          {
+            "id": "lab_req_workflow_3_shared_0",
+            "parameter_id": "temperature",
+            "label": "Actual metal temperature",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "100",
+            "maximum": "180",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_shared_1",
+            "parameter_id": "duration",
+            "label": "Cure duration",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "120",
+            "tolerance": null,
+            "values": [],
+            "unit": "min",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_shared_2",
+            "parameter_id": "temperature",
+            "label": "Conditioning temperature",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "15",
+            "maximum": "35",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_shared_3",
+            "parameter_id": "relative_humidity",
+            "label": "Conditioning humidity",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "20",
+            "maximum": "80",
+            "tolerance": null,
+            "values": [],
+            "unit": "% RH",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_shared_4",
+            "parameter_id": "duration",
+            "label": "Conditioning duration",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "30",
+            "tolerance": null,
+            "values": [],
+            "unit": "days",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_illuminant",
+            "parameter_id": "illuminant",
+            "label": "Illuminant",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "text",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "D65",
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_reference_panel",
+            "parameter_id": "reference_panel",
+            "label": "Reference panel",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "Master panel",
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_3_colour",
+            "parameter_id": "color_difference",
+            "label": "Overall colour difference",
+            "kind": "reporting",
+            "stage": "measurement",
+            "operator": "range",
+            "value": null,
+            "minimum": "0",
+            "maximum": "5",
+            "tolerance": null,
+            "values": [],
+            "unit": "ΔE*ab",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ],
+        "notes": "Independently authored synthetic lab capability for controlled matching tests. No client capability implied.",
+        "price": null,
+        "currency": null,
+        "pricing_basis": null
+      },
+      {
+        "id": "workflow_cap_4",
+        "canonical_test_id": "dry_film_thickness",
+        "method_ids": [
+          "synthetic_iso_60152_2025"
+        ],
+        "declared_constraints": null,
+        "structured_limits": [],
+        "atomic_claims": [
+          {
+            "id": "lab_req_workflow_4_shared_0",
+            "parameter_id": "temperature",
+            "label": "Actual metal temperature",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "100",
+            "maximum": "180",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_4_shared_1",
+            "parameter_id": "duration",
+            "label": "Cure duration",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "120",
+            "tolerance": null,
+            "values": [],
+            "unit": "min",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_4_shared_2",
+            "parameter_id": "temperature",
+            "label": "Conditioning temperature",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "15",
+            "maximum": "35",
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_4_shared_3",
+            "parameter_id": "relative_humidity",
+            "label": "Conditioning humidity",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "20",
+            "maximum": "80",
+            "tolerance": null,
+            "values": [],
+            "unit": "% RH",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "lab_req_workflow_4_shared_4",
+            "parameter_id": "duration",
+            "label": "Conditioning duration",
+            "kind": "condition",
+            "stage": "conditioning",
+            "operator": "range",
+            "value": null,
+            "minimum": "1",
+            "maximum": "30",
+            "tolerance": null,
+            "values": [],
+            "unit": "days",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Independently authored synthetic lab declaration.",
+            "source_context": null,
+            "source_pages": [],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ],
+        "notes": "Independently authored synthetic lab capability for controlled matching tests. No client capability implied.",
+        "price": null,
+        "currency": null,
+        "pricing_basis": null
+      }
+    ]
+  }
+}

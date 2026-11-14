@@ -1,0 +1,928 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "capability_adversarial_v1",
+  "annotation_status": "author_written_unreviewed",
+  "scope": "Post-baseline adversarial checks of comparison policy using typed facts and retained source wording. No historical baseline is available for this extension; no PDF/LLM extraction or independent accuracy is measured.",
+  "limitations": [
+    "Hand-authored synthetic challenge cases require independent domain review.",
+    "These cases were added after the original baseline capture; report only current results, never append them to the old baseline denominator.",
+    "Author-designed adversarial scenarios are not a blinded or statistically independent holdout."
+  ],
+  "cases": [
+    {
+      "id": "raw_water_cannot_borrow_air",
+      "family": "raw_subject",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Required water temperature: 60 °C.",
+      "lab_statement": "Available air temperature: 20–100 °C.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "The source subjects differ even when an older extractor has emitted the same generic temperature ID.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_raw_water_cannot_borrow_air",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Required water temperature: 60 °C.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Available air temperature: 20–100 °C.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 100,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "raw_water_same_subject",
+      "family": "raw_subject",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Required water temperature: 60 °C.",
+      "lab_statement": "Selectable water temperature: 20–100 °C.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "Both source statements explicitly concern water temperature in the same stage.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_raw_water_same_subject",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Required water temperature: 60 °C.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Selectable water temperature: 20–100 °C.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 100,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "raw_water_unspecified_subject",
+      "family": "raw_subject",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Required water temperature: 60 °C.",
+      "lab_statement": "Selectable temperature: 20–100 °C; medium not recorded.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "An unqualified temperature range does not establish water-temperature control.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_raw_water_unspecified_subject",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Required water temperature: 60 °C.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Selectable temperature: 20–100 °C; medium not recorded.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 100,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "water_parameter_cannot_borrow_air",
+      "family": "raw_subject",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Required water temperature: 60 °C.",
+      "lab_statement": "Selectable air temperature: 20–100 °C.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "Canonical subject-specific identity must not be erased to borrow an air declaration.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_water_parameter_cannot_borrow_air",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "water_temperature",
+            "label": "water temperature",
+            "raw_text": "Required water temperature: 60 °C.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Selectable air temperature: 20–100 °C.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 100,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "raw_air_same_subject",
+      "family": "raw_subject",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Required air temperature: 60 °C.",
+      "lab_statement": "Selectable air temperature: 20–100 °C.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "Both source statements explicitly concern air temperature.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_raw_air_same_subject",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Required air temperature: 60 °C.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Selectable air temperature: 20–100 °C.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 100,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "custom_numeric_without_unit",
+      "family": "missing_semantics",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Fictional parameter is 7, unit and measurement meaning not recorded.",
+      "lab_statement": "Fictional parameter range 3–9, unit and measurement meaning not recorded.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "Unknown physical meaning plus absent units cannot establish safe numeric support merely because 7 lies between 3 and 9.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_custom_numeric_without_unit",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "novel_fixture_setting",
+            "label": "novel fixture setting",
+            "raw_text": "Fictional parameter is 7, unit and measurement meaning not recorded.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 7,
+            "unit": null
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "novel_fixture_setting",
+          "label": "novel fixture setting",
+          "raw_text": "Fictional parameter range 3–9, unit and measurement meaning not recorded.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 3,
+          "maximum": 9,
+          "unit": null
+        }
+      ]
+    },
+    {
+      "id": "temperature_without_units",
+      "family": "missing_semantics",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Required temperature: 60; unit absent.",
+      "lab_statement": "Temperature range 20–100; unit absent.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "A physical temperature value without a declared unit is not safely comparable.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_temperature_without_units",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Required temperature: 60; unit absent.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 60,
+            "unit": null
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Temperature range 20–100; unit absent.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 100,
+          "unit": null
+        }
+      ]
+    },
+    {
+      "id": "duration_strict_inequality",
+      "family": "inequality",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Exposure must last less than 60 min.",
+      "lab_statement": "Exposure duration is selectable from 1 to 120 min.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "The incomplete requested execution envelope and strict boundary require clarification rather than assuming a particular setpoint.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_duration_strict_inequality",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "duration",
+            "label": "duration",
+            "raw_text": "Exposure must last less than 60 min.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "<",
+            "value": 60,
+            "unit": "min"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "duration",
+          "label": "duration",
+          "raw_text": "Exposure duration is selectable from 1 to 120 min.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 1,
+          "maximum": 120,
+          "unit": "min"
+        }
+      ]
+    },
+    {
+      "id": "fahrenheit_tolerance_too_wide",
+      "family": "affine_tolerance",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Maintain temperature at 140 ±1.8 °F.",
+      "lab_statement": "Temperature is adjustable from 59.5 to 60.5 °C.",
+      "expected_checks": {
+        "request": "gap"
+      },
+      "rationale": "The requested interval converts to 59–61 °C; the declared interval does not cover it.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_fahrenheit_tolerance_too_wide",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Maintain temperature at 140 ±1.8 °F.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 140,
+            "unit": "°F",
+            "tolerance": 1.8
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Temperature is adjustable from 59.5 to 60.5 °C.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 59.5,
+          "maximum": 60.5,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "resolution_converted_finer",
+      "family": "capability_metric_units",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Resolution must be 0.1 mm or finer.",
+      "lab_statement": "Measurement resolution is 80 µm.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "80 micrometres equals 0.08 millimetres and is finer than the maximum required 0.1.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_resolution_converted_finer",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "measurement_resolution",
+            "label": "measurement resolution",
+            "raw_text": "Resolution must be 0.1 mm or finer.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "<=",
+            "value": 0.1,
+            "unit": "mm"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "measurement_resolution",
+          "label": "measurement resolution",
+          "raw_text": "Measurement resolution is 80 µm.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "=",
+          "value": 80,
+          "unit": "µm"
+        }
+      ]
+    },
+    {
+      "id": "resolution_converted_coarser",
+      "family": "capability_metric_units",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Resolution must be 0.1 mm or finer.",
+      "lab_statement": "Measurement resolution is 200 µm.",
+      "expected_checks": {
+        "request": "gap"
+      },
+      "rationale": "200 micrometres equals 0.2 millimetres and fails the maximum-resolution bound.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_resolution_converted_coarser",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "measurement_resolution",
+            "label": "measurement resolution",
+            "raw_text": "Resolution must be 0.1 mm or finer.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "<=",
+            "value": 0.1,
+            "unit": "mm"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "measurement_resolution",
+          "label": "measurement resolution",
+          "raw_text": "Measurement resolution is 200 µm.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "=",
+          "value": 200,
+          "unit": "µm"
+        }
+      ]
+    },
+    {
+      "id": "contradictory_same_setup",
+      "family": "conflict",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Run at 60 °C.",
+      "lab_statement": "Temperature is adjustable from 20 to 70 °C. Temperature control is unavailable for this same setup.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "Conflicting declarations about the same capability require review; do not choose the convenient positive.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_contradictory_same_setup",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Run at 60 °C.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Temperature is adjustable from 20 to 70 °C.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C"
+        },
+        {
+          "id": "other_declaration",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Temperature control is unavailable for this same setup.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "text",
+          "text_value": "Unavailable",
+          "availability": "unsupported",
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "selected_configuration_not_borrowed",
+      "family": "configuration",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Selected route A must run at 80 °C.",
+      "lab_statement": "Selected route A temperature range: 20–70 °C. Route B temperature range: 20–100 °C.",
+      "expected_checks": {
+        "request": "gap"
+      },
+      "rationale": "An explicitly selected route cannot borrow the wider range of another route.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_selected_configuration_not_borrowed",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Selected route A must run at 80 °C.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 80,
+            "unit": "°C",
+            "configuration": "a"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Selected route A temperature range: 20–70 °C.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C",
+          "configuration": "a"
+        },
+        {
+          "id": "route_b",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Route B temperature range: 20–100 °C.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 100,
+          "unit": "°C",
+          "configuration": "b"
+        }
+      ]
+    },
+    {
+      "id": "discrete_points_do_not_cover_continuum",
+      "family": "discrete_set",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Working distance must cover the continuous range 1–3 cm.",
+      "lab_statement": "Available distance settings are exactly 1 or 3 cm.",
+      "expected_checks": {
+        "request": "gap"
+      },
+      "rationale": "Supporting only the endpoints does not cover all intermediate distances.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_discrete_points_do_not_cover_continuum",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "distance",
+            "label": "distance",
+            "raw_text": "Working distance must cover the continuous range 1–3 cm.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "range",
+            "minimum": 1,
+            "maximum": 3,
+            "unit": "cm"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "distance",
+          "label": "distance",
+          "raw_text": "Available distance settings are exactly 1 or 3 cm.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "one_of",
+          "values": [
+            1,
+            3
+          ],
+          "unit": "cm"
+        }
+      ]
+    },
+    {
+      "id": "requested_points_in_continuous_range",
+      "family": "discrete_set",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Use selectable distances 1 and 3 cm.",
+      "lab_statement": "Working distance is selectable continuously from 1 to 3 cm.",
+      "expected_checks": {
+        "request": "supported"
+      },
+      "rationale": "Both explicitly requested points fit the declared continuous range.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_requested_points_in_continuous_range",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "distance",
+            "label": "distance",
+            "raw_text": "Use selectable distances 1 and 3 cm.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "one_of",
+            "values": [
+              1,
+              3
+            ],
+            "unit": "cm"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "distance",
+          "label": "distance",
+          "raw_text": "Working distance is selectable continuously from 1 to 3 cm.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 1,
+          "maximum": 3,
+          "unit": "cm"
+        }
+      ]
+    },
+    {
+      "id": "operating_upper_bound_not_a_setpoint",
+      "family": "inequality",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Operate below or at 60 °C; no requested lower bound or setpoint given.",
+      "lab_statement": "Temperature is adjustable from 20 to 70 °C.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "An unbounded execution condition is not a complete requested interval or a single setpoint.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_operating_upper_bound_not_a_setpoint",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Operate below or at 60 °C; no requested lower bound or setpoint given.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "<=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Temperature is adjustable from 20 to 70 °C.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "lab_one_boundary_not_complete",
+      "family": "inequality",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Run at 60 °C.",
+      "lab_statement": "Temperature capability is stated only as at most 70 °C.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "The other boundary and capability meaning are missing; do not fill in an operating envelope.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_lab_one_boundary_not_complete",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Run at 60 °C.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Temperature capability is stated only as at most 70 °C.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "<=",
+          "value": 70,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "unresolved_lab_cannot_assert_unavailable",
+      "family": "source_quality",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Run at 60 °C.",
+      "lab_statement": "Unreadable temperature entry; unsupported flag came from unresolved interpretation.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "An unresolved source interpretation must not become a proved capability gap even if a tentative availability flag is present.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_unresolved_lab_cannot_assert_unavailable",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Run at 60 °C.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Unreadable temperature entry; unsupported flag came from unresolved interpretation.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "text",
+          "text_value": "Unavailable?",
+          "availability": "unsupported",
+          "normalization_state": "unresolved",
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "unresolved_requirement_cannot_assert_support",
+      "family": "source_quality",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Unreviewed reading may say 60 °C.",
+      "lab_statement": "Temperature is adjustable from 20 to 70 °C.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "Unresolved extraction cannot support an automated capability conclusion.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_unresolved_requirement_cannot_assert_support",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Unreviewed reading may say 60 °C.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C",
+            "normalization_state": "unresolved"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Temperature is adjustable from 20 to 70 °C.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C"
+        }
+      ]
+    },
+    {
+      "id": "material_context_different",
+      "family": "context",
+      "split": "author_designed_adversarial",
+      "requirement_statement": "Run an aluminium specimen at 60 °C.",
+      "lab_statement": "Steel specimen operating temperature: 20–70 °C.",
+      "expected_checks": {
+        "request": "unknown"
+      },
+      "rationale": "The material qualifier differs; an operating range alone does not establish compatibility with another specimen.",
+      "method_status": "supported",
+      "expected_overall": null,
+      "normalized": {
+        "requirement_id": "req_material_context_different",
+        "test_name": "Synthetic adversarial capability case",
+        "claims": [
+          {
+            "id": "request",
+            "parameter_id": "temperature",
+            "label": "temperature",
+            "raw_text": "Run an aluminium specimen at 60 °C.",
+            "kind": "condition",
+            "stage": "general",
+            "operator": "=",
+            "value": 60,
+            "unit": "°C",
+            "source_context": "aluminium specimen"
+          }
+        ]
+      },
+      "lab_claims": [
+        {
+          "id": "declared",
+          "parameter_id": "temperature",
+          "label": "temperature",
+          "raw_text": "Steel specimen operating temperature: 20–70 °C.",
+          "kind": "condition",
+          "stage": "general",
+          "operator": "range",
+          "minimum": 20,
+          "maximum": 70,
+          "unit": "°C",
+          "source_context": "steel specimen"
+        }
+      ]
+    }
+  ]
+}

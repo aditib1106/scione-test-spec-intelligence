@@ -89,12 +89,7 @@ def _render_intake(store: FileSpecStore, *, compact: bool = False) -> None:
         if st.button("Save specification", key="spec_save_upload", disabled=uploaded is None):
             _import_document(store, uploaded.name, uploaded.getvalue())
         st.caption("Text PDFs only · up to 25 MB / 200 pages · saved locally")
-        if SAMPLE_SPEC_PATH.is_file():
-            if st.button("Import supplied demo spec", key="spec_import_sample"):
-                try:
-                    _import_document(store, SAMPLE_SPEC_PATH.name, SAMPLE_SPEC_PATH.read_bytes())
-                except OSError as exc:
-                    st.error(f"Unable to read the local sample: {exc}")
+
 
 
 def _set_pdf_page(page: int) -> None:
@@ -345,6 +340,11 @@ def _render_extraction_controls(
                     run = CustomerRequirementRunner(
                         adapter,
                         max_input_characters=settings.scione_customer_input_character_limit,
+                        max_concurrent_chunks=(
+                            settings.scione_long_document_parallelism
+                            if stored.document.page_count > 10 else 2
+                        ),
+                        source_pdf_bytes=store.read_pdf(stored.document_id),
                     ).run(stored.document, strategy=strategy)
                     store.save_extraction(stored.document_id, run)
             except CustomerExtractionError as exc:
@@ -920,7 +920,7 @@ def render_specifications(settings: Settings) -> None:
         documents = store.list_documents()
         if not documents:
             _render_intake(store)
-            st.info("No specifications saved yet. Upload a PDF or import the supplied demo sample.")
+            st.info("No specifications saved yet. Upload a customer PDF to begin.")
             return
         by_id = {item.document_id: item for item in documents}
         pending = st.session_state.pop("_spec_open_after_import", None)

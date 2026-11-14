@@ -12,7 +12,7 @@ import os
 import re
 import stat
 import tempfile
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -23,7 +23,8 @@ import pymupdf
 from pydantic import BaseModel, ConfigDict, Field
 
 from scione.ingestion import IngestionError, PyMuPDFTextIngestor
-from scione.schemas import IngestedDocument, TextExtractionStatus
+from scione.schemas import IngestedDocument, TextExtractionStatus, TextReadingOrder
+from scione.specifications.attempts import ExtractionFailureArtifact
 from scione.specifications.models import CustomerExtractionRun
 
 MAX_PDF_BYTES = 25 * 1024 * 1024
@@ -46,6 +47,7 @@ class RequirementReview(BaseModel):
     status: Literal["confirmed", "needs_review", "excluded"]
     note: str = Field(default="", max_length=4000)
     updated_at: datetime
+    actor: str = Field(default="local_reviewer", min_length=1, max_length=100)
 
 
 class RequirementReviewSet(BaseModel):
@@ -70,6 +72,8 @@ class ExtractionFailure(BaseModel):
     output_limit: int = Field(gt=0)
     message: str = Field(min_length=1, max_length=4000)
     previous_run_id: str | None = None
+    attempt_id: str | None = None
+    error_code: str | None = None
 
 
 class _Metadata(BaseModel):
@@ -116,9 +120,30 @@ class FileSpecStore:
 
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root).absolute() / "specifications"
+        # The HTTP workspace can resolve source-backed human additions from its
+        # immutable SQL facts revisions. Standalone file callers stay strict.
+        self.added_requirement_ids: Callable[[str, str], set[str]] | None = None
+
+    def _reviewable_ids(self, run: CustomerExtractionRun) -> set[str]:
+        identifiers = {item.id for item in run.extraction.requirements}
+        if self.added_requirement_ids is not None:
+            identifiers.update(self.added_requirement_ids(run.document_id, run.run_id))
+        return identifiers
 
     def import_pdf(self, filename: str, data: bytes) -> StoredSpecification:
         """Validate, preserve, and parse a PDF; identical bytes reuse the first upload."""
+
+        saved, _ = self.import_pdf_with_status(filename, data)
+        return saved
+
+    def import_pdf_with_status(
+        self, filename: str, data: bytes
+    ) -> tuple[StoredSpecification, bool]:
+        """Import a PDF and atomically report whether this upload created its record.
+
+        A duplicate retains the original filename, metadata and saved analysis.
+        The decision is made while holding the same lock as the import itself.
+        """
 
         self._validate_filename(filename)
         self._validate_pdf(data)
@@ -131,12 +156,17 @@ class FileSpecStore:
                     existing = self.load_document(document_id)
                     if existing.document.sha256 != digest:
                         raise SpecStoreError("Document ID collision; no file was replaced.")
-                    return existing
+                    return existing, False
                 with tempfile.TemporaryDirectory(prefix=".import-", dir=self.root) as temporary:
                     staging = Path(temporary)
                     pdf_path = staging / "original.pdf"
                     pdf_path.write_bytes(data)
-                    document = PyMuPDFTextIngestor().ingest(pdf_path)
+                    # Reading the content stream can move a footer/next section
+                    # into the middle of a visually contiguous paragraph. Keep
+                    # the selected order in the immutable document artifact.
+                    document = PyMuPDFTextIngestor(
+                        reading_order=TextReadingOrder.GEOMETRIC
+                    ).ingest(pdf_path)
                     document.file_name = filename
                     metadata = _Metadata(
                         document_id=document_id,
@@ -147,7 +177,7 @@ class FileSpecStore:
                     self._write_model(staging / "metadata.json", metadata)
                     self._check_directory(directory)
                     os.rename(staging, directory)
-                return self.load_document(document_id)
+                return self.load_document(document_id), True
         except (OSError, ValueError, IngestionError) as exc:
             raise SpecStoreError(f"Unable to import specification: {exc}") from exc
 
@@ -175,7 +205,7 @@ class FileSpecStore:
                         page_count=item.document.page_count,
                         extraction_status=item.document.extraction_status,
                         latest_run_id=run.run_id if run else None,
-                        requirement_count=len(run.extraction.requirements) if run else 0,
+                        requirement_count=len(self._reviewable_ids(run)) if run else 0,
                         review_version=review.version if review else 0,
                         confirmed_count=sum(
                             entry.status == "confirmed" for entry in review.decisions.values()
@@ -339,7 +369,7 @@ class FileSpecStore:
             return RequirementReviewSet(document_id=document_id, run_id=run_id)
         try:
             review = RequirementReviewSet.model_validate_json(self._read_bytes(path))
-            valid_ids = {item.id for item in run.extraction.requirements}
+            valid_ids = self._reviewable_ids(run)
             if (
                 review.document_id != document_id
                 or review.run_id != run_id
@@ -383,8 +413,10 @@ class FileSpecStore:
         *,
         expected_version: int | None = None,
         require_latest: bool = True,
+        validate_current: Callable[[], None] | None = None,
+        actor: str = "local_reviewer",
     ) -> RequirementReviewSet:
-        """Atomically apply one explicit action to the selected run's original rows.
+        """Atomically review original rows and registered source-backed additions.
 
         The complete selection is validated under the write lock before any change.
         A batch advances the review version once, not once per selected record.
@@ -401,10 +433,12 @@ class FileSpecStore:
                         raise SpecStoreError(
                             "Extraction changed since you viewed it. Review the new result first."
                         )
+                if validate_current is not None:
+                    validate_current()
                 selected = list(requirement_ids)
                 if not selected or len(set(selected)) != len(selected):
                     raise SpecStoreError("Select one or more distinct requirements to review.")
-                if not set(selected) <= {item.id for item in run.extraction.requirements}:
+                if not set(selected) <= self._reviewable_ids(run):
                     raise SpecStoreError("Unknown requirement in this extraction run.")
                 review = self.load_review(document_id, run_id)
                 if expected_version is not None and review.version != expected_version:
@@ -413,7 +447,8 @@ class FileSpecStore:
                 # Construct all validated decisions before mutating the in-memory set.
                 decisions = {
                     identifier: RequirementReview(
-                        requirement_id=identifier, status=decision, note=note, updated_at=now
+                        requirement_id=identifier, status=decision, note=note,
+                        updated_at=now, actor=actor,
                     )
                     for identifier in selected
                 }
@@ -424,13 +459,32 @@ class FileSpecStore:
         except (OSError, ValueError) as exc:
             raise SpecStoreError(f"Unable to save human review: {exc}") from exc
 
-    def save_failure(self, failure: ExtractionFailure) -> None:
-        """Persist a diagnostic without replacing any result or review."""
+    def save_failure(
+        self,
+        failure: ExtractionFailure,
+        *,
+        artifact: ExtractionFailureArtifact | None = None,
+    ) -> None:
+        """Persist a private immutable attempt before its safe latest-failure pointer."""
 
         try:
             checked = ExtractionFailure.model_validate(failure.model_dump())
             with self._locked():
                 self.load_document(checked.document_id)
+                if artifact is not None:
+                    attempt = ExtractionFailureArtifact.model_validate(artifact.model_dump())
+                    if attempt.document_id != checked.document_id:
+                        raise SpecStoreError("Failure artifact belongs to another specification.")
+                    if checked.attempt_id not in {None, attempt.attempt_id}:
+                        raise SpecStoreError("Failure artifact does not match its diagnostic.")
+                    path = self._failure_artifact_path(checked.document_id, attempt.attempt_id)
+                    path.parent.mkdir(exist_ok=True)
+                    if path.exists() or path.is_symlink():
+                        raise SpecStoreError("This failed attempt is already saved and immutable.")
+                    self._write_model(path, attempt)
+                    checked.attempt_id = attempt.attempt_id
+                elif checked.attempt_id is not None:
+                    raise SpecStoreError("An attempt pointer requires its retained artifact.")
                 self._write_model(
                     self._document_directory(checked.document_id) / "latest_failure.json", checked
                 )
@@ -449,6 +503,30 @@ class FileSpecStore:
             return failure
         except (OSError, ValueError) as exc:
             raise SpecStoreError(f"Unable to load analysis diagnostic: {exc}") from exc
+
+    def _failure_artifact_path(self, document_id: str, attempt_id: str) -> Path:
+        if not isinstance(attempt_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", attempt_id
+        ):
+            raise SpecStoreError("Invalid failed-attempt ID.")
+        directory = self._document_directory(document_id) / "failed_attempts"
+        self._check_directory(directory)
+        return directory / f"{attempt_id}.json"
+
+    def load_failure_artifact(
+        self, document_id: str, attempt_id: str
+    ) -> ExtractionFailureArtifact:
+        """Read a requested historical failure without changing accepted results."""
+        self.load_document(document_id)
+        try:
+            artifact = ExtractionFailureArtifact.model_validate_json(
+                self._read_bytes(self._failure_artifact_path(document_id, attempt_id))
+            )
+            if artifact.document_id != document_id or artifact.attempt_id != attempt_id:
+                raise SpecStoreError("Saved failed attempt does not match its identity.")
+            return artifact
+        except (OSError, ValueError) as exc:
+            raise SpecStoreError(f"Unable to load failed analysis attempt: {exc}") from exc
 
     @staticmethod
     def _validate_filename(filename: str) -> None:
@@ -538,6 +616,12 @@ class FileSpecStore:
             os.replace(temporary, path)
         finally:
             temporary.unlink(missing_ok=True)
+
+    @contextmanager
+    def write_guard(self) -> Iterator[None]:
+        """Serialize a server-side correction with source/review writes."""
+        with self._locked():
+            yield
 
     @contextmanager
     def _locked(self) -> Iterator[None]:

@@ -42,6 +42,7 @@ class QuoteHighlight:
 @dataclass(frozen=True)
 class PDFHighlightResult:
     matches: tuple[QuoteHighlight, ...]
+    focus_y: float | None = None
 
     @property
     def rectangles(self) -> tuple[Rectangle, ...]:
@@ -76,6 +77,13 @@ class _SourceTableRow:
     cells: tuple[tuple[Rectangle, tuple[str, ...]], ...]
 
 
+@dataclass(frozen=True)
+class _GeometricTableRow:
+    bounds: Rectangle
+    cells: tuple[tuple[str, ...], ...]
+    tokens: tuple[str, ...]
+
+
 # Preserve numerical signs and inequalities: normalization must not turn
 # "<= 5" into "5", or a negative temperature into a positive one.
 _TOKEN_PATTERN = re.compile(r"[^\W_]+(?:[.,][0-9]+)?|[<>]=?|[=±°%+\-]", re.UNICODE)
@@ -97,6 +105,12 @@ _PUNCTUATION = str.maketrans(
 def _tokens(text: str) -> list[str]:
     normalized = unicodedata.normalize("NFKC", text).translate(_PUNCTUATION).casefold()
     return _TOKEN_PATTERN.findall(normalized)
+
+
+def pdf_quote_tokens(text: str) -> tuple[str, ...]:
+    """Normalize evidence typography while retaining numeric signs and units."""
+
+    return tuple(_tokens(text))
 
 
 @contextmanager
@@ -206,6 +220,93 @@ def _table_row_locations(
     return (candidates[0] if len(candidates) == 1 else ()), len(candidates), overlaps_table
 
 
+def _detected_geometric_table_rows(
+    page: pymupdf.Page,
+) -> tuple[_GeometricTableRow, ...]:
+    """Read whole physical rows in the PDF's geometric text order.
+
+    A wrapped table row can have a different native drawing order from the
+    sorted text supplied to extraction. Only complete detected rows are usable;
+    no source cells, values, or token positions are reconstructed or omitted.
+    """
+
+    rows: list[_GeometricTableRow] = []
+    try:
+        for table in page.find_tables().tables:
+            if table.col_count < 2:
+                continue
+            for row in table.rows:
+                rectangles = [pymupdf.Rect(cell) for cell in row.cells if cell is not None]
+                if not rectangles:
+                    continue
+                # A vertically merged cell can make a nominal row's union
+                # contain text from the next row. Such a layout cannot prove
+                # an exact single-row quotation with this narrow fallback.
+                if any(
+                    abs(rectangle.y0 - rectangles[0].y0) > 0.01
+                    or abs(rectangle.y1 - rectangles[0].y1) > 0.01
+                    for rectangle in rectangles[1:]
+                ):
+                    continue
+                bounds = rectangles[0]
+                for rectangle in rectangles[1:]:
+                    bounds |= rectangle
+                cells = tuple(
+                    pdf_quote_tokens(page.get_text("text", clip=pymupdf.Rect(cell), sort=True))
+                    if cell is not None
+                    else ()
+                    for cell in row.cells
+                )
+                tokens = pdf_quote_tokens(page.get_text("text", clip=bounds, sort=True))
+                if tokens:
+                    rows.append(_GeometricTableRow(tuple(bounds), cells, tokens))
+    except (RuntimeError, ValueError, TypeError, AttributeError):
+        # Failed layout inspection is never evidence that a quotation is valid.
+        return ()
+    return tuple(rows)
+
+
+def _unique_geometric_table_row(
+    rows: Sequence[_GeometricTableRow], quote: str
+) -> _GeometricTableRow | None:
+    if "|" in quote:
+        return None
+    tokens = pdf_quote_tokens(quote)
+    if not tokens:
+        return None
+    candidates = [row for row in rows if row.tokens == tokens]
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def matched_geometric_table_row(
+    data: bytes,
+    page_number: int,
+    quote: str,
+    *,
+    expected_label: str | None = None,
+) -> tuple[tuple[str, ...], ...] | None:
+    """Return cell tokens only for one exact, complete geometric source row.
+
+    The quote must equal the full row's sorted text token-for-token. Duplicate
+    rows, changed values, omitted cells, reordered text, and cross-row fragments
+    cannot establish this proof. Empty physical cells retain their positions.
+    ``expected_label`` additionally requires an exact first-cell token match.
+    This proves source layout, not semantic equivalence or scientific validity.
+    """
+
+    if not isinstance(quote, str) or len(quote) > 8000:
+        raise PDFPreviewError("Each highlight quote must be a string of at most 8000 characters.")
+    if "|" in quote or not pdf_quote_tokens(quote):
+        return None
+    with _open_page(data, page_number) as page:
+        row = _unique_geometric_table_row(_detected_geometric_table_rows(page), quote)
+    if row is None or not row.cells:
+        return None
+    if expected_label is not None and row.cells[0] != pdf_quote_tokens(expected_label):
+        return None
+    return row.cells
+
+
 def _inspect_page_highlights(page: pymupdf.Page, quotes: Sequence[str]) -> PDFHighlightResult:
     if isinstance(quotes, (str, bytes)) or len(quotes) > 100:
         raise PDFPreviewError("Highlight quotes must be a sequence of at most 100 strings.")
@@ -230,6 +331,7 @@ def _inspect_page_highlights(page: pymupdf.Page, quotes: Sequence[str]) -> PDFHi
 
     matches: list[QuoteHighlight] = []
     table_rows = _detected_table_rows(page) if any("|" in quote for quote in quotes) else ()
+    geometric_rows: tuple[_GeometricTableRow, ...] | None = None
     for quote in quotes:
         segments = [tokens for part in quote.split("|") if (tokens := _tokens(part))]
         selected: list[_SourceWord] = []
@@ -278,6 +380,22 @@ def _inspect_page_highlights(page: pymupdf.Page, quotes: Sequence[str]) -> PDFHi
             status = "ambiguous"
         else:
             status = "unmatched"
+        if status == "unmatched" and "|" not in quote and segments:
+            if geometric_rows is None:
+                geometric_rows = _detected_geometric_table_rows(page)
+            row = _unique_geometric_table_row(geometric_rows, quote)
+            if row is not None:
+                x0, y0, x1, y1 = row.bounds
+                selected = [
+                    word
+                    for word in source_words
+                    if x0 <= (word.rectangle[0] + word.rectangle[2]) / 2 <= x1
+                    and y0 <= (word.rectangle[1] + word.rectangle[3]) / 2 <= y1
+                ]
+                table_rectangles = _merge_word_rectangles(selected)
+                if table_rectangles:
+                    status = "matched"
+                    matched_segments = len(segments)
         matches.append(
             QuoteHighlight(
                 quote=quote,
@@ -288,7 +406,19 @@ def _inspect_page_highlights(page: pymupdf.Page, quotes: Sequence[str]) -> PDFHi
                 ambiguous_segments=ambiguous_segments,
             )
         )
-    return PDFHighlightResult(tuple(matches))
+    # Convert source coordinates to the rendered orientation, including rotation.
+    visible = [
+        pymupdf.Rect(rectangle) * page.rotation_matrix
+        for match in matches
+        for rectangle in match.rectangles
+    ]
+    first = min(visible, key=lambda rectangle: (rectangle.y0, rectangle.x0)) if visible else None
+    focus_y = (
+        min(1.0, max(0.0, ((first.y0 + first.y1) / 2) / page.rect.height))
+        if first is not None and page.rect.height > 0
+        else None
+    )
+    return PDFHighlightResult(tuple(matches), focus_y=focus_y)
 
 
 def inspect_pdf_highlights(
@@ -300,8 +430,9 @@ def inspect_pdf_highlights(
 
     Case, Unicode typography, whitespace, and table pipes are normalized. Tokens
     must appear consecutively in native order, or complete cells must identify
-    exactly one detected table row. This is source location, not a claim that a
-    model's extracted fact is correct.
+    exactly one detected table row. An otherwise unmatched no-pipe quote can
+    also equal one complete detected row in geometric text order. This is source
+    location, not a claim that a model's extracted fact is correct.
     """
 
     with _open_page(data, page_number) as page:

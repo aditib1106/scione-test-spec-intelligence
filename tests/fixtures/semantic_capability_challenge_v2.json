@@ -1,0 +1,4511 @@
+{
+  "schema_version": "2.0",
+  "dataset_id": "semantic_capability_challenge_v2",
+  "annotation_status": "author_written_frozen_before_live_outputs",
+  "scope": "Synthetic typed-fact semantic matching and deterministic capability compilation. Cases isolate matching from LLM extraction and PDF/OCR. All methods and procedures are fictional metadata.",
+  "candidate_scope": "Each requirement may select only its own case candidate_test_ids and capability IDs. Batching must not expose another case capability as an authorized candidate.",
+  "limitations": [
+    "Author-designed development cases are not independently validated or a blinded statistical holdout.",
+    "Expected outcomes describe intended safe task behavior, including known coverage gaps; they must not be changed after observing model responses.",
+    "Typed reference facts and the deliberately incomplete category case do not measure extraction accuracy.",
+    "Alternative complete outcomes are predeclared only when more than one conservative alignment is valid; always score against an entire outcome, not favorable fields picked from different alternatives.",
+    "Positive free-context and material synonym cases require explicit semantic evidence; unsafe literal equivalence must not be inferred for other cases."
+  ],
+  "catalog": {
+    "id": "semantic_challenge_v2_catalog",
+    "name": "Synthetic semantic challenge catalog",
+    "version": 1,
+    "synthetic": true,
+    "source_note": "Author-created method metadata only. All procedure designations and scenarios are fictional; no standard content is supplied or inferred.",
+    "tests": [
+      {
+        "id": "jet_adhesion",
+        "name": "Water jet adhesion",
+        "description": "Synthetic paint retention assessment under a stated water jet setup.",
+        "aliases": [
+          {
+            "text": "水射流附着力",
+            "language": "zh"
+          },
+          {
+            "text": "water-jet paint retention",
+            "language": "en"
+          }
+        ],
+        "method_ids": [
+          "syn_jet_2024",
+          "syn_jet_2026"
+        ]
+      },
+      {
+        "id": "surface_gloss",
+        "name": "Surface gloss",
+        "description": "Synthetic optical surface gloss measurement, with source-stated angle and reporting range.",
+        "aliases": [
+          {
+            "text": "表面光泽",
+            "language": "zh"
+          },
+          {
+            "text": "specular gloss",
+            "language": "en"
+          }
+        ],
+        "method_ids": [
+          "syn_gloss_2025"
+        ]
+      },
+      {
+        "id": "film_thickness",
+        "name": "Film thickness",
+        "description": "Synthetic dry-film thickness and source-stated specimen-holder setup.",
+        "aliases": [
+          {
+            "text": "干膜厚度",
+            "language": "zh"
+          },
+          {
+            "text": "dry-film build",
+            "language": "en"
+          }
+        ],
+        "method_ids": [
+          "syn_film_2025"
+        ]
+      },
+      {
+        "id": "colour_difference",
+        "name": "Colour difference",
+        "description": "Synthetic difference from a source-specified reference colour panel.",
+        "aliases": [
+          {
+            "text": "色差",
+            "language": "zh"
+          },
+          {
+            "text": "color difference",
+            "language": "en"
+          }
+        ],
+        "method_ids": [
+          "syn_colour_2025"
+        ]
+      }
+    ],
+    "methods": [
+      {
+        "id": "syn_jet_2024",
+        "identifier": "SYN-JET-01:2024",
+        "name": "Fictional SYN-JET-01:2024",
+        "edition": "2024",
+        "aliases": []
+      },
+      {
+        "id": "syn_jet_2026",
+        "identifier": "SYN-JET-01:2026",
+        "name": "Fictional SYN-JET-01:2026",
+        "edition": "2026",
+        "aliases": []
+      },
+      {
+        "id": "syn_gloss_2025",
+        "identifier": "SYN-GLOSS-04:2025",
+        "name": "Fictional SYN-GLOSS-04:2025",
+        "edition": "2025",
+        "aliases": []
+      },
+      {
+        "id": "syn_film_2025",
+        "identifier": "SYN-FILM-07:2025",
+        "name": "Fictional SYN-FILM-07:2025",
+        "edition": "2025",
+        "aliases": []
+      },
+      {
+        "id": "syn_colour_2025",
+        "identifier": "SYN-COLOUR-09:2025",
+        "name": "Fictional SYN-COLOUR-09:2025",
+        "edition": "2025",
+        "aliases": []
+      }
+    ]
+  },
+  "batches": [
+    {
+      "id": "batch_a",
+      "case_ids": [
+        "c01_bilingual_typo",
+        "c02_water_fahrenheit",
+        "c03_spanish_context_duration",
+        "c04_novel_holder_force",
+        "c05_missing_parameter",
+        "c06_wrong_temperature_subject",
+        "c07_wrong_stage",
+        "c08_wrong_cycle_step",
+        "c09_two_ordered_stages",
+        "c10_same_parameter_range_gap",
+        "c11_unknown_catalog_test",
+        "c12_known_test_absent_from_lab"
+      ]
+    },
+    {
+      "id": "batch_b",
+      "case_ids": [
+        "c13_method_edition_gap",
+        "c14_novel_resource_exact",
+        "c15_resource_punctuation_distinct",
+        "c16_explicit_unavailable",
+        "c17_reporting_and_material_synonym",
+        "c18_wrong_claim_role",
+        "c19_configuration_no_mix",
+        "c20_resolution_and_nominal_tolerance",
+        "c21_missing_resource_value",
+        "c22_unregistered_case_sensitive_code",
+        "c23_unrelated_equipment_negative",
+        "c24_unrelated_material_negative"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "c01_bilingual_typo",
+      "family": "bilingual_identity_and_reporting",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "表面光泽 / specular glos — SYN-GLOSS-04:2025\n测量验收：表面光泽度为 85–90 GU。",
+      "requirement": {
+        "id": "req_c01_bilingual_typo",
+        "original_test_name": "表面光泽 / specular glos — SYN-GLOSS-04:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-GLOSS-04:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [],
+        "acceptance_criteria": [
+          {
+            "name": "表面光泽度",
+            "raw_value": "测量验收：表面光泽度为 85–90 GU。",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "表面光泽 / specular glos — SYN-GLOSS-04:2025\n测量验收：表面光泽度为 85–90 GU。"
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q01_gloss",
+            "parameter_id": "表面光泽度",
+            "label": "表面光泽度",
+            "kind": "criterion",
+            "stage": "measurement",
+            "operator": "range",
+            "value": null,
+            "minimum": "85",
+            "maximum": "90",
+            "tolerance": null,
+            "values": [],
+            "unit": "GU",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "测量验收：表面光泽度为 85–90 GU。",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c01_bilingual_typo",
+        "test_name": "表面光泽 / specular glos — SYN-GLOSS-04:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q01_gloss",
+            "parameter_id": "表面光泽度",
+            "label": "表面光泽度",
+            "kind": "criterion",
+            "stage": "measurement",
+            "operator": "range",
+            "value": null,
+            "minimum": "85",
+            "maximum": "90",
+            "tolerance": null,
+            "values": [],
+            "unit": "GU",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "测量验收：表面光泽度为 85–90 GU。",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c01_bilingual_typo_main",
+          "canonical_test_id": "surface_gloss",
+          "method_ids": [
+            "syn_gloss_2025"
+          ],
+          "declared_constraints": "Reportable specular gloss spans 0–150 GU.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l01_gloss",
+              "parameter_id": "gloss",
+              "label": "Reportable specular gloss",
+              "kind": "reporting",
+              "stage": "measurement",
+              "operator": "range",
+              "value": null,
+              "minimum": "0",
+              "maximum": "150",
+              "tolerance": null,
+              "values": [],
+              "unit": "GU",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Reportable specular gloss spans 0–150 GU.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "surface_gloss"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c01_bilingual_typo",
+            "identity_status": "aligned",
+            "canonical_test_id": "surface_gloss",
+            "capability_id": "cap_c01_bilingual_typo_main",
+            "reason": "The bilingual property and minor name typo refer to the supplied gloss metadata; reportability covers the acceptance interval without predicting specimen success.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q01_gloss",
+                "capability_claim_ids": [
+                  "l01_gloss"
+                ],
+                "relation": "same_parameter",
+                "reason": "The bilingual property and minor name typo refer to the supplied gloss metadata; reportability covers the acceptance interval without predicting specimen success."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q01_gloss": "supported"
+          },
+          "overall": "fully_matched",
+          "rationale": "The bilingual property and minor name typo refer to the supplied gloss metadata; reportability covers the acceptance interval without predicting specimen success."
+        }
+      ]
+    },
+    {
+      "id": "c02_water_fahrenheit",
+      "family": "bilingual_units",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "水射流附着力 — SYN-JET-01:2024\nTest water temperature: 140 °F.",
+      "requirement": {
+        "id": "req_c02_water_fahrenheit",
+        "original_test_name": "水射流附着力 — SYN-JET-01:2024",
+        "requested_methods": [
+          {
+            "code": "SYN-JET-01:2024",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "试验用水温度",
+            "raw_value": "Test water temperature: 140 °F.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "水射流附着力 — SYN-JET-01:2024\nTest water temperature: 140 °F."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q02_temp",
+            "parameter_id": "水温度",
+            "label": "试验用水温度",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "140",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°F",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Test water temperature: 140 °F.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c02_water_fahrenheit",
+        "test_name": "水射流附着力 — SYN-JET-01:2024",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q02_temp",
+            "parameter_id": "水温度",
+            "label": "试验用水温度",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "140",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°F",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Test water temperature: 140 °F.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c02_water_fahrenheit_main",
+          "canonical_test_id": "jet_adhesion",
+          "method_ids": [
+            "syn_jet_2024"
+          ],
+          "declared_constraints": "Water temperature is selectable from 20 to 70 °C.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l02_temp",
+              "parameter_id": "water_temperature",
+              "label": "Water temperature",
+              "kind": "condition",
+              "stage": "exposure",
+              "operator": "range",
+              "value": null,
+              "minimum": "20",
+              "maximum": "70",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Water temperature is selectable from 20 to 70 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "jet_adhesion"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c02_water_fahrenheit",
+            "identity_status": "aligned",
+            "canonical_test_id": "jet_adhesion",
+            "capability_id": "cap_c02_water_fahrenheit_main",
+            "reason": "Both facts explicitly concern test water at the same stage; 140 °F equals 60 °C inside the declared interval.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q02_temp",
+                "capability_claim_ids": [
+                  "l02_temp"
+                ],
+                "relation": "same_parameter",
+                "reason": "Both facts explicitly concern test water at the same stage; 140 °F equals 60 °C inside the declared interval."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q02_temp": "supported"
+          },
+          "overall": "fully_matched",
+          "rationale": "Both facts explicitly concern test water at the same stage; 140 °F equals 60 °C inside the declared interval."
+        }
+      ]
+    },
+    {
+      "id": "c03_spanish_context_duration",
+      "family": "foreign_parameter_and_free_context",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Ensayo de adherencia — SYN-JET-01:2024\nDuración de exposición: 90 min, dentro de la cámara de humedad.",
+      "requirement": {
+        "id": "req_c03_spanish_context_duration",
+        "original_test_name": "Ensayo de adherencia — SYN-JET-01:2024",
+        "requested_methods": [
+          {
+            "code": "SYN-JET-01:2024",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Duración de exposición",
+            "raw_value": "Duración de exposición: 90 min, dentro de la cámara de humedad.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Ensayo de adherencia — SYN-JET-01:2024\nDuración de exposición: 90 min, dentro de la cámara de humedad."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q03_time",
+            "parameter_id": "tiempo_de_exposicion",
+            "label": "Duración de exposición",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "90",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "min",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Duración de exposición: 90 min, dentro de la cámara de humedad.",
+            "source_context": "dentro de la cámara de humedad",
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c03_spanish_context_duration",
+        "test_name": "Ensayo de adherencia — SYN-JET-01:2024",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q03_time",
+            "parameter_id": "tiempo_de_exposicion",
+            "label": "Duración de exposición",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "90",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "min",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Duración de exposición: 90 min, dentro de la cámara de humedad.",
+            "source_context": "dentro de la cámara de humedad",
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c03_spanish_context_duration_main",
+          "canonical_test_id": "jet_adhesion",
+          "method_ids": [
+            "syn_jet_2024"
+          ],
+          "declared_constraints": "Exposure duration inside the humidity chamber is selectable from 1 to 2 h.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l03_time",
+              "parameter_id": "duration",
+              "label": "Exposure duration",
+              "kind": "condition",
+              "stage": "exposure",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "2",
+              "tolerance": null,
+              "values": [],
+              "unit": "h",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Exposure duration inside the humidity chamber is selectable from 1 to 2 h.",
+              "source_context": "inside the humidity chamber",
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "jet_adhesion"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c03_spanish_context_duration",
+            "identity_status": "aligned",
+            "canonical_test_id": "jet_adhesion",
+            "capability_id": "cap_c03_spanish_context_duration_main",
+            "reason": "The Spanish and English phrases identify the same exposure duration and humidity-chamber restriction; 90 min is within 1–2 h.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q03_time",
+                "capability_claim_ids": [
+                  "l03_time"
+                ],
+                "relation": "same_parameter",
+                "reason": "The Spanish and English phrases identify the same exposure duration and humidity-chamber restriction; 90 min is within 1–2 h."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q03_time": "supported"
+          },
+          "overall": "fully_matched",
+          "rationale": "The Spanish and English phrases identify the same exposure duration and humidity-chamber restriction; 90 min is within 1–2 h."
+        }
+      ],
+      "note": "Desired semantic coverage includes equivalent free-text context. A current literal context guard returning unknown is a coverage limitation, not the gold label."
+    },
+    {
+      "id": "c04_novel_holder_force",
+      "family": "unregistered_semantic_parameter",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Dry-film build — SYN-FILM-07:2025\nThe load that secures the specimen holder must be 12 ± 1 N.",
+      "requirement": {
+        "id": "req_c04_novel_holder_force",
+        "original_test_name": "Dry-film build — SYN-FILM-07:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-FILM-07:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Fixture locking load",
+            "raw_value": "The load that secures the specimen holder must be 12 ± 1 N.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Dry-film build — SYN-FILM-07:2025\nThe load that secures the specimen holder must be 12 ± 1 N."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q04_load",
+            "parameter_id": "fixture_locking_load",
+            "label": "Fixture locking load",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "=",
+            "value": "12",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": "1",
+            "values": [],
+            "unit": "N",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "The load that secures the specimen holder must be 12 ± 1 N.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c04_novel_holder_force",
+        "test_name": "Dry-film build — SYN-FILM-07:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q04_load",
+            "parameter_id": "fixture_locking_load",
+            "label": "Fixture locking load",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "=",
+            "value": "12",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": "1",
+            "values": [],
+            "unit": "N",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "The load that secures the specimen holder must be 12 ± 1 N.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c04_novel_holder_force_main",
+          "canonical_test_id": "film_thickness",
+          "method_ids": [
+            "syn_film_2025"
+          ],
+          "declared_constraints": "Force used to secure the specimen holder is selectable from 10 to 15 N.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l04_load",
+              "parameter_id": "holder_preload",
+              "label": "Specimen-holder clamping force",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "range",
+              "value": null,
+              "minimum": "10",
+              "maximum": "15",
+              "tolerance": null,
+              "values": [],
+              "unit": "N",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Force used to secure the specimen holder is selectable from 10 to 15 N.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "film_thickness"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c04_novel_holder_force",
+            "identity_status": "aligned",
+            "canonical_test_id": "film_thickness",
+            "capability_id": "cap_c04_novel_holder_force_main",
+            "reason": "Different unfamiliar parameter names describe the same explicitly defined holder force; the complete 11–13 N requested interval is selectable.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q04_load",
+                "capability_claim_ids": [
+                  "l04_load"
+                ],
+                "relation": "same_parameter",
+                "reason": "Different unfamiliar parameter names describe the same explicitly defined holder force; the complete 11–13 N requested interval is selectable."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q04_load": "supported"
+          },
+          "overall": "fully_matched",
+          "rationale": "Different unfamiliar parameter names describe the same explicitly defined holder force; the complete 11–13 N requested interval is selectable."
+        }
+      ]
+    },
+    {
+      "id": "c05_missing_parameter",
+      "family": "missing_not_incapable",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Water jet adhesion — SYN-JET-01:2024\nRequired test water temperature: 60 °C.",
+      "requirement": {
+        "id": "req_c05_missing_parameter",
+        "original_test_name": "Water jet adhesion — SYN-JET-01:2024",
+        "requested_methods": [
+          {
+            "code": "SYN-JET-01:2024",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Water temperature",
+            "raw_value": "Required test water temperature: 60 °C.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Water jet adhesion — SYN-JET-01:2024\nRequired test water temperature: 60 °C."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q05_temp",
+            "parameter_id": "water_temperature",
+            "label": "Water temperature",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "60",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required test water temperature: 60 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c05_missing_parameter",
+        "test_name": "Water jet adhesion — SYN-JET-01:2024",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q05_temp",
+            "parameter_id": "water_temperature",
+            "label": "Water temperature",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "60",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required test water temperature: 60 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c05_missing_parameter_main",
+          "canonical_test_id": "jet_adhesion",
+          "method_ids": [
+            "syn_jet_2024"
+          ],
+          "declared_constraints": "Exposure duration: 0–5 h selectable.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l05_time",
+              "parameter_id": "duration",
+              "label": "Exposure duration",
+              "kind": "condition",
+              "stage": "exposure",
+              "operator": "range",
+              "value": null,
+              "minimum": "0",
+              "maximum": "5",
+              "tolerance": null,
+              "values": [],
+              "unit": "h",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Exposure duration: 0–5 h selectable.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "jet_adhesion"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c05_missing_parameter",
+            "identity_status": "aligned",
+            "canonical_test_id": "jet_adhesion",
+            "capability_id": "cap_c05_missing_parameter_main",
+            "reason": "The lab records duration only; there is no evidence about water temperature and duration cannot substitute for it.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q05_temp",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "The lab records duration only; there is no evidence about water temperature and duration cannot substitute for it."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q05_temp": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "The lab records duration only; there is no evidence about water temperature and duration cannot substitute for it."
+        }
+      ]
+    },
+    {
+      "id": "c06_wrong_temperature_subject",
+      "family": "subject_conflict",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Water jet adhesion — SYN-JET-01:2024\nRequired water temperature: 60 °C.",
+      "requirement": {
+        "id": "req_c06_wrong_temperature_subject",
+        "original_test_name": "Water jet adhesion — SYN-JET-01:2024",
+        "requested_methods": [
+          {
+            "code": "SYN-JET-01:2024",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Water temperature",
+            "raw_value": "Required water temperature: 60 °C.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Water jet adhesion — SYN-JET-01:2024\nRequired water temperature: 60 °C."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q06_temp",
+            "parameter_id": "temperature",
+            "label": "Water temperature",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "60",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required water temperature: 60 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c06_wrong_temperature_subject",
+        "test_name": "Water jet adhesion — SYN-JET-01:2024",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q06_temp",
+            "parameter_id": "temperature",
+            "label": "Water temperature",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "60",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required water temperature: 60 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c06_wrong_temperature_subject_main",
+          "canonical_test_id": "jet_adhesion",
+          "method_ids": [
+            "syn_jet_2024"
+          ],
+          "declared_constraints": "Selectable air temperature: 20–100 °C.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l06_temp",
+              "parameter_id": "temperature",
+              "label": "Air temperature",
+              "kind": "condition",
+              "stage": "exposure",
+              "operator": "range",
+              "value": null,
+              "minimum": "20",
+              "maximum": "100",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Selectable air temperature: 20–100 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "jet_adhesion"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c06_wrong_temperature_subject",
+            "identity_status": "aligned",
+            "canonical_test_id": "jet_adhesion",
+            "capability_id": "cap_c06_wrong_temperature_subject_main",
+            "reason": "Equal generic IDs and compatible numbers do not establish control of the same medium; water cannot borrow air capability.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q06_temp",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "Equal generic IDs and compatible numbers do not establish control of the same medium; water cannot borrow air capability."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q06_temp": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "Equal generic IDs and compatible numbers do not establish control of the same medium; water cannot borrow air capability."
+        }
+      ]
+    },
+    {
+      "id": "c07_wrong_stage",
+      "family": "stage_conflict",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Film build — SYN-FILM-07:2025\nCuring temperature: 140 °C.",
+      "requirement": {
+        "id": "req_c07_wrong_stage",
+        "original_test_name": "Film build — SYN-FILM-07:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-FILM-07:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Curing temperature",
+            "raw_value": "Curing temperature: 140 °C.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Film build — SYN-FILM-07:2025\nCuring temperature: 140 °C."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q07_temp",
+            "parameter_id": "temperature",
+            "label": "Curing temperature",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "=",
+            "value": "140",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Curing temperature: 140 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c07_wrong_stage",
+        "test_name": "Film build — SYN-FILM-07:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q07_temp",
+            "parameter_id": "temperature",
+            "label": "Curing temperature",
+            "kind": "condition",
+            "stage": "curing",
+            "operator": "=",
+            "value": "140",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Curing temperature: 140 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c07_wrong_stage_main",
+          "canonical_test_id": "film_thickness",
+          "method_ids": [
+            "syn_film_2025"
+          ],
+          "declared_constraints": "Measurement temperature selectable from 120 to 160 °C.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l07_temp",
+              "parameter_id": "temperature",
+              "label": "Measurement temperature",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "range",
+              "value": null,
+              "minimum": "120",
+              "maximum": "160",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Measurement temperature selectable from 120 to 160 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "film_thickness"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c07_wrong_stage",
+            "identity_status": "aligned",
+            "canonical_test_id": "film_thickness",
+            "capability_id": "cap_c07_wrong_stage_main",
+            "reason": "The only lab declaration applies during measurement, not curing.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q07_temp",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "The only lab declaration applies during measurement, not curing."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q07_temp": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "The only lab declaration applies during measurement, not curing."
+        }
+      ]
+    },
+    {
+      "id": "c08_wrong_cycle_step",
+      "family": "sequence_conflict",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Cyclic water jet assessment — SYN-JET-01:2024\nThermal cycle step 1: -20 °C.",
+      "requirement": {
+        "id": "req_c08_wrong_cycle_step",
+        "original_test_name": "Cyclic water jet assessment — SYN-JET-01:2024",
+        "requested_methods": [
+          {
+            "code": "SYN-JET-01:2024",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Step temperature",
+            "raw_value": "Thermal cycle step 1: -20 °C.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Cyclic water jet assessment — SYN-JET-01:2024\nThermal cycle step 1: -20 °C."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q08_temp",
+            "parameter_id": "temperature",
+            "label": "Step temperature",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "=",
+            "value": "-20",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Thermal cycle step 1: -20 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 1
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c08_wrong_cycle_step",
+        "test_name": "Cyclic water jet assessment — SYN-JET-01:2024",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q08_temp",
+            "parameter_id": "temperature",
+            "label": "Step temperature",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "=",
+            "value": "-20",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Thermal cycle step 1: -20 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 1
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c08_wrong_cycle_step_main",
+          "canonical_test_id": "jet_adhesion",
+          "method_ids": [
+            "syn_jet_2024"
+          ],
+          "declared_constraints": "Thermal cycle step 2 selectable from -30 to 0 °C.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l08_temp",
+              "parameter_id": "temperature",
+              "label": "Step temperature",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "range",
+              "value": null,
+              "minimum": "-30",
+              "maximum": "0",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Thermal cycle step 2 selectable from -30 to 0 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 2
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "jet_adhesion"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c08_wrong_cycle_step",
+            "identity_status": "aligned",
+            "canonical_test_id": "jet_adhesion",
+            "capability_id": "cap_c08_wrong_cycle_step_main",
+            "reason": "A matching numerical range at step 2 cannot establish support for step 1.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q08_temp",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "A matching numerical range at step 2 cannot establish support for step 1."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q08_temp": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "A matching numerical range at step 2 cannot establish support for step 1."
+        }
+      ]
+    },
+    {
+      "id": "c09_two_ordered_stages",
+      "family": "ordered_stage_positive",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Thermal-cycle water jet assessment — SYN-JET-01:2024\nStep 1 temperature: -10 °C.\nStep 2 temperature: 55 °C.",
+      "requirement": {
+        "id": "req_c09_two_ordered_stages",
+        "original_test_name": "Thermal-cycle water jet assessment — SYN-JET-01:2024",
+        "requested_methods": [
+          {
+            "code": "SYN-JET-01:2024",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "First step temperature",
+            "raw_value": "Step 1 temperature: -10 °C.",
+            "unit": null,
+            "context": null
+          },
+          {
+            "name": "Second step temperature",
+            "raw_value": "Step 2 temperature: 55 °C.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Thermal-cycle water jet assessment — SYN-JET-01:2024\nStep 1 temperature: -10 °C.\nStep 2 temperature: 55 °C."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q09_cold",
+            "parameter_id": "temperature",
+            "label": "First step temperature",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "=",
+            "value": "-10",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Step 1 temperature: -10 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 1
+          },
+          {
+            "id": "q09_hot",
+            "parameter_id": "temperature",
+            "label": "Second step temperature",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "=",
+            "value": "55",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Step 2 temperature: 55 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 2
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c09_two_ordered_stages",
+        "test_name": "Thermal-cycle water jet assessment — SYN-JET-01:2024",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q09_cold",
+            "parameter_id": "temperature",
+            "label": "First step temperature",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "=",
+            "value": "-10",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Step 1 temperature: -10 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 1
+          },
+          {
+            "id": "q09_hot",
+            "parameter_id": "temperature",
+            "label": "Second step temperature",
+            "kind": "condition",
+            "stage": "thermal_cycle",
+            "operator": "=",
+            "value": "55",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Step 2 temperature: 55 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": 2
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c09_two_ordered_stages_main",
+          "canonical_test_id": "jet_adhesion",
+          "method_ids": [
+            "syn_jet_2024"
+          ],
+          "declared_constraints": "Step 1 selectable: -20 to 0 °C. Step 2 selectable: 50–70 °C.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l09_cold",
+              "parameter_id": "temperature",
+              "label": "First step temperature",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "range",
+              "value": null,
+              "minimum": "-20",
+              "maximum": "0",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Step 1 selectable: -20 to 0 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 1
+            },
+            {
+              "id": "l09_hot",
+              "parameter_id": "temperature",
+              "label": "Second step temperature",
+              "kind": "condition",
+              "stage": "thermal_cycle",
+              "operator": "range",
+              "value": null,
+              "minimum": "50",
+              "maximum": "70",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Step 2 selectable: 50–70 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": 2
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "jet_adhesion"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c09_two_ordered_stages",
+            "identity_status": "aligned",
+            "canonical_test_id": "jet_adhesion",
+            "capability_id": "cap_c09_two_ordered_stages_main",
+            "reason": "Both ordered stages are separately declared; use each matching step rather than one combined min/max range.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q09_cold",
+                "capability_claim_ids": [
+                  "l09_cold"
+                ],
+                "relation": "same_parameter",
+                "reason": "Both ordered stages are separately declared; use each matching step rather than one combined min/max range."
+              },
+              {
+                "requirement_claim_id": "q09_hot",
+                "capability_claim_ids": [
+                  "l09_hot"
+                ],
+                "relation": "same_parameter",
+                "reason": "Both ordered stages are separately declared; use each matching step rather than one combined min/max range."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q09_cold": "supported",
+            "q09_hot": "supported"
+          },
+          "overall": "fully_matched",
+          "rationale": "Both ordered stages are separately declared; use each matching step rather than one combined min/max range."
+        }
+      ]
+    },
+    {
+      "id": "c10_same_parameter_range_gap",
+      "family": "correspondence_is_not_support",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Water jet adhesion — SYN-JET-01:2024\nRequired test water temperature: 80 °C.",
+      "requirement": {
+        "id": "req_c10_same_parameter_range_gap",
+        "original_test_name": "Water jet adhesion — SYN-JET-01:2024",
+        "requested_methods": [
+          {
+            "code": "SYN-JET-01:2024",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Water temperature",
+            "raw_value": "Required test water temperature: 80 °C.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Water jet adhesion — SYN-JET-01:2024\nRequired test water temperature: 80 °C."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q10_temp",
+            "parameter_id": "water_temperature",
+            "label": "Water temperature",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "80",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required test water temperature: 80 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c10_same_parameter_range_gap",
+        "test_name": "Water jet adhesion — SYN-JET-01:2024",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q10_temp",
+            "parameter_id": "water_temperature",
+            "label": "Water temperature",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "80",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required test water temperature: 80 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c10_same_parameter_range_gap_main",
+          "canonical_test_id": "jet_adhesion",
+          "method_ids": [
+            "syn_jet_2024"
+          ],
+          "declared_constraints": "Water temperature selectable from 20 to 70 °C.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l10_temp",
+              "parameter_id": "water_temperature",
+              "label": "Water temperature",
+              "kind": "condition",
+              "stage": "exposure",
+              "operator": "range",
+              "value": null,
+              "minimum": "20",
+              "maximum": "70",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Water temperature selectable from 20 to 70 °C.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "jet_adhesion"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c10_same_parameter_range_gap",
+            "identity_status": "aligned",
+            "canonical_test_id": "jet_adhesion",
+            "capability_id": "cap_c10_same_parameter_range_gap_main",
+            "reason": "The parameter correspondence is correct despite a true numeric capability gap.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q10_temp",
+                "capability_claim_ids": [
+                  "l10_temp"
+                ],
+                "relation": "same_parameter",
+                "reason": "The parameter correspondence is correct despite a true numeric capability gap."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q10_temp": "gap"
+          },
+          "overall": "partially_matched",
+          "rationale": "The parameter correspondence is correct despite a true numeric capability gap."
+        }
+      ]
+    },
+    {
+      "id": "c11_unknown_catalog_test",
+      "family": "unknown_test_identity",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Muon-thread acoustic echo weaving — SYN-MUON-99:2026\nMuon-thread echo exposure duration: 2 s.",
+      "requirement": {
+        "id": "req_c11_unknown_catalog_test",
+        "original_test_name": "Muon-thread acoustic echo weaving — SYN-MUON-99:2026",
+        "requested_methods": [
+          {
+            "code": "SYN-MUON-99:2026",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Echo duration",
+            "raw_value": "Muon-thread echo exposure duration: 2 s.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Muon-thread acoustic echo weaving — SYN-MUON-99:2026\nMuon-thread echo exposure duration: 2 s."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q11_time",
+            "parameter_id": "duration",
+            "label": "Echo duration",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "2",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "s",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Muon-thread echo exposure duration: 2 s.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c11_unknown_catalog_test",
+        "test_name": "Muon-thread acoustic echo weaving — SYN-MUON-99:2026",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q11_time",
+            "parameter_id": "duration",
+            "label": "Echo duration",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "2",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "s",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Muon-thread echo exposure duration: 2 s.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c11_unknown_catalog_test_main",
+          "canonical_test_id": "jet_adhesion",
+          "method_ids": [
+            "syn_jet_2024"
+          ],
+          "declared_constraints": "Water jet exposure duration selectable from 1 to 10 s.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l11_time",
+              "parameter_id": "duration",
+              "label": "Exposure duration",
+              "kind": "condition",
+              "stage": "exposure",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "10",
+              "tolerance": null,
+              "values": [],
+              "unit": "s",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Water jet exposure duration selectable from 1 to 10 s.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "jet_adhesion",
+        "surface_gloss",
+        "film_thickness",
+        "colour_difference"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c11_unknown_catalog_test",
+            "identity_status": "unknown",
+            "canonical_test_id": null,
+            "capability_id": null,
+            "reason": "No catalog test describes the requested fictional muon-thread procedure; a nearby duration must not manufacture a test identity.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q11_time",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "No catalog test describes the requested fictional muon-thread procedure; a nearby duration must not manufacture a test identity."
+              }
+            ]
+          },
+          "method_status": "unknown",
+          "checks": {
+            "q11_time": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "No catalog test describes the requested fictional muon-thread procedure; a nearby duration must not manufacture a test identity."
+        }
+      ]
+    },
+    {
+      "id": "c12_known_test_absent_from_lab",
+      "family": "known_test_no_lab_declaration",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Colour difference — SYN-COLOUR-09:2025\nAcceptance: colour difference <= 0.5 ΔE*ab.",
+      "requirement": {
+        "id": "req_c12_known_test_absent_from_lab",
+        "original_test_name": "Colour difference — SYN-COLOUR-09:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-COLOUR-09:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [],
+        "acceptance_criteria": [
+          {
+            "name": "Colour difference",
+            "raw_value": "Acceptance: colour difference <= 0.5 ΔE*ab.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Colour difference — SYN-COLOUR-09:2025\nAcceptance: colour difference <= 0.5 ΔE*ab."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q12_delta",
+            "parameter_id": "color_difference",
+            "label": "Colour difference",
+            "kind": "criterion",
+            "stage": "measurement",
+            "operator": "<=",
+            "value": "0.5",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "ΔE*ab",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Acceptance: colour difference <= 0.5 ΔE*ab.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c12_known_test_absent_from_lab",
+        "test_name": "Colour difference — SYN-COLOUR-09:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q12_delta",
+            "parameter_id": "color_difference",
+            "label": "Colour difference",
+            "kind": "criterion",
+            "stage": "measurement",
+            "operator": "<=",
+            "value": "0.5",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "ΔE*ab",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Acceptance: colour difference <= 0.5 ΔE*ab.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [],
+      "candidate_test_ids": [
+        "colour_difference"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c12_known_test_absent_from_lab",
+            "identity_status": "aligned",
+            "canonical_test_id": "colour_difference",
+            "capability_id": null,
+            "reason": "The catalog identifies the method, but this scenario contains no lab declaration for the test; record a method/test gap without inventing per-parameter capability.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q12_delta",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "The catalog identifies the method, but this scenario contains no lab declaration for the test; record a method/test gap without inventing per-parameter capability."
+              }
+            ]
+          },
+          "method_status": "gap",
+          "checks": {
+            "q12_delta": "unknown"
+          },
+          "overall": "not_matched",
+          "rationale": "The catalog identifies the method, but this scenario contains no lab declaration for the test; record a method/test gap without inventing per-parameter capability."
+        }
+      ]
+    },
+    {
+      "id": "c13_method_edition_gap",
+      "family": "method_edition",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Water jet adhesion — SYN-JET-01:2026\nRequired test water temperature: 60 °C.",
+      "requirement": {
+        "id": "req_c13_method_edition_gap",
+        "original_test_name": "Water jet adhesion — SYN-JET-01:2026",
+        "requested_methods": [
+          {
+            "code": "SYN-JET-01:2026",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Water temperature",
+            "raw_value": "Required test water temperature: 60 °C.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Water jet adhesion — SYN-JET-01:2026\nRequired test water temperature: 60 °C."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q13_temp",
+            "parameter_id": "water_temperature",
+            "label": "Water temperature",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "60",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required test water temperature: 60 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c13_method_edition_gap",
+        "test_name": "Water jet adhesion — SYN-JET-01:2026",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q13_temp",
+            "parameter_id": "water_temperature",
+            "label": "Water temperature",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "60",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required test water temperature: 60 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c13_method_edition_gap_main",
+          "canonical_test_id": "jet_adhesion",
+          "method_ids": [
+            "syn_jet_2024"
+          ],
+          "declared_constraints": "Water temperature selectable from 20 to 70 °C under SYN-JET-01:2024.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l13_temp",
+              "parameter_id": "water_temperature",
+              "label": "Water temperature",
+              "kind": "condition",
+              "stage": "exposure",
+              "operator": "range",
+              "value": null,
+              "minimum": "20",
+              "maximum": "70",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Water temperature selectable from 20 to 70 °C under SYN-JET-01:2024.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "jet_adhesion"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c13_method_edition_gap",
+            "identity_status": "aligned",
+            "canonical_test_id": "jet_adhesion",
+            "capability_id": "cap_c13_method_edition_gap_main",
+            "reason": "The test identity and parameter are comparable, but the lab declares edition 2024 while the source requires 2026; parameter coverage cannot erase that method gap.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q13_temp",
+                "capability_claim_ids": [
+                  "l13_temp"
+                ],
+                "relation": "same_parameter",
+                "reason": "The test identity and parameter are comparable, but the lab declares edition 2024 while the source requires 2026; parameter coverage cannot erase that method gap."
+              }
+            ]
+          },
+          "method_status": "gap",
+          "checks": {
+            "q13_temp": "supported"
+          },
+          "overall": "not_matched",
+          "rationale": "The test identity and parameter are comparable, but the lab declares edition 2024 while the source requires 2026; parameter coverage cannot erase that method gap."
+        },
+        {
+          "alignment": {
+            "requirement_id": "req_c13_method_edition_gap",
+            "identity_status": "aligned",
+            "canonical_test_id": "jet_adhesion",
+            "capability_id": null,
+            "reason": "It is also valid to decline selection of the wrong-edition capability; the known method gap remains not matched.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q13_temp",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "It is also valid to decline selection of the wrong-edition capability; the known method gap remains not matched."
+              }
+            ]
+          },
+          "method_status": "gap",
+          "checks": {
+            "q13_temp": "unknown"
+          },
+          "overall": "not_matched",
+          "rationale": "It is also valid to decline selection of the wrong-edition capability; the known method gap remains not matched."
+        }
+      ]
+    },
+    {
+      "id": "c14_novel_resource_exact",
+      "family": "novel_resource_positive",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Film build — SYN-FILM-07:2025\nRequired protective fixture liner: VZ+7.",
+      "requirement": {
+        "id": "req_c14_novel_resource_exact",
+        "original_test_name": "Film build — SYN-FILM-07:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-FILM-07:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Protective fixture liner",
+            "raw_value": "Required protective fixture liner: VZ+7.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Film build — SYN-FILM-07:2025\nRequired protective fixture liner: VZ+7."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q14_liner",
+            "parameter_id": "protective_liner",
+            "label": "Protective fixture liner",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "VZ+7",
+            "availability": "supported",
+            "raw_text": "Required protective fixture liner: VZ+7.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c14_novel_resource_exact",
+        "test_name": "Film build — SYN-FILM-07:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q14_liner",
+            "parameter_id": "protective_liner",
+            "label": "Protective fixture liner",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "VZ+7",
+            "availability": "supported",
+            "raw_text": "Required protective fixture liner: VZ+7.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c14_novel_resource_exact_main",
+          "canonical_test_id": "film_thickness",
+          "method_ids": [
+            "syn_film_2025"
+          ],
+          "declared_constraints": "Protective fixture liner VZ+7 is available.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l14_liner",
+              "parameter_id": "fixture_insert",
+              "label": "Protective fixture insert",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "required",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "VZ+7",
+              "availability": "supported",
+              "raw_text": "Protective fixture liner VZ+7 is available.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "film_thickness"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c14_novel_resource_exact",
+            "identity_status": "aligned",
+            "canonical_test_id": "film_thickness",
+            "capability_id": "cap_c14_novel_resource_exact_main",
+            "reason": "The explicitly named source-defined liner and insert refer to the same fixture resource and exact unfamiliar code.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q14_liner",
+                "capability_claim_ids": [
+                  "l14_liner"
+                ],
+                "relation": "same_parameter",
+                "reason": "The explicitly named source-defined liner and insert refer to the same fixture resource and exact unfamiliar code."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q14_liner": "supported"
+          },
+          "overall": "fully_matched",
+          "rationale": "The explicitly named source-defined liner and insert refer to the same fixture resource and exact unfamiliar code."
+        }
+      ]
+    },
+    {
+      "id": "c15_resource_punctuation_distinct",
+      "family": "identifier_punctuation",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Film build — SYN-FILM-07:2025\nRequired fixture insert: VZ+7.",
+      "requirement": {
+        "id": "req_c15_resource_punctuation_distinct",
+        "original_test_name": "Film build — SYN-FILM-07:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-FILM-07:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Fixture insert",
+            "raw_value": "Required fixture insert: VZ+7.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Film build — SYN-FILM-07:2025\nRequired fixture insert: VZ+7."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q15_liner",
+            "parameter_id": "fixture_insert",
+            "label": "Fixture insert",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "VZ+7",
+            "availability": "supported",
+            "raw_text": "Required fixture insert: VZ+7.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c15_resource_punctuation_distinct",
+        "test_name": "Film build — SYN-FILM-07:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q15_liner",
+            "parameter_id": "fixture_insert",
+            "label": "Fixture insert",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "VZ+7",
+            "availability": "supported",
+            "raw_text": "Required fixture insert: VZ+7.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c15_resource_punctuation_distinct_main",
+          "canonical_test_id": "film_thickness",
+          "method_ids": [
+            "syn_film_2025"
+          ],
+          "declared_constraints": "An available fixture insert is VZ-7; this is not an exhaustive inventory.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l15_liner",
+              "parameter_id": "fixture_insert",
+              "label": "Fixture insert",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "required",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "VZ-7",
+              "availability": "supported",
+              "raw_text": "An available fixture insert is VZ-7; this is not an exhaustive inventory.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "film_thickness"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c15_resource_punctuation_distinct",
+            "identity_status": "aligned",
+            "canonical_test_id": "film_thickness",
+            "capability_id": "cap_c15_resource_punctuation_distinct_main",
+            "reason": "The parameter is related, but VZ+7 and VZ-7 are different unfamiliar identifiers. A non-exhaustive list does not establish support or explicit unavailability of VZ+7.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q15_liner",
+                "capability_claim_ids": [
+                  "l15_liner"
+                ],
+                "relation": "same_parameter",
+                "reason": "The parameter is related, but VZ+7 and VZ-7 are different unfamiliar identifiers. A non-exhaustive list does not establish support or explicit unavailability of VZ+7."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q15_liner": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "The parameter is related, but VZ+7 and VZ-7 are different unfamiliar identifiers. A non-exhaustive list does not establish support or explicit unavailability of VZ+7."
+        },
+        {
+          "alignment": {
+            "requirement_id": "req_c15_resource_punctuation_distinct",
+            "identity_status": "aligned",
+            "canonical_test_id": "film_thickness",
+            "capability_id": "cap_c15_resource_punctuation_distinct_main",
+            "reason": "Deferring the correspondence is also safe because the exact requested resource is not declared.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q15_liner",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "Deferring the correspondence is also safe because the exact requested resource is not declared."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q15_liner": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "Deferring the correspondence is also safe because the exact requested resource is not declared."
+        }
+      ]
+    },
+    {
+      "id": "c16_explicit_unavailable",
+      "family": "explicit_negative",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Water jet adhesion — SYN-JET-01:2024\nRequired water temperature control: 60 °C.",
+      "requirement": {
+        "id": "req_c16_explicit_unavailable",
+        "original_test_name": "Water jet adhesion — SYN-JET-01:2024",
+        "requested_methods": [
+          {
+            "code": "SYN-JET-01:2024",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Water temperature",
+            "raw_value": "Required water temperature control: 60 °C.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Water jet adhesion — SYN-JET-01:2024\nRequired water temperature control: 60 °C."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q16_temp",
+            "parameter_id": "water_temperature",
+            "label": "Water temperature",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "60",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required water temperature control: 60 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c16_explicit_unavailable",
+        "test_name": "Water jet adhesion — SYN-JET-01:2024",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q16_temp",
+            "parameter_id": "water_temperature",
+            "label": "Water temperature",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "60",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required water temperature control: 60 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c16_explicit_unavailable_main",
+          "canonical_test_id": "jet_adhesion",
+          "method_ids": [
+            "syn_jet_2024"
+          ],
+          "declared_constraints": "Water-temperature control is explicitly unavailable at this lab.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l16_temp",
+              "parameter_id": "water_temperature",
+              "label": "Water temperature",
+              "kind": "condition",
+              "stage": "exposure",
+              "operator": "text",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "unavailable",
+              "availability": "unsupported",
+              "raw_text": "Water-temperature control is explicitly unavailable at this lab.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "jet_adhesion"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c16_explicit_unavailable",
+            "identity_status": "aligned",
+            "canonical_test_id": "jet_adhesion",
+            "capability_id": "cap_c16_explicit_unavailable_main",
+            "reason": "A global negative for this same water-temperature control parameter is an explicit gap, unlike missing information.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q16_temp",
+                "capability_claim_ids": [
+                  "l16_temp"
+                ],
+                "relation": "same_parameter",
+                "reason": "A global negative for this same water-temperature control parameter is an explicit gap, unlike missing information."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q16_temp": "gap"
+          },
+          "overall": "partially_matched",
+          "rationale": "A global negative for this same water-temperature control parameter is an explicit gap, unlike missing information."
+        }
+      ]
+    },
+    {
+      "id": "c17_reporting_and_material_synonym",
+      "family": "reportability_and_uncurated_category",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Colour difference — SYN-COLOUR-09:2025\nAcceptance: colour difference <= 0.7 ΔE*ab.\nRequired specimen material: low-carbon steel.",
+      "requirement": {
+        "id": "req_c17_reporting_and_material_synonym",
+        "original_test_name": "Colour difference — SYN-COLOUR-09:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-COLOUR-09:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Specimen material",
+            "raw_value": "Required specimen material: low-carbon steel.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [
+          {
+            "name": "Colour difference",
+            "raw_value": "Acceptance: colour difference <= 0.7 ΔE*ab.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Colour difference — SYN-COLOUR-09:2025\nAcceptance: colour difference <= 0.7 ΔE*ab.\nRequired specimen material: low-carbon steel."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q17_delta",
+            "parameter_id": "color_difference",
+            "label": "Colour difference",
+            "kind": "criterion",
+            "stage": "measurement",
+            "operator": "<=",
+            "value": "0.7",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "ΔE*ab",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Acceptance: colour difference <= 0.7 ΔE*ab.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "q17_material",
+            "parameter_id": "specimen_material",
+            "label": "Specimen material",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "text",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "low-carbon steel",
+            "availability": "supported",
+            "raw_text": "Required specimen material: low-carbon steel.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c17_reporting_and_material_synonym",
+        "test_name": "Colour difference — SYN-COLOUR-09:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q17_delta",
+            "parameter_id": "color_difference",
+            "label": "Colour difference",
+            "kind": "criterion",
+            "stage": "measurement",
+            "operator": "<=",
+            "value": "0.7",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "ΔE*ab",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Acceptance: colour difference <= 0.7 ΔE*ab.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "q17_material",
+            "parameter_id": "specimen_material",
+            "label": "Specimen material",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "text",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "low-carbon steel",
+            "availability": "supported",
+            "raw_text": "Required specimen material: low-carbon steel.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c17_reporting_and_material_synonym_main",
+          "canonical_test_id": "colour_difference",
+          "method_ids": [
+            "syn_colour_2025"
+          ],
+          "declared_constraints": "Reportable colour difference: 0–4 ΔE*ab. Supported specimen material: mild steel.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l17_delta",
+              "parameter_id": "color_difference",
+              "label": "Reportable colour difference",
+              "kind": "reporting",
+              "stage": "measurement",
+              "operator": "range",
+              "value": null,
+              "minimum": "0",
+              "maximum": "4",
+              "tolerance": null,
+              "values": [],
+              "unit": "ΔE*ab",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Reportable colour difference: 0–4 ΔE*ab.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "l17_material",
+              "parameter_id": "specimen_material",
+              "label": "Supported specimen material",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "text",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "mild steel",
+              "availability": "supported",
+              "raw_text": "Supported specimen material: mild steel.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "colour_difference"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c17_reporting_and_material_synonym",
+            "identity_status": "aligned",
+            "canonical_test_id": "colour_difference",
+            "capability_id": "cap_c17_reporting_and_material_synonym_main",
+            "reason": "The output range covers the requested reporting threshold, not a promise the specimen passes. Low-carbon steel and mild steel are equivalent material terms in this fictional scenario.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q17_delta",
+                "capability_claim_ids": [
+                  "l17_delta"
+                ],
+                "relation": "same_parameter",
+                "reason": "The output range covers the requested reporting threshold, not a promise the specimen passes. Low-carbon steel and mild steel are equivalent material terms in this fictional scenario."
+              },
+              {
+                "requirement_claim_id": "q17_material",
+                "capability_claim_ids": [
+                  "l17_material"
+                ],
+                "relation": "same_parameter",
+                "reason": "The output range covers the requested reporting threshold, not a promise the specimen passes. Low-carbon steel and mild steel are equivalent material terms in this fictional scenario."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q17_delta": "supported",
+            "q17_material": "supported"
+          },
+          "overall": "fully_matched",
+          "rationale": "The output range covers the requested reporting threshold, not a promise the specimen passes. Low-carbon steel and mild steel are equivalent material terms in this fictional scenario."
+        }
+      ],
+      "note": "Desired category equivalence is stated as an author label, not silently added to the runtime alias registry. Independent domain review remains required."
+    },
+    {
+      "id": "c18_wrong_claim_role",
+      "family": "role_conflict",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Film build — SYN-FILM-07:2025\nAcceptance: measured dry film thickness 42–55 µm.",
+      "requirement": {
+        "id": "req_c18_wrong_claim_role",
+        "original_test_name": "Film build — SYN-FILM-07:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-FILM-07:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [],
+        "acceptance_criteria": [
+          {
+            "name": "Dry film thickness",
+            "raw_value": "Acceptance: measured dry film thickness 42–55 µm.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Film build — SYN-FILM-07:2025\nAcceptance: measured dry film thickness 42–55 µm."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q18_thickness",
+            "parameter_id": "film_thickness",
+            "label": "Dry film thickness",
+            "kind": "criterion",
+            "stage": "measurement",
+            "operator": "range",
+            "value": null,
+            "minimum": "42",
+            "maximum": "55",
+            "tolerance": null,
+            "values": [],
+            "unit": "µm",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Acceptance: measured dry film thickness 42–55 µm.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c18_wrong_claim_role",
+        "test_name": "Film build — SYN-FILM-07:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q18_thickness",
+            "parameter_id": "film_thickness",
+            "label": "Dry film thickness",
+            "kind": "criterion",
+            "stage": "measurement",
+            "operator": "range",
+            "value": null,
+            "minimum": "42",
+            "maximum": "55",
+            "tolerance": null,
+            "values": [],
+            "unit": "µm",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Acceptance: measured dry film thickness 42–55 µm.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c18_wrong_claim_role_main",
+          "canonical_test_id": "film_thickness",
+          "method_ids": [
+            "syn_film_2025"
+          ],
+          "declared_constraints": "Applicator gap setting selectable from 20 to 100 µm; this is not measured coating thickness.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l18_gap",
+              "parameter_id": "film_thickness",
+              "label": "Applicator gap setting",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "range",
+              "value": null,
+              "minimum": "20",
+              "maximum": "100",
+              "tolerance": null,
+              "values": [],
+              "unit": "µm",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Applicator gap setting selectable from 20 to 100 µm; this is not measured coating thickness.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "film_thickness"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c18_wrong_claim_role",
+            "identity_status": "aligned",
+            "canonical_test_id": "film_thickness",
+            "capability_id": "cap_c18_wrong_claim_role_main",
+            "reason": "An application-machine setting cannot establish an ability to measure/report the final film thickness, despite the same unit and a misleading identical parameter ID.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q18_thickness",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "An application-machine setting cannot establish an ability to measure/report the final film thickness, despite the same unit and a misleading identical parameter ID."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q18_thickness": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "An application-machine setting cannot establish an ability to measure/report the final film thickness, despite the same unit and a misleading identical parameter ID."
+        }
+      ]
+    },
+    {
+      "id": "c19_configuration_no_mix",
+      "family": "configuration_completeness",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Water jet adhesion — SYN-JET-01:2024\nRig A required jet pressure: 1.5 bar.\nRig A required water temperature: 60 °C.",
+      "requirement": {
+        "id": "req_c19_configuration_no_mix",
+        "original_test_name": "Water jet adhesion — SYN-JET-01:2024",
+        "requested_methods": [
+          {
+            "code": "SYN-JET-01:2024",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Jet pressure",
+            "raw_value": "Rig A required jet pressure: 1.5 bar.",
+            "unit": null,
+            "context": null
+          },
+          {
+            "name": "Water temperature",
+            "raw_value": "Rig A required water temperature: 60 °C.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Water jet adhesion — SYN-JET-01:2024\nRig A required jet pressure: 1.5 bar.\nRig A required water temperature: 60 °C."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q19_pressure",
+            "parameter_id": "pressure",
+            "label": "Jet pressure",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "1.5",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "bar",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Rig A required jet pressure: 1.5 bar.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": "rig_a",
+            "sequence": null
+          },
+          {
+            "id": "q19_temp",
+            "parameter_id": "water_temperature",
+            "label": "Water temperature",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "60",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Rig A required water temperature: 60 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": "rig_a",
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c19_configuration_no_mix",
+        "test_name": "Water jet adhesion — SYN-JET-01:2024",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q19_pressure",
+            "parameter_id": "pressure",
+            "label": "Jet pressure",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "1.5",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "bar",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Rig A required jet pressure: 1.5 bar.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": "rig_a",
+            "sequence": null
+          },
+          {
+            "id": "q19_temp",
+            "parameter_id": "water_temperature",
+            "label": "Water temperature",
+            "kind": "condition",
+            "stage": "exposure",
+            "operator": "=",
+            "value": "60",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "°C",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Rig A required water temperature: 60 °C.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": "rig_a",
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c19_configuration_no_mix_main",
+          "canonical_test_id": "jet_adhesion",
+          "method_ids": [
+            "syn_jet_2024"
+          ],
+          "declared_constraints": "Rig A jet pressure: 1–2 bar selectable. Rig A water temperature: 20–40 °C selectable. Rig B jet pressure: 3–4 bar selectable. Rig B water temperature: 50–70 °C selectable.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l19_a_pressure",
+              "parameter_id": "pressure",
+              "label": "Jet pressure",
+              "kind": "condition",
+              "stage": "exposure",
+              "operator": "range",
+              "value": null,
+              "minimum": "1",
+              "maximum": "2",
+              "tolerance": null,
+              "values": [],
+              "unit": "bar",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Rig A jet pressure: 1–2 bar selectable.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": "rig_a",
+              "sequence": null
+            },
+            {
+              "id": "l19_a_temp",
+              "parameter_id": "water_temperature",
+              "label": "Water temperature",
+              "kind": "condition",
+              "stage": "exposure",
+              "operator": "range",
+              "value": null,
+              "minimum": "20",
+              "maximum": "40",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Rig A water temperature: 20–40 °C selectable.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": "rig_a",
+              "sequence": null
+            },
+            {
+              "id": "l19_b_pressure",
+              "parameter_id": "pressure",
+              "label": "Jet pressure",
+              "kind": "condition",
+              "stage": "exposure",
+              "operator": "range",
+              "value": null,
+              "minimum": "3",
+              "maximum": "4",
+              "tolerance": null,
+              "values": [],
+              "unit": "bar",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Rig B jet pressure: 3–4 bar selectable.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": "rig_b",
+              "sequence": null
+            },
+            {
+              "id": "l19_b_temp",
+              "parameter_id": "water_temperature",
+              "label": "Water temperature",
+              "kind": "condition",
+              "stage": "exposure",
+              "operator": "range",
+              "value": null,
+              "minimum": "50",
+              "maximum": "70",
+              "tolerance": null,
+              "values": [],
+              "unit": "°C",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Rig B water temperature: 50–70 °C selectable.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": "rig_b",
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "jet_adhesion"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c19_configuration_no_mix",
+            "identity_status": "aligned",
+            "canonical_test_id": "jet_adhesion",
+            "capability_id": "cap_c19_configuration_no_mix_main",
+            "reason": "The source specifically requires Rig A. Its pressure is covered but its water-temperature limit is insufficient; Rig B temperature cannot be borrowed to fabricate a complete setup.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q19_pressure",
+                "capability_claim_ids": [
+                  "l19_a_pressure"
+                ],
+                "relation": "same_parameter",
+                "reason": "The source specifically requires Rig A. Its pressure is covered but its water-temperature limit is insufficient; Rig B temperature cannot be borrowed to fabricate a complete setup."
+              },
+              {
+                "requirement_claim_id": "q19_temp",
+                "capability_claim_ids": [
+                  "l19_a_temp"
+                ],
+                "relation": "same_parameter",
+                "reason": "The source specifically requires Rig A. Its pressure is covered but its water-temperature limit is insufficient; Rig B temperature cannot be borrowed to fabricate a complete setup."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q19_pressure": "supported",
+            "q19_temp": "gap"
+          },
+          "overall": "partially_matched",
+          "rationale": "The source specifically requires Rig A. Its pressure is covered but its water-temperature limit is insufficient; Rig B temperature cannot be borrowed to fabricate a complete setup."
+        }
+      ]
+    },
+    {
+      "id": "c20_resolution_and_nominal_tolerance",
+      "family": "special_numeric_semantics",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Film measurement — SYN-FILM-07:2025\nRequired measurement resolution no worse than 0.1 mm.\nRequired measurement dwell setting: 70 s.",
+      "requirement": {
+        "id": "req_c20_resolution_and_nominal_tolerance",
+        "original_test_name": "Film measurement — SYN-FILM-07:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-FILM-07:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Measurement resolution",
+            "raw_value": "Required measurement resolution no worse than 0.1 mm.",
+            "unit": null,
+            "context": null
+          },
+          {
+            "name": "Measurement dwell",
+            "raw_value": "Required measurement dwell setting: 70 s.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Film measurement — SYN-FILM-07:2025\nRequired measurement resolution no worse than 0.1 mm.\nRequired measurement dwell setting: 70 s."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q20_resolution",
+            "parameter_id": "分辨率",
+            "label": "Measurement resolution",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "<=",
+            "value": "0.1",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "mm",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required measurement resolution no worse than 0.1 mm.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "q20_dwell",
+            "parameter_id": "duration",
+            "label": "Measurement dwell",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "=",
+            "value": "70",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "s",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required measurement dwell setting: 70 s.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c20_resolution_and_nominal_tolerance",
+        "test_name": "Film measurement — SYN-FILM-07:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q20_resolution",
+            "parameter_id": "分辨率",
+            "label": "Measurement resolution",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "<=",
+            "value": "0.1",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "mm",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required measurement resolution no worse than 0.1 mm.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          },
+          {
+            "id": "q20_dwell",
+            "parameter_id": "duration",
+            "label": "Measurement dwell",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "=",
+            "value": "70",
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": "s",
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required measurement dwell setting: 70 s.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c20_resolution_and_nominal_tolerance_main",
+          "canonical_test_id": "film_thickness",
+          "method_ids": [
+            "syn_film_2025"
+          ],
+          "declared_constraints": "Measurement resolution: 0.2 mm. Fixed nominal measurement dwell: 60 ± 10 s; the dwell is not user-selectable.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l20_resolution",
+              "parameter_id": "measurement_resolution",
+              "label": "Measurement resolution",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "=",
+              "value": "0.2",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": "mm",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Measurement resolution: 0.2 mm.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            },
+            {
+              "id": "l20_dwell",
+              "parameter_id": "duration",
+              "label": "Measurement dwell",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "=",
+              "value": "60",
+              "minimum": null,
+              "maximum": null,
+              "tolerance": "10",
+              "values": [],
+              "unit": "s",
+              "text_value": null,
+              "availability": "supported",
+              "raw_text": "Fixed nominal measurement dwell: 60 ± 10 s; the dwell is not user-selectable.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "film_thickness"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c20_resolution_and_nominal_tolerance",
+            "identity_status": "aligned",
+            "canonical_test_id": "film_thickness",
+            "capability_id": "cap_c20_resolution_and_nominal_tolerance_main",
+            "reason": "Resolution must be smaller or equal to the requested maximum. A fixed nominal setting with tolerance does not establish that 70 s is selectable.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q20_resolution",
+                "capability_claim_ids": [
+                  "l20_resolution"
+                ],
+                "relation": "same_parameter",
+                "reason": "Resolution must be smaller or equal to the requested maximum. A fixed nominal setting with tolerance does not establish that 70 s is selectable."
+              },
+              {
+                "requirement_claim_id": "q20_dwell",
+                "capability_claim_ids": [
+                  "l20_dwell"
+                ],
+                "relation": "same_parameter",
+                "reason": "Resolution must be smaller or equal to the requested maximum. A fixed nominal setting with tolerance does not establish that 70 s is selectable."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q20_resolution": "gap",
+            "q20_dwell": "unknown"
+          },
+          "overall": "partially_matched",
+          "rationale": "Resolution must be smaller or equal to the requested maximum. A fixed nominal setting with tolerance does not establish that 70 s is selectable."
+        }
+      ]
+    },
+    {
+      "id": "c21_missing_resource_value",
+      "family": "incomplete_extracted_category",
+      "split": "author_designed_development",
+      "input_quality": "intentionally_incomplete_extracted_fact",
+      "source_statement": "Film measurement — SYN-FILM-07:2025\nRequired fixture adapter: QX-9.",
+      "requirement": {
+        "id": "req_c21_missing_resource_value",
+        "original_test_name": "Film measurement — SYN-FILM-07:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-FILM-07:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Fixture adapter",
+            "raw_value": "Required fixture adapter: QX-9.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Film measurement — SYN-FILM-07:2025\nRequired fixture adapter: QX-9."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q21_adapter",
+            "parameter_id": "fixture_adapter",
+            "label": "Fixture adapter",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required fixture adapter: QX-9.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c21_missing_resource_value",
+        "test_name": "Film measurement — SYN-FILM-07:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q21_adapter",
+            "parameter_id": "fixture_adapter",
+            "label": "Fixture adapter",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": null,
+            "availability": "supported",
+            "raw_text": "Required fixture adapter: QX-9.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c21_missing_resource_value_main",
+          "canonical_test_id": "film_thickness",
+          "method_ids": [
+            "syn_film_2025"
+          ],
+          "declared_constraints": "Available fixture adapter: QX-7.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l21_adapter",
+              "parameter_id": "fixture_adapter",
+              "label": "Fixture adapter",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "required",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "QX-7",
+              "availability": "supported",
+              "raw_text": "Available fixture adapter: QX-7.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "film_thickness"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c21_missing_resource_value",
+            "identity_status": "aligned",
+            "canonical_test_id": "film_thickness",
+            "capability_id": "cap_c21_missing_resource_value_main",
+            "reason": "The extracted typed category is missing and the raw source names QX-9, while the lab names QX-7. An empty field is not a generic presence request and cannot establish support.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q21_adapter",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "The extracted typed category is missing and the raw source names QX-9, while the lab names QX-7. An empty field is not a generic presence request and cannot establish support."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q21_adapter": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "The extracted typed category is missing and the raw source names QX-9, while the lab names QX-7. An empty field is not a generic presence request and cannot establish support."
+        }
+      ],
+      "note": "This case deliberately models an upstream extraction defect; the preserved source text must prevent a missing text_value from acting as a wildcard."
+    },
+    {
+      "id": "c22_unregistered_case_sensitive_code",
+      "family": "identifier_case",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Film measurement — SYN-FILM-07:2025\nRequired proprietary adapter code: XQ-a.",
+      "requirement": {
+        "id": "req_c22_unregistered_case_sensitive_code",
+        "original_test_name": "Film measurement — SYN-FILM-07:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-FILM-07:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Fixture adapter",
+            "raw_value": "Required proprietary adapter code: XQ-a.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Film measurement — SYN-FILM-07:2025\nRequired proprietary adapter code: XQ-a."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q22_adapter",
+            "parameter_id": "fixture_adapter",
+            "label": "Fixture adapter",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "XQ-a",
+            "availability": "supported",
+            "raw_text": "Required proprietary adapter code: XQ-a.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c22_unregistered_case_sensitive_code",
+        "test_name": "Film measurement — SYN-FILM-07:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q22_adapter",
+            "parameter_id": "fixture_adapter",
+            "label": "Fixture adapter",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "XQ-a",
+            "availability": "supported",
+            "raw_text": "Required proprietary adapter code: XQ-a.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c22_unregistered_case_sensitive_code_main",
+          "canonical_test_id": "film_thickness",
+          "method_ids": [
+            "syn_film_2025"
+          ],
+          "declared_constraints": "An available proprietary adapter code is XQ-A; case is significant and the inventory is not exhaustive.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l22_adapter",
+              "parameter_id": "fixture_adapter",
+              "label": "Fixture adapter",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "required",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "XQ-A",
+              "availability": "supported",
+              "raw_text": "An available proprietary adapter code is XQ-A; case is significant and the inventory is not exhaustive.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "film_thickness"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c22_unregistered_case_sensitive_code",
+            "identity_status": "aligned",
+            "canonical_test_id": "film_thickness",
+            "capability_id": "cap_c22_unregistered_case_sensitive_code_main",
+            "reason": "These unregistered proprietary codes are case-sensitive. Lowercasing must not invent equivalence, and the non-exhaustive declaration does not prove unavailability.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q22_adapter",
+                "capability_claim_ids": [
+                  "l22_adapter"
+                ],
+                "relation": "same_parameter",
+                "reason": "These unregistered proprietary codes are case-sensitive. Lowercasing must not invent equivalence, and the non-exhaustive declaration does not prove unavailability."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q22_adapter": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "These unregistered proprietary codes are case-sensitive. Lowercasing must not invent equivalence, and the non-exhaustive declaration does not prove unavailability."
+        },
+        {
+          "alignment": {
+            "requirement_id": "req_c22_unregistered_case_sensitive_code",
+            "identity_status": "aligned",
+            "canonical_test_id": "film_thickness",
+            "capability_id": "cap_c22_unregistered_case_sensitive_code_main",
+            "reason": "Deferring the correspondence is safe because the exact case-sensitive resource is not declared.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q22_adapter",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "Deferring the correspondence is safe because the exact case-sensitive resource is not declared."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q22_adapter": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "Deferring the correspondence is safe because the exact case-sensitive resource is not declared."
+        }
+      ]
+    },
+    {
+      "id": "c23_unrelated_equipment_negative",
+      "family": "negative_resource_scope",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Optical comparison — SYN-COLOUR-09:2025\nRequired optical instrument: spectrophotometer.",
+      "requirement": {
+        "id": "req_c23_unrelated_equipment_negative",
+        "original_test_name": "Optical comparison — SYN-COLOUR-09:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-COLOUR-09:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Optical instrument",
+            "raw_value": "Required optical instrument: spectrophotometer.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Optical comparison — SYN-COLOUR-09:2025\nRequired optical instrument: spectrophotometer."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q23_equipment",
+            "parameter_id": "equipment",
+            "label": "Optical instrument",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "spectrophotometer",
+            "availability": "supported",
+            "raw_text": "Required optical instrument: spectrophotometer.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c23_unrelated_equipment_negative",
+        "test_name": "Optical comparison — SYN-COLOUR-09:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q23_equipment",
+            "parameter_id": "equipment",
+            "label": "Optical instrument",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "required",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "spectrophotometer",
+            "availability": "supported",
+            "raw_text": "Required optical instrument: spectrophotometer.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c23_unrelated_equipment_negative_main",
+          "canonical_test_id": "colour_difference",
+          "method_ids": [
+            "syn_colour_2025"
+          ],
+          "declared_constraints": "A UV lamp is explicitly unavailable; no spectrophotometer declaration is recorded.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l23_equipment",
+              "parameter_id": "equipment",
+              "label": "Optical instrument",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "required",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "UV lamp",
+              "availability": "unsupported",
+              "raw_text": "A UV lamp is explicitly unavailable; no spectrophotometer declaration is recorded.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "colour_difference"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c23_unrelated_equipment_negative",
+            "identity_status": "aligned",
+            "canonical_test_id": "colour_difference",
+            "capability_id": "cap_c23_unrelated_equipment_negative_main",
+            "reason": "A negative declaration for a UV lamp does not establish either availability or unavailability of a spectrophotometer.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q23_equipment",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "A negative declaration for a UV lamp does not establish either availability or unavailability of a spectrophotometer."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q23_equipment": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "A negative declaration for a UV lamp does not establish either availability or unavailability of a spectrophotometer."
+        },
+        {
+          "alignment": {
+            "requirement_id": "req_c23_unrelated_equipment_negative",
+            "identity_status": "aligned",
+            "canonical_test_id": "colour_difference",
+            "capability_id": "cap_c23_unrelated_equipment_negative_main",
+            "reason": "Even if grouped under the same equipment parameter, the negative refers to a different resource and must not become a gap for the requested instrument.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q23_equipment",
+                "capability_claim_ids": [
+                  "l23_equipment"
+                ],
+                "relation": "same_parameter",
+                "reason": "Even if grouped under the same equipment parameter, the negative refers to a different resource and must not become a gap for the requested instrument."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q23_equipment": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "Even if grouped under the same equipment parameter, the negative refers to a different resource and must not become a gap for the requested instrument."
+        }
+      ]
+    },
+    {
+      "id": "c24_unrelated_material_negative",
+      "family": "negative_category_scope",
+      "split": "author_designed_development",
+      "input_quality": "author_typed_reference_facts",
+      "source_statement": "Film measurement — SYN-FILM-07:2025\nRequired specimen material: steel.",
+      "requirement": {
+        "id": "req_c24_unrelated_material_negative",
+        "original_test_name": "Film measurement — SYN-FILM-07:2025",
+        "requested_methods": [
+          {
+            "code": "SYN-FILM-07:2025",
+            "revision": null,
+            "role": null
+          }
+        ],
+        "conditions": [
+          {
+            "name": "Specimen material",
+            "raw_value": "Required specimen material: steel.",
+            "unit": null,
+            "context": null
+          }
+        ],
+        "acceptance_criteria": [],
+        "applicability": [],
+        "special_instructions": [],
+        "evidence": [
+          {
+            "page": 1,
+            "section": null,
+            "quote": "Film measurement — SYN-FILM-07:2025\nRequired specimen material: steel."
+          }
+        ],
+        "atomic_claims": [
+          {
+            "id": "q24_material",
+            "parameter_id": "specimen_material",
+            "label": "Specimen material",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "text",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "steel",
+            "availability": "supported",
+            "raw_text": "Required specimen material: steel.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "normalized": {
+        "requirement_id": "req_c24_unrelated_material_negative",
+        "test_name": "Film measurement — SYN-FILM-07:2025",
+        "normalizer_version": "manual_semantic_challenge_v2",
+        "claims": [
+          {
+            "id": "q24_material",
+            "parameter_id": "specimen_material",
+            "label": "Specimen material",
+            "kind": "condition",
+            "stage": "measurement",
+            "operator": "text",
+            "value": null,
+            "minimum": null,
+            "maximum": null,
+            "tolerance": null,
+            "values": [],
+            "unit": null,
+            "text_value": "steel",
+            "availability": "supported",
+            "raw_text": "Required specimen material: steel.",
+            "source_context": null,
+            "source_pages": [
+              1
+            ],
+            "normalization_state": "parsed",
+            "configuration": null,
+            "sequence": null
+          }
+        ]
+      },
+      "capabilities": [
+        {
+          "id": "cap_c24_unrelated_material_negative_main",
+          "canonical_test_id": "film_thickness",
+          "method_ids": [
+            "syn_film_2025"
+          ],
+          "declared_constraints": "Aluminium specimens are unsupported; support for steel is not recorded.",
+          "structured_limits": [],
+          "atomic_claims": [
+            {
+              "id": "l24_material",
+              "parameter_id": "specimen_material",
+              "label": "Specimen material",
+              "kind": "condition",
+              "stage": "measurement",
+              "operator": "text",
+              "value": null,
+              "minimum": null,
+              "maximum": null,
+              "tolerance": null,
+              "values": [],
+              "unit": null,
+              "text_value": "aluminium",
+              "availability": "unsupported",
+              "raw_text": "Aluminium specimens are unsupported; support for steel is not recorded.",
+              "source_context": null,
+              "source_pages": [],
+              "normalization_state": "parsed",
+              "configuration": null,
+              "sequence": null
+            }
+          ],
+          "notes": null,
+          "price": null,
+          "currency": null,
+          "pricing_basis": null
+        }
+      ],
+      "candidate_test_ids": [
+        "film_thickness"
+      ],
+      "expected_outcomes": [
+        {
+          "alignment": {
+            "requirement_id": "req_c24_unrelated_material_negative",
+            "identity_status": "aligned",
+            "canonical_test_id": "film_thickness",
+            "capability_id": "cap_c24_unrelated_material_negative_main",
+            "reason": "The explicit negative is limited to aluminium. It does not establish that steel is unsupported.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q24_material",
+                "capability_claim_ids": [],
+                "relation": "unknown",
+                "reason": "The explicit negative is limited to aluminium. It does not establish that steel is unsupported."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q24_material": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "The explicit negative is limited to aluminium. It does not establish that steel is unsupported."
+        },
+        {
+          "alignment": {
+            "requirement_id": "req_c24_unrelated_material_negative",
+            "identity_status": "aligned",
+            "canonical_test_id": "film_thickness",
+            "capability_id": "cap_c24_unrelated_material_negative_main",
+            "reason": "A common material parameter does not extend an aluminium-only negative to a different requested material.",
+            "claim_alignments": [
+              {
+                "requirement_claim_id": "q24_material",
+                "capability_claim_ids": [
+                  "l24_material"
+                ],
+                "relation": "same_parameter",
+                "reason": "A common material parameter does not extend an aluminium-only negative to a different requested material."
+              }
+            ]
+          },
+          "method_status": "supported",
+          "checks": {
+            "q24_material": "unknown"
+          },
+          "overall": "needs_information",
+          "rationale": "A common material parameter does not extend an aluminium-only negative to a different requested material."
+        }
+      ]
+    }
+  ]
+}
