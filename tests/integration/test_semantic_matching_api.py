@@ -11,6 +11,7 @@ import pytest
 from test_workspace_api import LocalHTTPClient, make_pdf
 
 from scione.api.app import create_app
+from scione.api.contracts import AssessmentReview
 from scione.api.workspace import Workspace
 from scione.catalogs.models import LabCapability
 from scione.config import Settings
@@ -195,6 +196,55 @@ def test_explicit_ai_alignment_drives_saved_comparison_and_machine_artifacts(set
     assert artifact["matching_machine"]["requested_model"] == "fixture-alias"
     assert provider.calls == 1  # Browsing and exporting must never call a model.
     assert workspace.labs.records()["claims"][0]["parameter_id"] == "lab_operating_temperature"
+
+
+def test_completed_matching_replaces_warm_pre_ai_view_without_rewriting_history(setup):
+    client, workspace, document_id, provider, _settings = setup
+    before = client.get(f"/api/comparisons/{document_id}").json()
+    assert before["matching_run_id"] is None
+    assert client.get(f"/api/comparisons/{document_id}").json()["comparison_id"] == (
+        before["comparison_id"]
+    )
+    # A user's decision belongs to the saved assessment. A later AI result may
+    # supersede that assessment, but must not rewrite its review or export.
+    reviewed = workspace.library.review_assessment(document_id, AssessmentReview(
+        comparison_id=before["comparison_id"],
+        input_fingerprint=before["report_input_fingerprint"],
+        requirement_id="req_pencil", expected_version=0,
+        review_status="accepted", decision="clarify_customer",
+        note="Ask the customer to confirm the requested temperature.",
+    ))
+    old_export = deepcopy(workspace.library.store.comparison(reviewed["export_snapshot_id"]))
+    source_run = workspace.specs.load_latest_extraction(document_id)
+    source_review = workspace.specs.load_review(document_id, source_run.run_id).model_dump(
+        mode="json"
+    )
+    matching_inputs = client.get(f"/api/specifications/{document_id}/matching").json()
+    response = client.post(
+        f"/api/specifications/{document_id}/matching", json=body_for(client, document_id)
+    )
+    assert response.status_code == 200, response.text
+    run_id = response.json()["run_id"]
+    current_inputs = client.get(f"/api/specifications/{document_id}/matching").json()
+    assert current_inputs["input_fingerprint"] == matching_inputs["input_fingerprint"]
+    assert current_inputs["current_run_id"] == run_id
+
+    after = client.get(f"/api/comparisons/{document_id}").json()
+    assert after["comparison_id"] != before["comparison_id"]
+    assert after["matching_run_id"] == run_id
+    assert after["comparison_engine"] == "ai_semantic_matching"
+    assert after["report_input_fingerprint"] == before["report_input_fingerprint"]
+    assert after["summary"]["fully_matched"] == 1
+    repeated = client.get(f"/api/comparisons/{document_id}").json()
+    assert repeated["comparison_id"] == after["comparison_id"]
+    assert repeated["matching_run_id"] == run_id
+    assert provider.calls == 1
+    assert workspace.library.store.comparison(reviewed["export_snapshot_id"]) == old_export
+    assert old_export["matching_run_id"] is None
+    assert old_export["assessment_reviews"]["req_pencil"]["decision"] == "clarify_customer"
+    assert workspace.specs.load_review(document_id, source_run.run_id).model_dump(
+        mode="json"
+    ) == source_review
 
 
 @pytest.mark.parametrize("maximum, summary", [("30", "fully_matched"), ("22", "partially_matched")])
