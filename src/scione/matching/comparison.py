@@ -7,6 +7,7 @@ Method identity/edition decisions are supplied by the deterministic caller.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Literal
 
@@ -25,7 +26,9 @@ from scione.matching.service import (
 )
 from scione.matching.workflow_roles import compound_plan_review_issues, compound_sample_plan_proofs
 from scione.parameters import normalize_claim, resolve_definition
+from scione.source_text import citation_contains
 from scione.structured.comparison import compare_requirement
+from scione.structured.lexical_grounding import grounded_source_numbers
 from scione.structured.models import AtomicClaim, ClaimCheck, StructuredComparison
 from scione.structured.normalization import known_source_fact_problem
 
@@ -48,6 +51,57 @@ def _unknown_check(claim: AtomicClaim, reason: str) -> ClaimCheck:
     )
 
 
+def _conditioning_air_request(claim, lab, source):
+    """Resolve ambient conditioning only from its owned temperature/RH clause.
+
+    This comparison copy cannot alias water, object/oven temperatures or a
+    different phase. Neither the stored source nor the model input changes.
+    """
+    first = resolve_definition(normalize_claim(claim).parameter_id)
+    second = resolve_definition(normalize_claim(lab).parameter_id)
+    if not (
+        first and first.id == "temperature"
+        and second and second.id == "air_temperature"
+        and claim.kind == lab.kind == "condition"
+        and claim.stage == lab.stage == "conditioning"
+        and claim.normalization_state != "unresolved"
+        and lab.normalization_state != "unresolved"
+        and claim.availability == lab.availability == "supported"
+        and claim.source_context is None and lab.source_context is None
+        and claim.source_pages
+        and re.search(r"\bconditioning\b", claim.raw_text, re.I)
+        and re.search(r"%\s*RH\b|\brelative\s+humidity\b", claim.raw_text, re.I)
+        and re.search(r"\bconditioning\b", lab.raw_text, re.I)
+        and not re.search(
+            r"\b(?:water|liquid|oil|metal|object|oven|bath|immersion|immersed|solution|"
+            r"fluid|coolant|not|except|unless|without)\b|"
+            r"\b(?:specimen|sample|surface)\s+temperature\b",
+            " ".join((claim.label, claim.raw_text, lab.label, lab.raw_text)), re.I,
+        )
+    ):
+        return None
+    pages = {
+        row.page for row in source.evidence
+        if citation_contains(row.quote, claim.raw_text)
+    }
+    numbers = {
+        value for value in (claim.value, claim.minimum, claim.maximum, *claim.values)
+        if value is not None
+    }
+    if (
+        not set(claim.source_pages) <= pages
+        or not numbers
+        or numbers != grounded_source_numbers(claim.raw_text, unit=claim.unit)
+    ):
+        return None
+    return claim.model_copy(deep=True, update={"parameter_id": "air_temperature"}), {
+        "rule": "owned_conditioning_temperature_and_relative_humidity",
+        "field": "parameter_id", "source": claim.parameter_id,
+        "canonical": "air_temperature", "side": "requirement",
+        "source_pages": list(claim.source_pages), "source_quote": claim.raw_text,
+    }
+
+
 def _exact_field_check(claim, normalized, source, declared, method_status, owner_test_labels=()):
     """A single registered field can be decisive without a model correspondence.
 
@@ -66,10 +120,15 @@ def _exact_field_check(claim, normalized, source, declared, method_status, owner
     candidates = []
     for lab in declared.values():
         lab_definition = resolve_definition(normalize_claim(lab).parameter_id)
+        requested, source_actions = claim, []
         if not lab_definition or lab_definition.id != definition.id:
-            continue
+            proof = _conditioning_air_request(claim, lab, source.requirement)
+            if proof is None:
+                continue
+            requested, action = proof
+            source_actions.append(action)
         try:
-            request, declaration = comparison_pair(claim, lab)
+            request, declaration = comparison_pair(requested, lab)
             request, declaration, actions = canonical_alignment_pair(
                 request,
                 declaration,
@@ -80,7 +139,7 @@ def _exact_field_check(claim, normalized, source, declared, method_status, owner
         except ValueError:
             continue
         if _compatible_context(request, declaration) is None:
-            candidates.append((request, declaration, actions, lab))
+            candidates.append((request, declaration, [*source_actions, *actions], lab))
     if len(candidates) != 1:
         return None
     request, declaration, actions, original_lab = candidates[0]

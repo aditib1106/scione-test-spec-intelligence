@@ -53,6 +53,7 @@ import ReportAssessmentReview from "../components/ReportAssessmentReview";
 import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
 import SourceCoverageNotice from "../components/SourceCoverageNotice";
 import DocumentNotes from "../components/DocumentNotes";
+import ComparisonCheckSummary from "../components/ComparisonCheckSummary";
 import { specificationVersionLabel } from "../specificationDates";
 import type { PageProps } from "../types";
 import type { LibraryDocument } from "../libraryTypes";
@@ -805,6 +806,28 @@ export default function Comparison({ workspace }: PageProps) {
               </Stack>
               {tab === "comparison" && (
                 <>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    gap={1.5}
+                    useFlexGap
+                    flexWrap="wrap"
+                    sx={{ mb: 1.25, px: 0.5, flexShrink: 0 }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      Requirement checks
+                    </Typography>
+                    <ComparisonCheckSummary
+                      label="Requirement check totals"
+                      checks={report.requirements
+                        .filter((item) => item.comparison.status !== "excluded")
+                        .flatMap((item) => item.comparison.checks)}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      A test is fully matched only when all required checks are
+                      resolved.
+                    </Typography>
+                  </Stack>
                   <Box
                     sx={{
                       display: "grid",
@@ -1028,6 +1051,15 @@ export default function Comparison({ workspace }: PageProps) {
                                 </Typography>
                               )}
                             </Stack>
+                            {requirement.comparison.status !== "excluded" && (
+                              <Box sx={{ mt: 1 }}>
+                                <ComparisonCheckSummary
+                                  label={`${requirement.test_name}: comparison checks`}
+                                  checks={requirement.comparison.checks}
+                                  showBar
+                                />
+                              </Box>
+                            )}
                           </ListItemButton>
                         ))}
                         {!visible.length && (
@@ -1105,37 +1137,12 @@ export default function Comparison({ workspace }: PageProps) {
                               </Stack>
                               {selected.comparison.status !== "excluded" &&
                                 selected.comparison.checks.length > 0 && (
-                                  <Stack
-                                    direction="row"
-                                    gap={2}
-                                    flexWrap="wrap"
-                                    role="group"
-                                    aria-label="Comparison checks"
-                                    sx={{ mt: 1 }}
-                                  >
-                                    {[
-                                      ["supported", "matched", "#24745a"],
-                                      ["gap", "gaps", "#b34552"],
-                                      ["unknown", "to clarify", "#946018"],
-                                    ].map(([state, label, color]) => {
-                                      const count =
-                                        selected.comparison.checks.filter(
-                                          (check) => check.status === state,
-                                        ).length;
-                                      return count > 0 ? (
-                                        <Typography
-                                          key={state}
-                                          variant="caption"
-                                          sx={{ color, fontWeight: 600 }}
-                                        >
-                                          {count}{" "}
-                                          {state === "gap" && count === 1
-                                            ? "gap"
-                                            : label}
-                                        </Typography>
-                                      ) : null;
-                                    })}
-                                  </Stack>
+                                  <Box sx={{ mt: 1 }}>
+                                    <ComparisonCheckSummary
+                                      label="Comparison checks"
+                                      checks={selected.comparison.checks}
+                                    />
+                                  </Box>
                                 )}
                               {["needs_attention", "needs_review"].includes(
                                 selected.source_review_state,
