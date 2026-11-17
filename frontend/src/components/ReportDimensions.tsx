@@ -28,6 +28,7 @@ import type {
   ReasonSource,
 } from "../comparisonTypes";
 import type { PopoverActions } from "@mui/material";
+import ComparisonCheckSummary from "./ComparisonCheckSummary";
 
 export type ReportDimension = "method" | "condition" | "criterion";
 type ResultState = "match" | "partial" | "gap" | "unknown" | "note" | "empty";
@@ -554,17 +555,24 @@ export default function ReportDimensions({
                             transition: "transform 180ms ease",
                           }}
                         />
-                        <Typography fontSize={14} fontWeight={650}>
-                          {label}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ ml: 0.5 }}
-                        >
-                          {checks.length || "No"}{" "}
-                          {checks.length === 1 ? "requirement" : "requirements"}
-                        </Typography>
+                        <Box sx={{ py: 1 }}>
+                          <Typography fontSize={14} fontWeight={650}>
+                            {label}
+                          </Typography>
+                          {checks.length ? (
+                            <ComparisonCheckSummary
+                              label={`${label}: check breakdown`}
+                              checks={checks}
+                            />
+                          ) : (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              No requirements recorded
+                            </Typography>
+                          )}
+                        </Box>
                       </ButtonBase>
                     </TableCell>
                     <TableCell

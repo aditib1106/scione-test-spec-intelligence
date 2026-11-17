@@ -180,6 +180,58 @@ async function selectFilter(page: Page, label: string) {
   await page.getByRole("option", { name: label, exact: true }).click();
 }
 
+test("incomplete tests show resolved checks without claiming a full match", async ({
+  page,
+}) => {
+  const comparison = await mockReport(page);
+  const requirement = comparison.requirements[0];
+  requirement.comparison.status = "needs_information";
+  requirement.comparison.checks[1].status = "supported";
+  requirement.comparison.checks.push(
+    {
+      ...requirement.comparison.checks[2],
+      label: "Source review",
+      kind: "source",
+      parameter_id: "source_review",
+    },
+    {
+      ...requirement.comparison.checks[2],
+      label: "Customer note",
+      kind: "instruction",
+      status: "informational",
+    },
+  );
+  comparison.summary = { needs_information: 1, fully_matched: 1 };
+  await page.goto(`${base}/reports?document=summary-source`);
+  const item = page
+    .getByRole("navigation", { name: "Requested tests" })
+    .getByRole("button", { name: "Water jet adhesion", exact: true });
+  await expect(
+    item.getByText("Needs information", { exact: true }),
+  ).toBeVisible();
+  await expect(item.getByText("3 matched", { exact: true })).toBeVisible();
+  await expect(item.getByText("1 to clarify", { exact: true })).toBeVisible();
+  await expect(item.getByText("1 source check", { exact: true })).toBeVisible();
+  const totals = page.getByRole("group", {
+    name: "Requirement check totals",
+    exact: true,
+  });
+  await expect(totals.getByText("4 matched", { exact: true })).toBeVisible();
+  await expect(totals.getByText("1 to clarify", { exact: true })).toBeVisible();
+  const conditions = page.getByRole("group", {
+    name: "Condition: check breakdown",
+    exact: true,
+  });
+  await expect(
+    conditions.getByText("1 matched", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    conditions.getByText("1 source check", { exact: true }),
+  ).toBeVisible();
+  await selectFilter(page, "Fully matched");
+  await expect(item).toHaveCount(0);
+});
+
 test("document source coverage stays visible while filtering extracted report items", async ({
   page,
 }) => {
