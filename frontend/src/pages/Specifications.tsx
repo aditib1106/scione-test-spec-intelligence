@@ -5,6 +5,7 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -46,7 +47,10 @@ import {
   requestOperation,
   useResource,
 } from "../api";
-import { useInferenceActivity } from "../components/InferenceActivity";
+import {
+  useInferenceActivity,
+  useInlineInferenceActivity,
+} from "../components/InferenceActivity";
 import { useAuth } from "../auth";
 import PdfPageViewer from "../components/PdfPageViewer";
 import SourceFactsEditor from "../components/SourceFactsEditor";
@@ -60,6 +64,7 @@ import SpecificationReviewSummary from "../components/SpecificationReviewSummary
 import DocumentNotes from "../components/DocumentNotes";
 import type {
   PageProps,
+  DocumentSummary,
   Requirement,
   SpecificationData,
   SpecificationUploadReceipt,
@@ -120,12 +125,19 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const { canDevelop } = useAuth();
   const [params, setParams] = useSearchParams();
   const lastRequirementParam = useRef(params.get("requirement"));
+  const documentNavigationIntent = useRef<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const compact = useMediaQuery("(max-width:1099px)");
   const docs = workspace.documents;
   const requestedId = params.get("document");
   const documentId = requestedId || docs[0]?.document_id || "";
+  useEffect(() => {
+    // The intent protects only the gap before Router commits navigation. Once
+    // the route changes, Back or another navigation must not inherit it while
+    // the destination's source request is still pending or has failed.
+    documentNavigationIntent.current = null;
+  }, [documentId]);
   const { active: activeOperations, refresh: refreshActivity } =
     useInferenceActivity();
   const analysisOperation = activeOperations.find(
@@ -179,6 +191,11 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         item.kind === "extraction" &&
         item.observation_state !== "stale",
     );
+  useInlineInferenceActivity(
+    documentId,
+    "extraction",
+    analyzing && Boolean(data) && data?.document_id === documentId && !loading,
+  );
   const [analysisDocumentName, setAnalysisDocumentName] = useState("");
   const analysisSubmitting = useRef(false);
   const ownedAnalysisDocument = useRef("");
@@ -258,6 +275,8 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const [batchNote, setBatchNote] = useState("");
   const [batchAck, setBatchAck] = useState(false);
   const [batchSaving, setBatchSaving] = useState(false);
+  const reviewBusy = saving || batchSaving;
+  const reviewSubmitting = useRef(false);
   const [batchError, setBatchError] = useState("");
   const [analysisOpen, setAnalysisOpen] = useState(!data?.run);
   const requestedSourcePage = params.get("page");
@@ -296,6 +315,20 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
           { signal },
         );
         if (isCurrent()) {
+          if (documentNavigationIntent.current === id)
+            documentNavigationIntent.current = null;
+          // Choose a useful initial view for a newly opened document. After
+          // this point an explicit Pending filter remains Pending, including
+          // when its last item is confirmed or the queue is empty.
+          if (dataRef.current?.document_id !== id)
+            setFilter(
+              preferredRequirementId ||
+                !next.run?.extraction.requirements.some(
+                  (item) => statusOf(next, item.id) === "needs_attention",
+                )
+                ? "all"
+                : "pending",
+            );
           setData(next);
           setPage(1);
           setAnalysisError("");
@@ -454,7 +487,9 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         item.original_test_name
       : item.original_test_name;
   const selected: Requirement | undefined = requirements.find(
-    (item) => item.id === selectedId,
+    (item) =>
+      item.id === selectedId &&
+      (filter === "all" || statusOf(data!, item.id) === "needs_attention"),
   );
   useEffect(() => {
     setSourceField(null);
@@ -496,13 +531,32 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         .map((item) => item.id),
     [data, requirements],
   );
-  useEffect(() => {
-    if (data?.run && actionableIds.length === 0) setFilter("all");
-  }, [data?.run?.run_id, actionableIds.length]);
   const displayed =
     filter === "pending"
       ? requirements.filter((item) => actionableIds.includes(item.id))
       : requirements;
+  useEffect(() => {
+    // Router navigation can commit after a synchronous selection reset. The
+    // outgoing document must not write its old ID back over that navigation.
+    if (
+      documentNavigationIntent.current &&
+      documentNavigationIntent.current !== documentId
+    )
+      return;
+    if (!data?.run || data.document_id !== documentId) return;
+    if (displayed.some((item) => item.id === selectedId)) return;
+    const next = displayed[0]?.id ?? "";
+    if (next === selectedId) return;
+    setSelectedId(next);
+    lastRequirementParam.current = next || null;
+    setParams(
+      next
+        ? { document: documentId, requirement: next }
+        : { document: documentId },
+      { replace: true },
+    );
+    setNote(data.review?.decisions[next]?.note ?? "");
+  }, [data, displayed, documentId, selectedId, setParams]);
   const state = selected && data ? statusOf(data, selected.id) : "";
   const canReviewSelected =
     state === "needs_attention" ||
@@ -624,6 +678,24 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     if (first) setPage(first.page);
     setNote(data?.review?.decisions[id]?.note ?? "");
   };
+  const selectedSourceIndex = requirements.findIndex(
+    (item) => item.id === selected?.id,
+  );
+  const previousPendingId =
+    selectedSourceIndex > 0
+      ? requirements
+          .slice(0, selectedSourceIndex)
+          .reverse()
+          .find((item) => actionableIds.includes(item.id))?.id
+      : undefined;
+  const nextPendingId = requirements
+    .slice(selectedSourceIndex + 1)
+    .find((item) => actionableIds.includes(item.id))?.id;
+  const navigatePending = (id?: string) => {
+    if (!id || reviewBusy || data?.document_id !== documentId) return;
+    setFilter("pending");
+    selectRequirement(id);
+  };
   const advance = (
     nextData: SpecificationData,
     actedIds: string[],
@@ -646,6 +718,9 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     selectedNote: string,
     acknowledged: boolean,
   ) => {
+    if (reviewSubmitting.current) return false;
+    const fromBatchReview = batchOpen;
+    const showReviewError = fromBatchReview ? setBatchError : setError;
     if (
       !data?.run ||
       !data.review ||
@@ -654,15 +729,16 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     )
       return;
     if (decision === "excluded" && !selectedNote.trim()) {
-      setError("Add a reason before excluding source records.");
+      showReviewError("Add a reason before excluding source records.");
       return;
     }
     if (ids.length > 1 && !acknowledged) {
-      setError(
+      showReviewError(
         "Acknowledge that you checked every selected record against the PDF.",
       );
       return;
     }
+    reviewSubmitting.current = true;
     setSaving(ids.length === 1);
     setBatchSaving(ids.length > 1);
     setError("");
@@ -714,9 +790,10 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
           ? `${reason.message} Your draft is still here. Reload saved review only after deciding whether to keep it.`
           : errorText(reason);
       if (activeDocumentRef.current === documentAtSubmit)
-        ids.length > 1 ? setBatchError(message) : setError(message);
+        showReviewError(message);
       return false;
     } finally {
+      reviewSubmitting.current = false;
       setSaving(false);
       setBatchSaving(false);
     }
@@ -1151,9 +1228,24 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     </Stack>
   ) : (
     <Box sx={{ py: 5, textAlign: "center" }}>
-      <Typography color="text.secondary">
-        Select a test to see what was extracted.
-      </Typography>
+      {filter === "pending" && requirements.length > 0 ? (
+        <>
+          <CheckRoundedIcon
+            sx={{ color: "success.main", fontSize: 32, mb: 1 }}
+          />
+          <Typography fontWeight={700}>No tests need your review</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            You can still inspect all extracted tests or continue to the report.
+          </Typography>
+          <Button onClick={() => setFilter("all")} sx={{ mt: 1 }}>
+            View all tests
+          </Button>
+        </>
+      ) : (
+        <Typography color="text.secondary">
+          Select a test to see what was extracted.
+        </Typography>
+      )}
     </Box>
   );
 
@@ -1163,28 +1255,33 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       spacing={1.5}
       alignItems={{ md: "center" }}
     >
-      <FormControl
+      <Autocomplete<DocumentSummary, false, boolean, false>
         size="small"
+        disableClearable
+        options={docs}
+        value={docs.find((doc) => doc.document_id === documentId) ?? null}
+        getOptionKey={(doc) => doc.document_id}
+        getOptionLabel={(doc) => doc.original_name}
+        isOptionEqualToValue={(option, value) =>
+          option.document_id === value.document_id
+        }
+        onChange={(_, document) => {
+          if (!document || document.document_id === documentId) return;
+          documentNavigationIntent.current = document.document_id;
+          setParams({ document: document.document_id });
+          setSelectedId("");
+          setError("");
+        }}
+        noOptionsText="No saved PDF matches this search."
         sx={{ minWidth: { xs: "100%", md: 310 }, bgcolor: "#fff" }}
-      >
-        <InputLabel id="spec-doc-label">Saved specification</InputLabel>
-        <Select
-          labelId="spec-doc-label"
-          label="Saved specification"
-          value={documentId}
-          onChange={(event) => {
-            setParams({ document: event.target.value });
-            setSelectedId("");
-            setError("");
-          }}
-        >
-          {docs.map((doc) => (
-            <MenuItem value={doc.document_id} key={doc.document_id}>
-              {doc.original_name}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+        renderInput={(input) => (
+          <TextField
+            {...input}
+            label="Saved specification"
+            placeholder="Search saved PDFs"
+          />
+        )}
+      />
       <Stack direction="row" spacing={1}>
         <Button
           component="label"
@@ -1708,7 +1805,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                         <Typography variant="body2" color="text.secondary">
                           {data.run
                             ? "Review the extracted test items below, or run a fresh analysis."
-                            : "Extract the test items, conditions and acceptance criteria from this PDF."}
+                            : "Extract the test items, conditions and test specifications from this PDF."}
                         </Typography>
                       </Box>
                       <Button
@@ -1868,12 +1965,15 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                           {requirements.length} tests · {actionableIds.length}{" "}
                           {actionableIds.length === 1 ? "needs" : "need"} your
                           review
+                          {state === "needs_attention" &&
+                            ` · Pending item ${actionableIds.indexOf(selectedId) + 1} of ${actionableIds.length}`}
                         </Typography>
                       </Box>
                       <Stack direction="row" spacing={0.5}>
                         <Button
                           size="small"
                           variant={filter === "pending" ? "contained" : "text"}
+                          disabled={reviewBusy}
                           onClick={() => setFilter("pending")}
                         >
                           Pending
@@ -1881,6 +1981,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                         <Button
                           size="small"
                           variant={filter === "all" ? "contained" : "text"}
+                          disabled={reviewBusy}
                           onClick={() => setFilter("all")}
                         >
                           All
@@ -1890,6 +1991,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                             <IconButton
                               size="small"
                               aria-label="Batch review"
+                              disabled={reviewBusy}
                               onClick={() => {
                                 setBatchOpen(true);
                                 setBatchError("");
@@ -1908,19 +2010,13 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                       <Select
                         labelId="selected-test-label"
                         label="Selected test"
-                        value={selectedId}
+                        value={selected?.id ?? ""}
                         onChange={(event) =>
                           selectRequirement(event.target.value)
                         }
-                        disabled={!requirements.length}
+                        disabled={!displayed.length || reviewBusy}
                       >
-                        {[
-                          ...displayed,
-                          ...(selected &&
-                          !displayed.some((item) => item.id === selected.id)
-                            ? [selected]
-                            : []),
-                        ].map((item) => (
+                        {displayed.map((item) => (
                           <MenuItem key={item.id} value={item.id}>
                             <Typography
                               variant="body2"
@@ -1932,6 +2028,32 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                         ))}
                       </Select>
                     </FormControl>
+                    {actionableIds.length > 0 && (
+                      <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<ChevronLeftIcon />}
+                          disabled={reviewBusy || !previousPendingId}
+                          onClick={() => navigatePending(previousPendingId)}
+                          aria-label="Previous pending test"
+                          sx={{ flex: 1, minWidth: 0 }}
+                        >
+                          Previous pending
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          endIcon={<ChevronRightIcon />}
+                          disabled={reviewBusy || !nextPendingId}
+                          onClick={() => navigatePending(nextPendingId)}
+                          aria-label="Next pending test"
+                          sx={{ flex: 1, minWidth: 0 }}
+                        >
+                          Next pending
+                        </Button>
+                      </Stack>
+                    )}
                     <Box
                       sx={{
                         mt: 1,
@@ -1970,6 +2092,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                     </Box>
                     <Divider sx={{ mt: 1 }} />
                     <Box
+                      hidden={!selected}
                       sx={{
                         p: 0.75,
                         bgcolor: "#fff",
@@ -2248,7 +2371,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
             <Stack direction="row" gap={1}>
               <Button
                 size="small"
-                disabled={!actionableIds.length}
+                disabled={reviewBusy || !actionableIds.length}
                 onClick={() => {
                   setBatchIds(actionableIds);
                   setBatchAck(false);
@@ -2258,7 +2381,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               </Button>
               <Button
                 size="small"
-                disabled={!batchIds.length}
+                disabled={reviewBusy || !batchIds.length}
                 onClick={() => {
                   setBatchIds([]);
                   setBatchAck(false);
@@ -2281,6 +2404,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                   control={
                     <Checkbox
                       size="small"
+                      disabled={reviewBusy}
                       inputProps={{ "aria-label": item.original_test_name }}
                       checked={batchIds.includes(item.id)}
                       onChange={(event) => {
@@ -2307,12 +2431,14 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               minRows={2}
               label="Batch note / exclusion reason"
               value={batchNote}
+              disabled={reviewBusy}
               onChange={(event) => setBatchNote(event.target.value)}
             />
             {batchIds.length > 1 && (
               <FormControlLabel
                 control={
                   <Checkbox
+                    disabled={reviewBusy}
                     checked={batchAck}
                     onChange={(event) => setBatchAck(event.target.checked)}
                   />
@@ -2332,7 +2458,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                 variant="contained"
                 disabled={
                   !batchIds.length ||
-                  batchSaving ||
+                  reviewBusy ||
                   (batchIds.length > 1 && !batchAck)
                 }
                 onClick={async () => {
@@ -2340,13 +2466,13 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                     setBatchOpen(false);
                 }}
               >
-                {batchSaving ? "Saving…" : "Confirm selected"}
+                {reviewBusy ? "Saving…" : "Confirm selected"}
               </Button>
               <Button
                 variant="outlined"
                 disabled={
                   !batchIds.length ||
-                  batchSaving ||
+                  reviewBusy ||
                   !batchNote.trim() ||
                   (batchIds.length > 1 && !batchAck)
                 }

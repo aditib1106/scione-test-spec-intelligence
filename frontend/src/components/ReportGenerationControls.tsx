@@ -22,7 +22,10 @@ import {
   requestInference,
 } from "../api";
 import { useAuth } from "../auth";
-import { useInferenceActivity } from "./InferenceActivity";
+import {
+  useInferenceActivity,
+  useInlineInferenceActivity,
+} from "./InferenceActivity";
 import type { ProviderOption } from "../types";
 import { claimReportGenerationIntent } from "../reportGeneration";
 import InferenceProgress, {
@@ -98,6 +101,7 @@ export default function ReportGenerationControls({
   const [progressOpen, setProgressOpen] = useState(false);
   const [developerOpen, setDeveloperOpen] = useState(false);
   const [error, setError] = useState("");
+  useInlineInferenceActivity(documentId, "matching", progressOpen && busy);
   const transportFailure = useRef(false);
   const previousMatchingRun = useRef(matchingRunId);
   const [notice, setNotice] = useState("");

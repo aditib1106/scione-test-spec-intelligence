@@ -372,7 +372,7 @@ test("result explanations show recorded evidence and distinguish AI assistance f
 
   await page
     .getByRole("button", {
-      name: "Acceptance criteria / reporting",
+      name: "Test specification",
       exact: true,
     })
     .click();
@@ -520,7 +520,7 @@ test("report expands conditions and criteria in their own groups", async ({
     exact: true,
   });
   const criteriaButton = page.getByRole("button", {
-    name: "Acceptance criteria / reporting",
+    name: "Test specification",
     exact: true,
   });
   await expect(
@@ -693,12 +693,12 @@ for (const height of [900, 760]) {
     await page.getByRole("button", { name: "Conditions", exact: true }).click();
     await page
       .getByRole("button", {
-        name: "Acceptance criteria / reporting",
+        name: "Test specification",
         exact: true,
       })
       .click();
     const criteria = pane.getByRole("rowgroup", {
-      name: "Water jet adhesion acceptance criteria / reporting comparison",
+      name: "Water jet adhesion test specification comparison",
       exact: true,
     });
     // A single shared table keeps expanded fields under the same headings.
@@ -942,7 +942,7 @@ for (const viewport of [
       exact: true,
     });
     const criteria = pane.getByRole("button", {
-      name: "Acceptance criteria / reporting",
+      name: "Test specification",
       exact: true,
     });
     await conditions.click();

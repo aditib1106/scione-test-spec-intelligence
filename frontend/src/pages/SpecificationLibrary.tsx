@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Link as RouterLink,
   useNavigate,
@@ -15,6 +15,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  FormHelperText,
   InputAdornment,
   InputLabel,
   IconButton,
@@ -152,6 +153,8 @@ export default function SpecificationLibrary({
   const [editing, setEditing] = useState<LibraryDocument | null>(null);
   const [metadata, setMetadata] = useState<LibraryMetadata>(emptyMetadata);
   const [file, setFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const submitting = useRef(false);
   const [uploadedId, setUploadedId] = useState<string | null>(null);
   const [uploadReceipt, setUploadReceipt] =
     useState<SpecificationUploadReceipt | null>(null);
@@ -309,7 +312,7 @@ export default function SpecificationLibrary({
   };
 
   const save = async () => {
-    if (saving) return;
+    if (submitting.current) return;
     setSaveError("");
     if (!editing && !uploadedId && !file) {
       setSaveError("Choose the specification PDF first.");
@@ -319,6 +322,7 @@ export default function SpecificationLibrary({
       setSaveError("Choose a PDF smaller than 25 MB.");
       return;
     }
+    submitting.current = true;
     setSaving(true);
     try {
       let documentId = editing?.document_id || uploadedId;
@@ -385,6 +389,7 @@ export default function SpecificationLibrary({
           : "The specification could not be saved. Please try again.",
       );
     } finally {
+      submitting.current = false;
       setSaving(false);
     }
   };
@@ -1000,7 +1005,7 @@ export default function SpecificationLibrary({
                         {(
                           [
                             ["condition", "Conditions and scope"],
-                            ["criterion", "Acceptance criteria / reporting"],
+                            ["criterion", "Test specification"],
                           ] as const
                         ).map(([kind, label]) => {
                           const claims = selectedTest.claims.filter((claim) =>
@@ -1360,10 +1365,12 @@ export default function SpecificationLibrary({
       </Dialog>
       <Dialog
         open={dialogOpen}
-        onClose={() => {
-          if (!saving) setDialogOpen(false);
+        onClose={(_, reason) => {
+          if (!saving && reason !== "backdropClick") setDialogOpen(false);
         }}
+        disableEscapeKeyDown={saving}
         maxWidth="sm"
+        fullWidth
       >
         <DialogTitle>
           {editing ? "Specification details" : "Add customer specification"}
@@ -1371,25 +1378,90 @@ export default function SpecificationLibrary({
         <DialogContent>
           <Stack spacing={2.25} sx={{ pt: 0.75 }}>
             {!editing && (
-              <Box>
+              <Box
+                component="section"
+                aria-label="Specification PDF"
+                sx={{
+                  p: 2,
+                  border: "1px solid",
+                  borderColor: file ? "primary.light" : "divider",
+                  borderRadius: 2,
+                  bgcolor: file ? "#f5f8ff" : "#f8fafc",
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                  Specification PDF
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 1.5 }}
+                >
+                  Text-based PDF · up to 25 MB
+                </Typography>
+                {file && (
+                  <Stack direction="row" gap={1.25} sx={{ mb: 1.5 }}>
+                    <DescriptionOutlinedIcon
+                      color="primary"
+                      sx={{ mt: 0.25, flexShrink: 0 }}
+                    />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        variant="body2"
+                        fontWeight={600}
+                        sx={{ overflowWrap: "anywhere" }}
+                      >
+                        {file.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {file.size < 1024 * 1024
+                          ? `${Math.max(1, Math.round(file.size / 1024))} KB`
+                          : `${(file.size / (1024 * 1024)).toFixed(1)} MB`}
+                        {uploadedId
+                          ? " · Uploaded"
+                          : " · Selected, not uploaded yet"}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                )}
                 <Stack direction="row" gap={1} useFlexGap flexWrap="wrap">
                   <Button
                     component="label"
-                    variant="outlined"
+                    variant={file ? "outlined" : "contained"}
                     startIcon={<UploadFileOutlinedIcon />}
                     disabled={saving || Boolean(uploadedId)}
                   >
-                    {file ? "Change PDF" : "Choose PDF"}
+                    {file ? "Replace PDF" : "Choose PDF"}
                     <input
+                      ref={fileInput}
                       type="file"
                       hidden
                       accept="application/pdf,.pdf"
+                      aria-label="Choose specification PDF"
+                      disabled={saving || Boolean(uploadedId)}
                       onChange={(event) => {
-                        setFile(event.target.files?.[0] ?? null);
+                        const selectedFile = event.target.files?.[0];
+                        if (selectedFile) {
+                          setFile(selectedFile);
+                          setSaveError("");
+                        }
                         event.currentTarget.value = "";
                       }}
                     />
                   </Button>
+                  {file && (
+                    <Button
+                      startIcon={<DeleteOutlineRoundedIcon />}
+                      disabled={saving || Boolean(uploadedId)}
+                      onClick={() => {
+                        setFile(null);
+                        setSaveError("");
+                        if (fileInput.current) fileInput.current.value = "";
+                      }}
+                    >
+                      Remove PDF
+                    </Button>
+                  )}
                   <Tooltip title="Scan and handwriting support is coming soon.">
                     <span>
                       <Button
@@ -1406,13 +1478,6 @@ export default function SpecificationLibrary({
                     </span>
                   </Tooltip>
                 </Stack>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 0.75 }}
-                >
-                  {file?.name || "Text PDF, up to 25 MB"}
-                </Typography>
               </Box>
             )}
             {!editing && (
@@ -1433,6 +1498,13 @@ export default function SpecificationLibrary({
                     </MenuItem>
                   ))}
                 </Select>
+                <FormHelperText>
+                  {metadata.family_id
+                    ? "A new version of this specification. Earlier versions are kept."
+                    : families.length
+                      ? "Start a new specification, or select an existing one to add a version."
+                      : "Your first upload starts a new specification. You can add versions later."}
+                </FormHelperText>
               </FormControl>
             )}
             <TextField
@@ -1489,11 +1561,12 @@ export default function SpecificationLibrary({
                 Original source revision: {editing.revision}
               </Typography>
             )}
-            <Typography variant="caption" color="text.secondary">
-              {editing
-                ? "These details organize the saved customer specification. Earlier versions remain available."
-                : "Choose an existing specification to save a new version. Earlier PDFs and extracted requirements are kept."}
-            </Typography>
+            {editing && (
+              <Typography variant="caption" color="text.secondary">
+                These details organize the saved customer specification. Earlier
+                versions remain available.
+              </Typography>
+            )}
             {saveError && (
               <Alert severity="error">
                 {saveError}

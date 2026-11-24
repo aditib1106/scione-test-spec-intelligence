@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -55,7 +56,7 @@ import SourceCoverageNotice from "../components/SourceCoverageNotice";
 import DocumentNotes from "../components/DocumentNotes";
 import ComparisonCheckSummary from "../components/ComparisonCheckSummary";
 import { specificationVersionLabel } from "../specificationDates";
-import type { PageProps } from "../types";
+import type { DocumentSummary, PageProps } from "../types";
 import type { LibraryDocument } from "../libraryTypes";
 import type {
   ComparisonData,
@@ -299,6 +300,16 @@ export default function Comparison({ workspace }: PageProps) {
       : null,
   );
   const library = useResource<{ documents: LibraryDocument[] }>("/api/library");
+  const libraryDocuments = useMemo(
+    () =>
+      new Map(
+        (library.data?.documents ?? []).map((document) => [
+          document.document_id,
+          document,
+        ]),
+      ),
+    [library.data?.documents],
+  );
   const [views, setViews] = useState(readViews);
   const saved = views[documentId];
   const view: ReportView = {
@@ -472,9 +483,7 @@ export default function Comparison({ workspace }: PageProps) {
     ]),
   );
   const docTitle = (id: string, fallback: string) => {
-    const document = library.data?.documents.find(
-      (item) => item.document_id === id,
-    );
+    const document = libraryDocuments.get(id);
     return document
       ? [
           document.company_name,
@@ -545,40 +554,54 @@ export default function Comparison({ workspace }: PageProps) {
           sx={{ minWidth: 0, flex: 1, justifyContent: { lg: "flex-end" } }}
         >
           {docs.length > 0 && (
-            <FormControl
+            <Autocomplete<DocumentSummary, false, boolean, false>
               size="small"
+              disableClearable
+              options={docs}
+              value={docs.find((doc) => doc.document_id === documentId) ?? null}
+              getOptionKey={(doc) => doc.document_id}
+              getOptionLabel={(doc) =>
+                docTitle(doc.document_id, doc.original_name)
+              }
+              isOptionEqualToValue={(option, value) =>
+                option.document_id === value.document_id
+              }
+              filterOptions={(options, { inputValue }) => {
+                const needle = inputValue.trim().toLocaleLowerCase();
+                return options.filter((doc) => {
+                  const saved = libraryDocuments.get(doc.document_id);
+                  return [
+                    doc.original_name,
+                    docTitle(doc.document_id, doc.original_name),
+                    saved?.title,
+                    saved?.specification_date,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .toLocaleLowerCase()
+                    .includes(needle);
+                });
+              }}
+              onChange={(_, document) => {
+                if (document && document.document_id !== documentId)
+                  setParams({ document: document.document_id });
+              }}
+              noOptionsText="No specification matches this search."
               sx={{
                 flex: { xs: "1 1 100%", sm: "1 1 240px", lg: "0 1 360px" },
                 minWidth: { sm: 220 },
                 maxWidth: { lg: 360 },
+                bgcolor: "background.paper",
               }}
-            >
-              <InputLabel id="comparison-document-label">
-                Customer specification
-              </InputLabel>
-              <Select
-                labelId="comparison-document-label"
-                label="Customer specification"
-                value={
-                  docs.some((item) => item.document_id === documentId)
-                    ? documentId
-                    : ""
-                }
-                onChange={(event) =>
-                  setParams({ document: event.target.value })
-                }
-                sx={{ bgcolor: "background.paper", fontSize: 14 }}
-              >
-                {docs.map((document) => (
-                  <MenuItem
-                    key={document.document_id}
-                    value={document.document_id}
-                  >
-                    {docTitle(document.document_id, document.original_name)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+              renderInput={(input) => (
+                <TextField
+                  {...input}
+                  label="Customer specification"
+                  placeholder="Search customer, specification or PDF"
+                  sx={{ fontSize: 14 }}
+                />
+              )}
+            />
           )}
           {report && (
             <ReportGenerationControls

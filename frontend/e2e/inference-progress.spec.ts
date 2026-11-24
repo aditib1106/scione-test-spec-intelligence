@@ -84,9 +84,10 @@ test("observed AI steps update, keep checks visible at 100 percent, and disappea
     "aria-valuenow",
     "33",
   );
+  // The inline card is the single progress view for the selected task.
   await expect(
     page.getByRole("progressbar", { name: "Active AI steps", exact: true }),
-  ).toHaveAttribute("aria-valuenow", "33");
+  ).not.toBeVisible();
   state.progress = {
     stage: "validating",
     completed_steps: 6,

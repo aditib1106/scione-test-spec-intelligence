@@ -27,7 +27,8 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import { request, useResource } from "../api";
+import { apiFetch, request, useResource } from "../api";
+import PdfPageViewer from "./PdfPageViewer";
 import type {
   AtomicClaim,
   Requirement,
@@ -76,6 +77,97 @@ const cleanClaim = (value: SourceReviewClaim): AtomicClaim => ({
   sequence: value.sequence,
 });
 
+/** Read the existing PDF preview; editing evidence never starts inference. */
+function SourceEvidencePreview({
+  data,
+  requirementId,
+  page,
+}: {
+  data: SpecificationData;
+  requirementId?: string;
+  page?: number;
+}) {
+  const [imageUrl, setImageUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const validPage =
+    page !== undefined &&
+    Number.isInteger(page) &&
+    page >= 1 &&
+    page <= data.document.page_count;
+  useEffect(() => {
+    setImageUrl("");
+    setError("");
+    if (!validPage || !data.run) {
+      setLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    let objectUrl = "";
+    const query = new URLSearchParams({ run_id: data.run.run_id });
+    if (requirementId) query.set("requirement_id", requirementId);
+    setLoading(true);
+    void apiFetch(
+      `/api/specifications/${encodeURIComponent(data.document_id)}/pages/${page}?${query}`,
+      { signal: controller.signal },
+    )
+      .then(async (response) => {
+        if (!response.ok)
+          throw new Error(
+            "This PDF page could not be displayed. You can still check the original PDF.",
+          );
+        const blob = await response.blob();
+        if (controller.signal.aborted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setImageUrl(objectUrl);
+      })
+      .catch((reason) => {
+        if (!controller.signal.aborted)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "The source preview could not be loaded.",
+          );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [data.document_id, data.run?.run_id, page, requirementId, validPage]);
+  if (!validPage)
+    return (
+      <Alert severity="info">
+        Choose a source page from 1 to {data.document.page_count} to preview it.
+      </Alert>
+    );
+  return (
+    <Box
+      sx={{
+        p: 1.5,
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 2,
+        minWidth: 0,
+      }}
+    >
+      <PdfPageViewer
+        title={`Original PDF · Page ${page}`}
+        alt={`Source evidence PDF page ${page}`}
+        imageUrl={imageUrl}
+        loading={loading}
+        error={error}
+        documentUrl={`/api/specifications/${encodeURIComponent(data.document_id)}/pdf#page=${page}`}
+        documentLabel="Open original PDF"
+        height={360}
+        initialFit="page"
+      />
+    </Box>
+  );
+}
+
 export default function SourceFactsEditor({
   data,
   selected,
@@ -122,6 +214,7 @@ export default function SourceFactsEditor({
   const mounted = useRef(true);
   const lastRequest = useRef<number | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
+  const submitting = useRef(false);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -218,7 +311,7 @@ export default function SourceFactsEditor({
       return "Enter each method identifier, or remove the empty method.";
     for (const [key, heading] of [
       ["conditions", "condition"],
-      ["acceptance_criteria", "criterion"],
+      ["acceptance_criteria", "specification"],
     ] as const) {
       for (const [index, value] of draft[key].entries()) {
         if (!value.name.trim())
@@ -299,12 +392,13 @@ export default function SourceFactsEditor({
     return "";
   }
   async function save() {
-    if (!data.run) return;
+    if (!data.run || submitting.current) return;
     const invalid = validationError();
     if (invalid) {
       setError(invalid);
       return;
     }
+    submitting.current = true;
     setSaving(true);
     setError("");
     try {
@@ -384,6 +478,7 @@ export default function SourceFactsEditor({
             : "Unable to save corrections.",
         );
     } finally {
+      submitting.current = false;
       if (mounted.current) setSaving(false);
     }
   }
@@ -466,7 +561,7 @@ export default function SourceFactsEditor({
                 ? "Sample plan / instruction"
                 : activeAtom.kind === "condition"
                   ? "Condition"
-                  : "Acceptance criteria / reporting"
+                  : "Test specification"
             }
           />
         </Stack>
@@ -794,7 +889,7 @@ export default function SourceFactsEditor({
         {row && (
           <Stack
             component="fieldset"
-            aria-label={`${section === "condition" ? "Conditions" : "Acceptance criteria / reporting"} ${selectedRawIndex + 1}`}
+            aria-label={`${section === "condition" ? "Conditions" : "Test specification"} ${selectedRawIndex + 1}`}
             gap={1.5}
             sx={{ m: 0, p: 0, minWidth: 0, border: 0 }}
           >
@@ -877,8 +972,8 @@ export default function SourceFactsEditor({
       <Dialog
         open={open}
         aria-labelledby="source-editor-title"
-        onClose={() => {
-          if (!saving) setOpen(false);
+        onClose={(_, reason) => {
+          if (!saving && reason !== "backdropClick") setOpen(false);
         }}
         maxWidth="md"
         fullWidth
@@ -934,7 +1029,9 @@ export default function SourceFactsEditor({
         </DialogTitle>
         <Tabs
           value={section}
-          onChange={(_, value) => selectSection(value)}
+          onChange={(_, value) => {
+            if (!saving) selectSection(value);
+          }}
           variant={
             sourceAtoms.some(isSamplePlanClaim) ? "scrollable" : "fullWidth"
           }
@@ -946,16 +1043,22 @@ export default function SourceFactsEditor({
             flexShrink: 0,
           }}
         >
-          <Tab value="overview" label="Test & method" />
-          <Tab value="condition" label="Conditions" />
-          <Tab value="criterion" label="Acceptance criteria" />
+          <Tab disabled={saving} value="overview" label="Test & method" />
+          <Tab disabled={saving} value="condition" label="Conditions" />
+          <Tab disabled={saving} value="criterion" label="Test specification" />
           {sourceAtoms.some(isSamplePlanClaim) && (
-            <Tab value="planning" label="Sample plan" />
+            <Tab disabled={saving} value="planning" label="Sample plan" />
           )}
-          <Tab value="source" label="Source evidence" />
+          <Tab disabled={saving} value="source" label="Source evidence" />
         </Tabs>
         <DialogContent sx={{ pt: 2, bgcolor: "#fff", minHeight: 0 }}>
-          <Stack spacing={1.5}>
+          <Stack
+            component="fieldset"
+            disabled={saving}
+            inert={saving}
+            spacing={1.5}
+            sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
+          >
             {error && (
               <Alert severity="error" ref={errorRef} tabIndex={-1}>
                 {error}
@@ -1245,45 +1348,58 @@ export default function SourceFactsEditor({
                 </TextField>
                 {draft.evidence[evidenceIndex] && (
                   <Stack
-                    component="fieldset"
-                    aria-label={`Source evidence ${evidenceIndex + 1}`}
-                    gap={1.5}
-                    sx={{ m: 0, p: 0, minWidth: 0, border: 0 }}
+                    direction={{ xs: "column", md: "row" }}
+                    gap={2}
+                    alignItems="stretch"
                   >
-                    <TextField
-                      size="small"
-                      type="number"
-                      label="Source page"
-                      required
-                      value={draft.evidence[evidenceIndex].page}
-                      inputProps={{ min: 1, max: data.document.page_count }}
-                      onChange={(event) =>
-                        patch({
-                          evidence: draft.evidence.map((item, index) =>
-                            index === evidenceIndex
-                              ? { ...item, page: Number(event.target.value) }
-                              : item,
-                          ),
-                        })
-                      }
-                    />
-                    <TextField
-                      label="Source quotation"
-                      required
-                      multiline
-                      minRows={5}
-                      maxRows={12}
-                      value={draft.evidence[evidenceIndex].quote}
-                      onChange={(event) =>
-                        patch({
-                          evidence: draft.evidence.map((item, index) =>
-                            index === evidenceIndex
-                              ? { ...item, quote: event.target.value }
-                              : item,
-                          ),
-                        })
-                      }
-                    />
+                    <Stack
+                      component="fieldset"
+                      aria-label={`Source evidence ${evidenceIndex + 1}`}
+                      gap={1.5}
+                      sx={{ m: 0, p: 0, minWidth: 0, border: 0, flex: 1 }}
+                    >
+                      <TextField
+                        size="small"
+                        type="number"
+                        label="Source page"
+                        required
+                        value={draft.evidence[evidenceIndex].page}
+                        inputProps={{ min: 1, max: data.document.page_count }}
+                        onChange={(event) =>
+                          patch({
+                            evidence: draft.evidence.map((item, index) =>
+                              index === evidenceIndex
+                                ? { ...item, page: Number(event.target.value) }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                      <TextField
+                        label="Source quotation"
+                        required
+                        multiline
+                        minRows={5}
+                        maxRows={12}
+                        value={draft.evidence[evidenceIndex].quote}
+                        onChange={(event) =>
+                          patch({
+                            evidence: draft.evidence.map((item, index) =>
+                              index === evidenceIndex
+                                ? { ...item, quote: event.target.value }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                    </Stack>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <SourceEvidencePreview
+                        data={data}
+                        page={draft.evidence[evidenceIndex].page}
+                        requirementId={adding ? undefined : selected.id}
+                      />
+                    </Box>
                   </Stack>
                 )}
               </Stack>
@@ -1292,6 +1408,7 @@ export default function SourceFactsEditor({
         </DialogContent>
         <Divider />
         <Box
+          inert={saving}
           sx={{ px: { xs: 2, sm: 3 }, pt: 1.5, bgcolor: "#fff", flexShrink: 0 }}
         >
           {wordingRebuildRequired && (

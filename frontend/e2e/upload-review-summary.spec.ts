@@ -83,7 +83,7 @@ test("saved uploads are explicit and review notes stay compact above the PDF", a
   ).toBeVisible();
   await expect(
     page.getByRole("combobox", { name: "Saved specification" }),
-  ).toContainText(source.original_name);
+  ).toHaveValue(source.original_name);
   await expect(
     page.getByText("Saved as renamed-copy.pdf.", { exact: false }),
   ).toHaveCount(0);

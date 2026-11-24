@@ -43,8 +43,12 @@ test("a lab signs in to its own files and keeps the chosen upload filename", asy
     .click();
   await expect(page).toHaveURL(new RegExp(`/specifications\\?document=${id}`));
   await expect(
-    page.getByText("my-uploaded-customer-spec.pdf", { exact: true }).first(),
-  ).toBeVisible();
+    page.getByRole("combobox", { name: "Saved specification", exact: true }),
+  ).toHaveValue("my-uploaded-customer-spec.pdf");
+  const savedSource = await (
+    await page.request.get(`/api/specifications/${id}`)
+  ).json();
+  expect(savedSource.original_name).toBe("my-uploaded-customer-spec.pdf");
   await expect(
     page.getByText(/same PDF|duplicate upload|already in your workspace/i),
   ).toHaveCount(0);

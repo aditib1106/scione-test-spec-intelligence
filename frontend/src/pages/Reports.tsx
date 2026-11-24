@@ -931,7 +931,7 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
                       values={currentLine.requirement.conditions}
                     />
                     <ValueList
-                      title="Acceptance criteria"
+                      title="Test specification"
                       values={currentLine.requirement.acceptance_criteria}
                     />
                     {currentLine.requirement.applicability.length > 0 && (
@@ -1518,9 +1518,9 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
                 color="text.secondary"
                 sx={{ mb: 1.5 }}
               >
-                Select only tests whose displayed conditions, criteria and
-                applicable scope you have checked. This confirms lab support,
-                not extracted text or a quote.
+                Select only tests whose displayed conditions, test specification
+                and applicable scope you have checked. This confirms lab
+                support, not extracted text or a quote.
               </Typography>
               {error && (
                 <Alert
@@ -1589,7 +1589,7 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
                       )}
                     </Typography>
                     <Typography variant="caption" display="block">
-                      Criteria:{" "}
+                      Test specification:{" "}
                       {joinOr(
                         line.requirement.acceptance_criteria.map(
                           (value) => `${value.name}: ${value.raw_value}`,
@@ -1637,7 +1637,7 @@ export default function Reports({ workspace, onRefresh }: PageProps) {
                     onChange={(event) => setBatchAck(event.target.checked)}
                   />
                 }
-                label="I checked the conditions, criteria and applicable scope for every selected test"
+                label="I checked the conditions, test specification and applicable scope for every selected test"
               />
               <TextField
                 fullWidth

@@ -30,7 +30,7 @@ test("source review groups fields, locates citations, and adds or removes a miss
   ).toBeVisible();
   await expect(page.getByRole("tab", { name: /^Conditions/ })).toBeVisible();
   await expect(
-    page.getByRole("tab", { name: /^Acceptance criteria/ }),
+    page.getByRole("tab", { name: /^Test specification/ }),
   ).toBeVisible();
   const parameterTable = page.getByRole("table", {
     name: "Condition parameters",
@@ -286,7 +286,7 @@ for (const action of ["edit", "add"] as const) {
     await responseDelivered;
     await expect(
       page.getByRole("combobox", { name: "Saved specification", exact: true }),
-    ).toContainText(originalSecond.original_name);
+    ).toHaveValue(originalSecond.original_name);
     await expect(page).toHaveURL(new RegExp(`document=${secondId}`));
     await expect(
       page.getByText("No extraction yet", { exact: true }),

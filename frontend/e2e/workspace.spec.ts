@@ -391,7 +391,7 @@ test("seeded source review, lab support, catalog gap, and immutable report histo
     .getByText("Your lab lists", { exact: true })
     .locator("..");
   await expect(
-    customerPanel.getByText("Acceptance criteria", { exact: true }),
+    customerPanel.getByText("Test specification", { exact: true }),
   ).toBeVisible();
   await expect(
     customerPanel.getByText("Your lab’s recorded limits", { exact: true }),
@@ -400,7 +400,7 @@ test("seeded source review, lab support, catalog gap, and immutable report histo
     labPanel.getByText("Your lab’s recorded limits", { exact: true }),
   ).toBeVisible();
   await expect(
-    labPanel.getByText("Acceptance criteria", { exact: true }),
+    labPanel.getByText("Test specification", { exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Optional quote quantity" }).click();
   await expect(
@@ -670,6 +670,7 @@ test("saved source fixtures retain atomic requirements and export the same gap a
   ).toBeVisible();
   const comparison = await readJson<{
     comparison_id: string;
+    export_snapshot_id?: string;
     requirements: {
       test_name: string;
       comparison: { checks: { parameter_id: string | null; status: string }[] };
@@ -703,13 +704,13 @@ test("saved source fixtures retain atomic requirements and export the same gap a
   });
   await page
     .getByRole("button", {
-      name: "Acceptance criteria / reporting",
+      name: "Test specification",
       exact: true,
     })
     .click();
   const gap = page
     .getByRole("rowgroup", {
-      name: "Specular gloss acceptance criteria / reporting comparison",
+      name: "Specular gloss test specification comparison",
       exact: true,
     })
     .getByText("Gap", { exact: true });
@@ -721,14 +722,24 @@ test("saved source fixtures retain atomic requirements and export the same gap a
   ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Download PDF", exact: true }),
-  ).toHaveAttribute("href", new RegExp(comparison.comparison_id));
+  ).toHaveAttribute(
+    "href",
+    `/api/comparison-snapshots/${comparison.export_snapshot_id ?? comparison.comparison_id}/pdf?download=true`,
+  );
   const exported = await readJson<{
     comparison_id: string;
+    machine_comparison_id?: string;
     requirements: unknown[];
   }>(
     request,
-    `${emptyBase}/api/comparison-snapshots/${comparison.comparison_id}/json`,
+    `${emptyBase}/api/comparison-snapshots/${comparison.export_snapshot_id ?? comparison.comparison_id}/json`,
   );
-  expect(exported.comparison_id).toBe(comparison.comparison_id);
+  expect(exported.comparison_id).toBe(
+    comparison.export_snapshot_id ?? comparison.comparison_id,
+  );
+  expect(exported.machine_comparison_id ?? exported.comparison_id).toBe(
+    comparison.comparison_id,
+  );
   expect(exported.requirements).toHaveLength(4);
+  expect(exported.requirements).toEqual(comparison.requirements);
 });

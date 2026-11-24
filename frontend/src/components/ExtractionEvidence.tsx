@@ -62,7 +62,7 @@ export default function ExtractionEvidence({
       text: originalValue(item),
     })),
     ...requirement.acceptance_criteria.map((item) => ({
-      label: "Acceptance criteria text",
+      label: "Test specification text",
       text: originalValue(item),
     })),
   ].filter(

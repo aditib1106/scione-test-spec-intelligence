@@ -254,7 +254,7 @@ test("review keeps a tall PDF, separates parameters from prose, and opens one fo
     await viewport.evaluate((element) => {
       element.scrollTop = 30;
     });
-    await page.getByRole("tab", { name: /^Acceptance criteria \(/ }).click();
+    await page.getByRole("tab", { name: /^Test specification \(/ }).click();
     expect(await viewport.evaluate((element) => element.scrollTop)).toBe(30);
     await page.getByRole("tab", { name: /^Conditions \(/ }).click();
   }

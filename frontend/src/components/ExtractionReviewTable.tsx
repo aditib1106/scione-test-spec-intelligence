@@ -75,7 +75,7 @@ export default function ExtractionReviewTable({
         <SourcePageReference
           key={page}
           page={page}
-          label={`View ${field} source on page ${page}${claim ? ` for ${claim.label}` : ""}`}
+          label={`View ${field === "criterion" ? "test specification" : field} source on page ${page}${claim ? ` for ${claim.label}` : ""}`}
           onClick={() => onSource(field, page, claim?.id)}
         />
       ))}
@@ -91,7 +91,7 @@ export default function ExtractionReviewTable({
     );
     const page = exact?.page ?? requirement.evidence[0]?.page;
     return page ? (
-      <Box sx={{ mt: 0.4 }}>
+      <Box sx={{ display: "inline-flex", flexShrink: 0 }}>
         <SourcePageReference
           page={page}
           label={`View ${field} source on page ${page}`}
@@ -152,8 +152,15 @@ export default function ExtractionReviewTable({
                 scope="row"
                 sx={{ width: 106, fontWeight: 650, color: "text.secondary" }}
               >
-                Test name
-                {identitySource("name")}
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  gap={0.5}
+                  flexWrap="wrap"
+                >
+                  <span>Test name</span>
+                  {identitySource("name")}
+                </Stack>
               </TableCell>
               <TableCell>
                 <Typography
@@ -182,8 +189,15 @@ export default function ExtractionReviewTable({
                 scope="row"
                 sx={{ fontWeight: 650, color: "text.secondary" }}
               >
-                Method
-                {identitySource("method")}
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  gap={0.5}
+                  flexWrap="wrap"
+                >
+                  <span>Method</span>
+                  {identitySource("method")}
+                </Stack>
               </TableCell>
               <TableCell>
                 <Stack direction="row" flexWrap="wrap" gap={0.75}>
@@ -242,7 +256,7 @@ export default function ExtractionReviewTable({
           />
           <Tab
             value="criterion"
-            label={`Acceptance criteria (${criteria.filter(isReviewParameter).length})`}
+            label={`Test specification (${criteria.filter(isReviewParameter).length})`}
           />
         </Tabs>
         {concrete.length > 0 && (
@@ -251,7 +265,7 @@ export default function ExtractionReviewTable({
               aria-label={
                 group === "condition"
                   ? "Condition parameters"
-                  : "Acceptance criteria parameters"
+                  : "Test specification parameters"
               }
               size="small"
               sx={{
@@ -338,7 +352,8 @@ export default function ExtractionReviewTable({
         )}
         {!concrete.length && !rawValues.length && !other.length && (
           <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-            No {group === "condition" ? "conditions" : "criteria"} stated.
+            No {group === "condition" ? "conditions" : "test specification"}{" "}
+            stated.
           </Typography>
         )}
         {other.length > 0 && (
