@@ -47,7 +47,7 @@ test("lab enters typed conditions, reporting and unknown custom facts without te
     .getByRole("button", { name: "Add measurement", exact: true })
     .click();
   const reporting = dialog.getByRole("group", {
-    name: "Acceptance criteria / reporting field 1",
+    name: "Measurements & reporting field 1",
   });
   await reporting.getByLabel("Field", { exact: true }).click();
   await page

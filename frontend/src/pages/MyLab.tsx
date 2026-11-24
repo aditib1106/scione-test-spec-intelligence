@@ -18,6 +18,7 @@ import {
   IconButton,
   InputAdornment,
   MenuItem,
+  Snackbar,
   Stack,
   Table,
   TableBody,
@@ -184,6 +185,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [deletingCapability, setDeletingCapability] =
     useState<Capability | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -248,6 +250,9 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
       },
     );
     setCapabilityOpen(false);
+    setSuccessMessage(
+      editingCapability ? "Capability updated." : "Capability added.",
+    );
     setEditingCapability(undefined);
     if (!updated) return;
     onRefresh();
@@ -267,6 +272,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
       );
       if (viewingId === deletingCapability.id) setViewingId(null);
       setDeletingCapability(null);
+      setSuccessMessage("Capability deleted.");
       onRefresh();
     } catch (reason) {
       setDeleteError(
@@ -292,6 +298,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
         }),
       });
       setProfileOpen(false);
+      setSuccessMessage("Lab details updated.");
       onRefresh();
     } catch (reason) {
       const message =
@@ -506,7 +513,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                   <TableCell sx={{ width: "15%" }}>Method</TableCell>
                   <TableCell sx={{ width: "23%" }}>Conditions</TableCell>
                   <TableCell sx={{ width: "22%" }}>
-                    Acceptance criteria / reporting
+                    Measurements & reporting
                   </TableCell>
                   <TableCell sx={{ width: "13%" }}>Rate</TableCell>
                   <TableCell sx={{ width: "10%" }} align="right">
@@ -943,7 +950,10 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
       </Dialog>
       <Dialog
         open={profileOpen}
-        onClose={savingProfile ? undefined : () => setProfileOpen(false)}
+        onClose={(_, reason) => {
+          if (!savingProfile && reason !== "backdropClick")
+            setProfileOpen(false);
+        }}
         fullWidth
         maxWidth="sm"
       >
@@ -995,6 +1005,23 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
           </Button>
         </DialogActions>
       </Dialog>
+      <Snackbar
+        open={Boolean(successMessage)}
+        autoHideDuration={5000}
+        onClose={(_, reason) => {
+          if (reason !== "clickaway") setSuccessMessage("");
+        }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setSuccessMessage("")}
+          sx={{ width: "100%" }}
+        >
+          {successMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

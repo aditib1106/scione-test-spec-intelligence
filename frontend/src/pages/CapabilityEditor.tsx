@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Accordion,
   AccordionDetails,
@@ -152,12 +152,54 @@ export default function CapabilityEditor({
   const [limitsEnabled, setLimitsEnabled] = useState(false);
   const [limits, setLimits] = useState<DraftLimit[]>([]);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
   const [limitType, setLimitType] = useState<Parameter>("temperature");
   const [claims, setClaims] = useState<DraftClaim[]>([]);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsReviewed, setDetailsReviewed] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const submitting = useRef(false);
+
+  const clearFieldError = (key: string) =>
+    setFieldErrors((current) => {
+      if (!(key in current)) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  const clearMethodErrors = () =>
+    setFieldErrors((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([key]) => !key.startsWith("method-")),
+      ),
+    );
+  function focusErrors() {
+    requestAnimationFrame(() => {
+      const content = contentRef.current;
+      if (!content) return;
+      const target = content.querySelector<HTMLElement>(
+        '[aria-invalid="true"], [data-validation-invalid="true"]',
+      );
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        const control = target.matches(
+          "input, textarea, button, [role=combobox]",
+        )
+          ? target
+          : (target.querySelector<HTMLElement>(
+              '[aria-invalid="true"]:not([type="hidden"])',
+            ) ??
+            target.querySelector<HTMLElement>(
+              'input:not([type="hidden"]), textarea, [role=combobox]',
+            ));
+        control?.focus({ preventScroll: true });
+      } else {
+        content.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    });
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -200,8 +242,10 @@ export default function CapabilityEditor({
     setDetailsOpen(false);
     setDetailsReviewed(false);
     setError("");
+    setFieldErrors({});
     setConflict(false);
     setSaving(false);
+    submitting.current = false;
     // Refreshing workspace props must not erase an open draft; initialize by record ID.
   }, [open, initial?.id]);
 
@@ -261,40 +305,46 @@ export default function CapabilityEditor({
         JSON.stringify(initial?.structured_limits ?? []));
 
   async function save() {
+    if (submitting.current) return;
     setError("");
+    setConflict(false);
+    const problems: Record<string, string> = {};
     if (customTest ? !customTestName.trim() : !testId) {
-      setError(
-        customTest
-          ? "Enter your test name."
-          : "Choose a test name or create a custom test.",
-      );
-      return;
+      problems.test = customTest
+        ? "Enter your test name."
+        : "Choose a test name or create a custom test.";
     }
-    if (customMethods.some((method) => !method.name.trim())) {
-      setError(
-        "Enter a name for each custom method, or remove the empty method.",
-      );
-      return;
-    }
+    customMethods.forEach((method, index) => {
+      if (!method.name.trim())
+        problems[`method-${index}`] =
+          `Enter a name for custom method ${index + 1}, or remove it.`;
+    });
     if (declarationChanged && !detailsReviewed) {
-      setDetailsOpen(true);
-      setError(
-        "Check the saved conditions and measurements after changing the test, methods or description, then confirm below.",
-      );
+      problems.details =
+        "Check the saved conditions and measurements after changing the test, methods or description, then confirm below.";
+    }
+    const atomicClaims: AtomicClaim[] = [];
+    claims.forEach((claim, index) => {
+      try {
+        atomicClaims.push(savedClaim(claim));
+      } catch (reason) {
+        problems[`claim-${claim.id}`] =
+          `Field ${index + 1}: ${reason instanceof Error ? reason.message : "Check the conditions and measurements."}`;
+      }
+    });
+    if (Boolean(price.trim()) !== Boolean(currency.trim() && basis.trim())) {
+      if (!price.trim())
+        problems.price = "Add the price, or clear the pricing fields.";
+      if (!currency.trim())
+        problems.currency = "Add a currency with the price.";
+      if (!basis.trim()) problems.basis = "Add a pricing basis with the price.";
+    }
+    setFieldErrors(problems);
+    if (Object.keys(problems).length) {
+      focusErrors();
       return;
     }
-    let atomicClaims: AtomicClaim[];
-    try {
-      atomicClaims = claims.map(savedClaim);
-    } catch (reason) {
-      setDetailsOpen(true);
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Check the conditions and measurements.",
-      );
-      return;
-    }
+    submitting.current = true;
     setSaving(true);
     const id = initial?.id ?? `cap_${crypto.randomUUID().replaceAll("-", "")}`;
     const next: Capability = {
@@ -311,13 +361,6 @@ export default function CapabilityEditor({
       currency: price.trim() ? currency.trim().toUpperCase() : null,
       pricing_basis: price.trim() ? basis.trim() : null,
     };
-    if (Boolean(price.trim()) !== Boolean(currency.trim() && basis.trim())) {
-      setError(
-        "Add a currency and pricing basis with the price, or leave all three blank.",
-      );
-      setSaving(false);
-      return;
-    }
     try {
       await onSave({
         capability: next,
@@ -353,6 +396,9 @@ export default function CapabilityEditor({
           ? reason.message
           : "The capability could not be saved.",
       );
+      focusErrors();
+    } finally {
+      submitting.current = false;
       setSaving(false);
     }
   }
@@ -360,7 +406,9 @@ export default function CapabilityEditor({
   return (
     <Dialog
       open={open}
-      onClose={saving ? undefined : onClose}
+      onClose={(_, reason) => {
+        if (!saving && reason !== "backdropClick") onClose();
+      }}
       fullScreen={fullScreen}
       fullWidth
       maxWidth="md"
@@ -372,8 +420,27 @@ export default function CapabilityEditor({
           Choose a test, then record what your lab can perform and report.
         </Typography>
       </DialogTitle>
-      <DialogContent dividers sx={{ bgcolor: "grey.50" }}>
-        <Stack spacing={2.4}>
+      <DialogContent ref={contentRef} dividers sx={{ bgcolor: "grey.50" }}>
+        <Stack
+          component="fieldset"
+          disabled={saving}
+          inert={saving}
+          aria-busy={saving}
+          spacing={2.4}
+          sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
+        >
+          {Object.keys(fieldErrors).length > 0 && (
+            <Alert severity="error">
+              <Typography variant="body2" fontWeight={600}>
+                Check the highlighted fields before saving.
+              </Typography>
+              <Box component="ul" sx={{ my: 0.5, pl: 2.5 }}>
+                {Object.entries(fieldErrors).map(([key, message]) => (
+                  <li key={key}>{message}</li>
+                ))}
+              </Box>
+            </Alert>
+          )}
           {error && (
             <Alert
               severity="error"
@@ -416,6 +483,7 @@ export default function CapabilityEditor({
                 }
                 setMethodIds([]);
                 setCustomMethods([]);
+                clearMethodErrors();
               }}
               aria-label="Test source"
               size="small"
@@ -429,7 +497,12 @@ export default function CapabilityEditor({
                 <TextField
                   label="Custom test name"
                   value={customTestName}
-                  onChange={(event) => setCustomTestName(event.target.value)}
+                  onChange={(event) => {
+                    setCustomTestName(event.target.value);
+                    clearFieldError("test");
+                  }}
+                  error={Boolean(fieldErrors.test)}
+                  helperText={fieldErrors.test}
                   required
                   fullWidth
                   placeholder="e.g. In-house coating flexibility"
@@ -486,21 +559,30 @@ export default function CapabilityEditor({
                 }}
                 onChange={(_, selected) => {
                   setTestId(selected?.id ?? "");
+                  clearFieldError("test");
                   setMethodIds([]);
                   setCustomMethods([]);
+                  clearMethodErrors();
                 }}
                 noOptionsText="No matching test. Use Create custom test to add your own."
                 renderInput={(input) => (
                   <TextField
                     {...input}
                     label="Test name"
+                    required
+                    error={Boolean(fieldErrors.test)}
                     placeholder="Search by name, alias or method"
+                    inputProps={{
+                      ...input.inputProps,
+                      "aria-label": "Test name",
+                    }}
                     helperText={
-                      test
+                      fieldErrors.test ||
+                      (test
                         ? test.id.startsWith("labtest_")
                           ? "Private to this lab"
                           : "Shared test reference; your capability is saved for your lab only."
-                        : undefined
+                        : undefined)
                     }
                   />
                 )}
@@ -587,16 +669,19 @@ export default function CapabilityEditor({
                     <TextField
                       label={`Custom method ${index + 1}`}
                       required
+                      error={Boolean(fieldErrors[`method-${index}`])}
+                      helperText={fieldErrors[`method-${index}`]}
                       value={method.name}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        clearFieldError(`method-${index}`);
                         setCustomMethods((current) =>
                           current.map((item, i) =>
                             i === index
                               ? { ...item, name: event.target.value }
                               : item,
                           ),
-                        )
-                      }
+                        );
+                      }}
                       size="small"
                       fullWidth
                     />
@@ -617,11 +702,12 @@ export default function CapabilityEditor({
                     />
                     <IconButton
                       aria-label={`Remove custom method ${index + 1}`}
-                      onClick={() =>
+                      onClick={() => {
                         setCustomMethods((current) =>
                           current.filter((_, i) => i !== index),
-                        )
-                      }
+                        );
+                        clearMethodErrors();
+                      }}
                       size="small"
                     >
                       <DeleteOutlineRoundedIcon fontSize="small" />
@@ -656,20 +742,45 @@ export default function CapabilityEditor({
           </Box>
           <CapabilityParameters
             claims={claims}
-            onChange={setClaims}
+            onChange={(next) => {
+              const changed = new Set(
+                claims
+                  .filter(
+                    (claim) =>
+                      next.find((entry) => entry.id === claim.id) !== claim,
+                  )
+                  .map((claim) => `claim-${claim.id}`),
+              );
+              setClaims(next);
+              setFieldErrors((current) =>
+                Object.fromEntries(
+                  Object.entries(current).filter(([key]) => !changed.has(key)),
+                ),
+              );
+            }}
             active={open}
+            errors={Object.fromEntries(
+              claims.map((claim) => [
+                claim.id,
+                fieldErrors[`claim-${claim.id}`],
+              ]),
+            )}
           />
           {declarationChanged && (
-            <Alert severity="warning">
+            <Alert
+              severity={fieldErrors.details ? "error" : "warning"}
+              data-validation-invalid={Boolean(fieldErrors.details)}
+            >
               The test, methods or description changed. Check that the saved
               conditions and measurements still apply.
               <FormControlLabel
                 control={
                   <Checkbox
                     checked={detailsReviewed}
-                    onChange={(event) =>
-                      setDetailsReviewed(event.target.checked)
-                    }
+                    onChange={(event) => {
+                      setDetailsReviewed(event.target.checked);
+                      clearFieldError("details");
+                    }}
                   />
                 }
                 label="I checked the conditions and measurements for this capability."
@@ -811,7 +922,9 @@ export default function CapabilityEditor({
                                 label="Minimum"
                                 value={limit.minimum}
                                 onChange={(e) =>
-                                  patchLimit(index, { minimum: e.target.value })
+                                  patchLimit(index, {
+                                    minimum: e.target.value,
+                                  })
                                 }
                                 fullWidth
                                 placeholder="No minimum"
@@ -821,7 +934,9 @@ export default function CapabilityEditor({
                                 label="Maximum"
                                 value={limit.maximum}
                                 onChange={(e) =>
-                                  patchLimit(index, { maximum: e.target.value })
+                                  patchLimit(index, {
+                                    maximum: e.target.value,
+                                  })
                                 }
                                 fullWidth
                                 placeholder="No maximum"
@@ -831,7 +946,9 @@ export default function CapabilityEditor({
                                 label={`Discrete values (${units[limit.parameter]})`}
                                 value={limit.values}
                                 onChange={(e) =>
-                                  patchLimit(index, { values: e.target.value })
+                                  patchLimit(index, {
+                                    values: e.target.value,
+                                  })
                                 }
                                 fullWidth
                                 multiline
@@ -918,26 +1035,45 @@ export default function CapabilityEditor({
             >
               <TextField
                 label="Price"
+                required={Boolean(currency.trim() && basis.trim())}
+                error={Boolean(fieldErrors.price)}
+                helperText={fieldErrors.price}
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onChange={(e) => {
+                  setPrice(e.target.value);
+                  clearFieldError("price");
+                }}
                 fullWidth
                 placeholder="e.g. 125.00"
-                inputProps={{ inputMode: "decimal" }}
+                inputProps={{ inputMode: "decimal", "aria-label": "Price" }}
               />
               <TextField
                 label="Currency"
+                required={Boolean(price.trim())}
+                error={Boolean(fieldErrors.currency)}
+                helperText={fieldErrors.currency}
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  setCurrency(e.target.value.toUpperCase());
+                  clearFieldError("currency");
+                }}
                 fullWidth
                 placeholder="USD"
-                inputProps={{ maxLength: 3 }}
+                inputProps={{ maxLength: 3, "aria-label": "Currency" }}
               />
               <TextField
                 label="Pricing basis"
+                required={Boolean(price.trim())}
+                error={Boolean(fieldErrors.basis)}
+                helperText={fieldErrors.basis}
                 value={basis}
-                onChange={(e) => setBasis(e.target.value)}
+                onChange={(e) => {
+                  setBasis(e.target.value);
+                  clearFieldError("basis");
+                }}
                 fullWidth
                 placeholder="per sample"
+                inputProps={{ "aria-label": "Pricing basis" }}
               />
             </Stack>
           </Box>

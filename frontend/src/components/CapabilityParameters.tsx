@@ -34,6 +34,7 @@ interface Props {
   claims: DraftClaim[];
   onChange: (claims: DraftClaim[]) => void;
   active: boolean;
+  errors?: Record<string, string | undefined>;
 }
 const isReporting = (claim: DraftClaim) =>
   ["reporting", "criterion"].includes(claim.kind);
@@ -42,6 +43,7 @@ export default function CapabilityParameters({
   claims,
   onChange,
   active,
+  errors = {},
 }: Props) {
   const registry = useResource<{ parameters: ParameterDefinition[] }>(
     active ? "/api/parameters" : null,
@@ -124,9 +126,7 @@ export default function CapabilityParameters({
         const group = claims.filter(
           (claim) => isReporting(claim) === reporting,
         );
-        const title = reporting
-          ? "Acceptance criteria / reporting"
-          : "Conditions";
+        const title = reporting ? "Measurements & reporting" : "Conditions";
         return (
           <Box
             key={title}
@@ -189,6 +189,8 @@ export default function CapabilityParameters({
                   (entry) => entry.id === claim.parameter_id,
                 );
                 const numeric = !["text", "required"].includes(claim.operator);
+                const valueRequired = claim.availability === "supported";
+                const rangeDescriptionId = `${claim.id}-range-description`;
                 const advanced = expanded === claim.id;
                 const choices = definitions.filter((entry) =>
                   reporting
@@ -200,12 +202,13 @@ export default function CapabilityParameters({
                     key={claim.id}
                     component="fieldset"
                     aria-label={`${title} field ${position + 1}`}
+                    data-validation-invalid={Boolean(errors[claim.id])}
                     sx={{
                       m: 0,
                       p: 2,
                       minWidth: 0,
                       border: "1px solid",
-                      borderColor: "divider",
+                      borderColor: errors[claim.id] ? "error.main" : "divider",
                       borderRadius: 1.5,
                       bgcolor: "grey.50",
                     }}
@@ -275,6 +278,11 @@ export default function CapabilityParameters({
                             fullWidth
                             size="small"
                             label="Field name"
+                            required
+                            inputProps={{ "aria-label": "Field name" }}
+                            error={
+                              Boolean(errors[claim.id]) && !claim.label.trim()
+                            }
                             value={claim.label}
                             placeholder="For example: special fixture"
                             onChange={(event) =>
@@ -307,6 +315,11 @@ export default function CapabilityParameters({
                           <MenuItem value="unknown">Not yet assessed</MenuItem>
                         </TextField>
                       </Stack>
+                      {errors[claim.id] && (
+                        <Alert severity="error" sx={{ py: 0 }}>
+                          {errors[claim.id]}
+                        </Alert>
+                      )}
                       {claim.parameter_id && (
                         <>
                           <TextField
@@ -361,6 +374,17 @@ export default function CapabilityParameters({
                               </MenuItem>,
                             ]}
                           </TextField>
+                          {numeric && claim.operator === "range" && (
+                            <Typography
+                              id={rangeDescriptionId}
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {valueRequired
+                                ? "Range * — enter a minimum, a maximum, or both."
+                                : "Range is optional when this capability is not available or not yet assessed."}
+                            </Typography>
+                          )}
                           {numeric ? (
                             <Stack
                               direction={{ xs: "column", sm: "row" }}
@@ -372,6 +396,9 @@ export default function CapabilityParameters({
                                     fullWidth
                                     size="small"
                                     label="Minimum"
+                                    inputProps={{
+                                      "aria-describedby": rangeDescriptionId,
+                                    }}
                                     value={claim.minimum}
                                     onChange={(event) =>
                                       patch(claim.id, {
@@ -383,6 +410,9 @@ export default function CapabilityParameters({
                                     fullWidth
                                     size="small"
                                     label="Maximum"
+                                    inputProps={{
+                                      "aria-describedby": rangeDescriptionId,
+                                    }}
                                     value={claim.maximum}
                                     onChange={(event) =>
                                       patch(claim.id, {
@@ -396,6 +426,10 @@ export default function CapabilityParameters({
                                   fullWidth
                                   size="small"
                                   label="Specific values"
+                                  required={valueRequired}
+                                  inputProps={{
+                                    "aria-label": "Specific values",
+                                  }}
                                   value={claim.values}
                                   placeholder="20, 60, 85"
                                   onChange={(event) =>
@@ -409,6 +443,8 @@ export default function CapabilityParameters({
                                   fullWidth
                                   size="small"
                                   label="Value"
+                                  required={valueRequired}
+                                  inputProps={{ "aria-label": "Value" }}
                                   value={claim.value}
                                   onChange={(event) =>
                                     patch(claim.id, {
@@ -437,6 +473,15 @@ export default function CapabilityParameters({
                                     ? "Supported items (one per line)"
                                     : "Declared capability"
                                 }
+                                required={
+                                  valueRequired && claim.operator === "text"
+                                }
+                                inputProps={{
+                                  "aria-label":
+                                    definition?.value_kind === "set"
+                                      ? "Supported items (one per line)"
+                                      : "Declared capability",
+                                }}
                                 value={claim.text_value}
                                 multiline={definition?.value_kind === "set"}
                                 minRows={

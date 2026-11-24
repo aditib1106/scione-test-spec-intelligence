@@ -77,7 +77,7 @@ test("common entries explain their scope and edit only the selected test", async
     .click();
   const editor = page.getByRole("dialog", { name: "Edit capability" });
   const reporting = editor.getByRole("group", {
-    name: "Acceptance criteria / reporting field 1",
+    name: "Measurements & reporting field 1",
   });
   const updatedText =
     "Report each specimen separately with a specimen photograph.";
