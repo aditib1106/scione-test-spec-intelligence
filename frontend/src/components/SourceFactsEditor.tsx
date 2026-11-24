@@ -27,7 +27,8 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import { request, useResource } from "../api";
+import { apiFetch, request, useResource } from "../api";
+import PdfPageViewer from "./PdfPageViewer";
 import type {
   AtomicClaim,
   Requirement,
@@ -48,6 +49,9 @@ interface Props {
   selected: Requirement;
   onSaved: (data: SpecificationData) => void;
   adding?: boolean;
+  hideTrigger?: boolean;
+  openRequest?: number;
+  onOpenRequestHandled?: (nonce: number) => void;
   editRequest?: { claimId: string; nonce: number } | null;
   onEditRequestHandled?: () => void;
 }
@@ -76,11 +80,112 @@ const cleanClaim = (value: SourceReviewClaim): AtomicClaim => ({
   sequence: value.sequence,
 });
 
+/** Read the existing PDF preview; editing evidence never starts inference. */
+function SourceEvidencePreview({
+  data,
+  requirementId,
+  page,
+  height = 360,
+  compactControls = false,
+  initialFit = "page",
+}: {
+  data: SpecificationData;
+  requirementId?: string;
+  page?: number;
+  height?: number;
+  compactControls?: boolean;
+  initialFit?: "page" | "width";
+}) {
+  const [imageUrl, setImageUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const validPage =
+    page !== undefined &&
+    Number.isInteger(page) &&
+    page >= 1 &&
+    page <= data.document.page_count;
+  useEffect(() => {
+    setImageUrl("");
+    setError("");
+    if (!validPage || !data.run) {
+      setLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    let objectUrl = "";
+    const query = new URLSearchParams({ run_id: data.run.run_id });
+    if (requirementId) query.set("requirement_id", requirementId);
+    setLoading(true);
+    void apiFetch(
+      `/api/specifications/${encodeURIComponent(data.document_id)}/pages/${page}?${query}`,
+      { signal: controller.signal },
+    )
+      .then(async (response) => {
+        if (!response.ok)
+          throw new Error(
+            "This PDF page could not be displayed. You can still check the original PDF.",
+          );
+        const blob = await response.blob();
+        if (controller.signal.aborted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setImageUrl(objectUrl);
+      })
+      .catch((reason) => {
+        if (!controller.signal.aborted)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "The source preview could not be loaded.",
+          );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [data.document_id, data.run?.run_id, page, requirementId, validPage]);
+  if (!validPage)
+    return (
+      <Alert severity="info">
+        Choose a source page from 1 to {data.document.page_count} to preview it.
+      </Alert>
+    );
+  return (
+    <Box
+      sx={{
+        p: 1.5,
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 2,
+        minWidth: 0,
+      }}
+    >
+      <PdfPageViewer
+        title={`Original PDF · Page ${page}`}
+        alt={`Source evidence PDF page ${page}`}
+        imageUrl={imageUrl}
+        loading={loading}
+        error={error}
+        documentUrl={`/api/specifications/${encodeURIComponent(data.document_id)}/pdf#page=${page}`}
+        documentLabel="Open original PDF"
+        height={height}
+        initialFit={initialFit}
+        compactControls={compactControls}
+      />
+    </Box>
+  );
+}
+
 export default function SourceFactsEditor({
   data,
   selected,
   onSaved,
   adding = false,
+  hideTrigger = false,
+  openRequest,
+  onOpenRequestHandled,
   editRequest,
   onEditRequestHandled,
 }: Props) {
@@ -121,7 +226,10 @@ export default function SourceFactsEditor({
   const wordingRebuildAllowed = wordingRebuildAcknowledged || rebuildDetails;
   const mounted = useRef(true);
   const lastRequest = useRef<number | null>(null);
+  const lastOpenRequest = useRef<number | undefined>(undefined);
   const errorRef = useRef<HTMLDivElement>(null);
+  const localValidationError = useRef<string | null>(null);
+  const submitting = useRef(false);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -134,10 +242,18 @@ export default function SourceFactsEditor({
   useEffect(() => {
     if (!wordingRebuildRequired) setWordingRebuildAcknowledged(false);
   }, [wordingRebuildRequired]);
+  useEffect(() => {
+    const previous = localValidationError.current;
+    if (previous && !validationErrors().includes(previous)) {
+      localValidationError.current = null;
+      setError("");
+    }
+  }, [draft, atomEdits, rebuildDetails, wordingRebuildAllowed]);
 
   function begin(claimId?: string) {
     setDraft(structuredClone(selected));
     setNote("");
+    localValidationError.current = null;
     setError("");
     setRebuildDetails(false);
     setWordingRebuildAcknowledged(false);
@@ -183,6 +299,13 @@ export default function SourceFactsEditor({
       onEditRequestHandled?.();
     }
   }, [editRequest?.nonce]);
+  useEffect(() => {
+    if (openRequest !== undefined && openRequest !== lastOpenRequest.current) {
+      lastOpenRequest.current = openRequest;
+      begin();
+      onOpenRequestHandled?.(openRequest);
+    }
+  }, [openRequest]);
   const patch = (values: Partial<Requirement>) =>
     setDraft((old) => ({ ...old, ...values }));
   const patchAtom = (identifier: string, changes: Partial<AtomicClaim>) => {
@@ -211,38 +334,64 @@ export default function SourceFactsEditor({
   const rawKey = section === "condition" ? "conditions" : "acceptance_criteria";
   const rawValues = draft[rawKey];
 
-  function validationError() {
-    if (!draft.original_test_name.trim())
-      return "Enter the test name stated in the source.";
-    if (draft.requested_methods.some((method) => !method.code.trim()))
-      return "Enter each method identifier, or remove the empty method.";
-    for (const [key, heading] of [
-      ["conditions", "condition"],
-      ["acceptance_criteria", "criterion"],
-    ] as const) {
-      for (const [index, value] of draft[key].entries()) {
-        if (!value.name.trim())
-          return `Name ${heading} ${index + 1} so it can be understood.`;
-        if (!value.raw_value.trim())
-          return `Enter ${heading} ${index + 1}, or remove the empty entry.`;
-      }
-    }
+  function evidenceValidationErrors() {
+    const problems: { message: string; index: number }[] = [];
     if (!draft.evidence.length)
-      return "Keep at least one source quotation for this test.";
-    for (const evidence of draft.evidence) {
+      problems.push({
+        message: "Keep at least one source quotation for this test.",
+        index: 0,
+      });
+    for (const [index, evidence] of draft.evidence.entries()) {
       if (
         !Number.isInteger(evidence.page) ||
         evidence.page < 1 ||
         evidence.page > data.document.page_count
       )
-        return `Select a source page from 1 to ${data.document.page_count}.`;
+        problems.push({
+          message: `Select a source page from 1 to ${data.document.page_count}.`,
+          index,
+        });
       if (!evidence.quote.trim())
-        return "Keep the exact source quotation for every source page.";
+        problems.push({
+          message: "Keep the exact source quotation for every source page.",
+          index,
+        });
     }
+    return problems;
+  }
+
+  function validationErrors() {
+    // Save uses the first problem; retaining the full set lets an error clear
+    // only when its own reason is fixed, even across different evidence passages.
+    const problems: string[] = [];
+    if (!draft.original_test_name.trim())
+      problems.push("Enter the test name stated in the source.");
+    if (draft.requested_methods.some((method) => !method.code.trim()))
+      problems.push(
+        "Enter each method identifier, or remove the empty method.",
+      );
+    for (const [key, heading] of [
+      ["conditions", "condition"],
+      ["acceptance_criteria", "specification"],
+    ] as const) {
+      for (const [index, value] of draft[key].entries()) {
+        if (!value.name.trim())
+          problems.push(
+            `Name ${heading} ${index + 1} so it can be understood.`,
+          );
+        if (!value.raw_value.trim())
+          problems.push(
+            `Enter ${heading} ${index + 1}, or remove the empty entry.`,
+          );
+      }
+    }
+    problems.push(...evidenceValidationErrors().map((issue) => issue.message));
     for (const value of Object.values(atomEdits)) {
-      if (!value.label.trim()) return "Name each edited parameter.";
+      if (!value.label.trim()) problems.push("Name each edited parameter.");
       if (!value.parameter_id)
-        return "Choose the parameter that the source describes, or choose Other parameter.";
+        problems.push(
+          "Choose the parameter that the source describes, or choose Other parameter.",
+        );
       const nums =
         value.operator === "range"
           ? [value.minimum, value.maximum].filter((entry) => entry !== null)
@@ -256,24 +405,26 @@ export default function SourceFactsEditor({
         (!nums.length ||
           nums.some((entry) => !entry || !numericPattern.test(entry)))
       )
-        return `Enter a valid number for ${value.label}.`;
+        problems.push(`Enter a valid number for ${value.label}.`);
       if (
         ["text", "required"].includes(value.operator) &&
         !value.text_value?.trim()
       )
-        return `Enter the requirement for ${value.label}.`;
+        problems.push(`Enter the requirement for ${value.label}.`);
       if (!value.source_pages.length || !value.raw_text.trim())
-        return `Keep the source passage for ${value.label}.`;
+        problems.push(`Keep the source passage for ${value.label}.`);
       if (
         value.sequence !== null &&
         (!Number.isInteger(value.sequence) || value.sequence < 1)
       )
-        return "Use a positive whole number for the step, or leave it blank.";
+        problems.push(
+          "Use a positive whole number for the step, or leave it blank.",
+        );
       if (
         value.tolerance !== null &&
         (!numericPattern.test(value.tolerance) || Number(value.tolerance) < 0)
       )
-        return "Enter a valid, non-negative tolerance.";
+        problems.push("Enter a valid, non-negative tolerance.");
     }
     if (
       !adding &&
@@ -281,7 +432,9 @@ export default function SourceFactsEditor({
       !Object.keys(atomEdits).length &&
       !(canRebuildDetails && rebuildDetails)
     )
-      return "Change at least one extracted field before saving a correction.";
+      problems.push(
+        "Change at least one extracted field before saving a correction.",
+      );
     const rawChanged = [
       "conditions",
       "acceptance_criteria",
@@ -293,19 +446,32 @@ export default function SourceFactsEditor({
         JSON.stringify(selected[key as keyof Requirement]),
     );
     if (rawChanged && Object.keys(atomEdits).length)
-      return "Save the original wording changes first, then edit the refreshed parameters.";
+      problems.push(
+        "Save the original wording changes first, then edit the refreshed parameters.",
+      );
     if (wordingRebuildRequired && !wordingRebuildAllowed)
-      return "Confirm that this test's detailed fields can be rebuilt before saving.";
-    return "";
+      problems.push(
+        "Confirm that this test's detailed fields can be rebuilt before saving.",
+      );
+    return problems;
   }
   async function save() {
-    if (!data.run) return;
-    const invalid = validationError();
+    if (!data.run || submitting.current) return;
+    const invalid = validationErrors()[0];
     if (invalid) {
+      const evidenceIssue = evidenceValidationErrors()[0];
+      if (evidenceIssue?.message === invalid) {
+        selectSection("source");
+        setEvidenceIndex(evidenceIssue.index);
+      }
+      localValidationError.current = invalid;
       setError(invalid);
+      requestAnimationFrame(() => errorRef.current?.focus());
       return;
     }
+    submitting.current = true;
     setSaving(true);
+    localValidationError.current = null;
     setError("");
     try {
       const fieldsChanged = [
@@ -384,6 +550,7 @@ export default function SourceFactsEditor({
             : "Unable to save corrections.",
         );
     } finally {
+      submitting.current = false;
       if (mounted.current) setSaving(false);
     }
   }
@@ -466,7 +633,7 @@ export default function SourceFactsEditor({
                 ? "Sample plan / instruction"
                 : activeAtom.kind === "condition"
                   ? "Condition"
-                  : "Acceptance criteria / reporting"
+                  : "Test specification"
             }
           />
         </Stack>
@@ -794,7 +961,7 @@ export default function SourceFactsEditor({
         {row && (
           <Stack
             component="fieldset"
-            aria-label={`${section === "condition" ? "Conditions" : "Acceptance criteria / reporting"} ${selectedRawIndex + 1}`}
+            aria-label={`${section === "condition" ? "Conditions" : "Test specification"} ${selectedRawIndex + 1}`}
             gap={1.5}
             sx={{ m: 0, p: 0, minWidth: 0, border: 0 }}
           >
@@ -856,29 +1023,35 @@ export default function SourceFactsEditor({
   }
   return (
     <>
-      <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
-        <Button
-          size="small"
-          variant="outlined"
-          aria-label={adding ? "Add missing test" : "Correct extracted content"}
-          onClick={() => begin()}
-        >
-          {adding ? "Add missing test" : "Edit test"}
-        </Button>
-        {data.facts_revision?.changed_requirement_ids.includes(selected.id) && (
-          <Chip
+      {!hideTrigger && (
+        <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
+          <Button
             size="small"
-            color="info"
             variant="outlined"
-            label="Corrected draft"
-          />
-        )}
-      </Stack>
+            aria-label={
+              adding ? "Add missing test" : "Correct extracted content"
+            }
+            onClick={() => begin()}
+          >
+            {adding ? "Add missing test" : "Edit test"}
+          </Button>
+          {data.facts_revision?.changed_requirement_ids.includes(
+            selected.id,
+          ) && (
+            <Chip
+              size="small"
+              color="info"
+              variant="outlined"
+              label="Corrected draft"
+            />
+          )}
+        </Stack>
+      )}
       <Dialog
         open={open}
         aria-labelledby="source-editor-title"
-        onClose={() => {
-          if (!saving) setOpen(false);
+        onClose={(_, reason) => {
+          if (!saving && reason !== "backdropClick") setOpen(false);
         }}
         maxWidth="md"
         fullWidth
@@ -934,7 +1107,9 @@ export default function SourceFactsEditor({
         </DialogTitle>
         <Tabs
           value={section}
-          onChange={(_, value) => selectSection(value)}
+          onChange={(_, value) => {
+            if (!saving) selectSection(value);
+          }}
           variant={
             sourceAtoms.some(isSamplePlanClaim) ? "scrollable" : "fullWidth"
           }
@@ -946,185 +1121,228 @@ export default function SourceFactsEditor({
             flexShrink: 0,
           }}
         >
-          <Tab value="overview" label="Test & method" />
-          <Tab value="condition" label="Conditions" />
-          <Tab value="criterion" label="Acceptance criteria" />
+          <Tab disabled={saving} value="overview" label="Test & method" />
+          <Tab disabled={saving} value="condition" label="Conditions" />
+          <Tab disabled={saving} value="criterion" label="Test specification" />
           {sourceAtoms.some(isSamplePlanClaim) && (
-            <Tab value="planning" label="Sample plan" />
+            <Tab disabled={saving} value="planning" label="Sample plan" />
           )}
-          <Tab value="source" label="Source evidence" />
+          <Tab disabled={saving} value="source" label="Source evidence" />
         </Tabs>
         <DialogContent sx={{ pt: 2, bgcolor: "#fff", minHeight: 0 }}>
-          <Stack spacing={1.5}>
+          <Stack
+            component="fieldset"
+            disabled={saving}
+            inert={saving}
+            spacing={1.5}
+            sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
+          >
             {error && (
               <Alert severity="error" ref={errorRef} tabIndex={-1}>
                 {error}
               </Alert>
             )}
             {section === "overview" && (
-              <Stack gap={2}>
-                <TextField
-                  label="Test name"
-                  required
-                  value={draft.original_test_name}
-                  onChange={(event) =>
-                    patch({ original_test_name: event.target.value })
-                  }
-                  fullWidth
-                  multiline
-                  maxRows={3}
-                />
-                <Box>
-                  <Typography fontWeight={700} variant="body2" sx={{ mb: 1 }}>
-                    Methods stated in the source
-                  </Typography>
-                  <Stack gap={1}>
-                    {draft.requested_methods.map((method, index) => (
-                      <Stack
-                        key={index}
-                        component="fieldset"
-                        aria-label={`Source method ${index + 1}`}
-                        direction={{ xs: "column", sm: "row" }}
-                        gap={1}
-                        sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
-                      >
-                        <TextField
-                          size="small"
-                          label="Method identifier"
-                          required
-                          value={method.code}
-                          fullWidth
-                          onChange={(event) =>
-                            patch({
-                              requested_methods: draft.requested_methods.map(
-                                (item, at) =>
-                                  at === index
-                                    ? { ...item, code: event.target.value }
-                                    : item,
-                              ),
-                            })
-                          }
-                        />
-                        <IconButton
-                          aria-label={`Remove method ${index + 1}`}
-                          onClick={() =>
-                            patch({
-                              requested_methods: draft.requested_methods.filter(
-                                (_, at) => at !== index,
-                              ),
-                            })
-                          }
-                        >
-                          <CloseIcon />
-                        </IconButton>
-                      </Stack>
-                    ))}
-                  </Stack>
-                  <Button
-                    size="small"
-                    startIcon={<AddRoundedIcon />}
-                    onClick={() =>
-                      patch({
-                        requested_methods: [
-                          ...draft.requested_methods,
-                          { code: "" },
-                        ],
-                      })
-                    }
-                    sx={{ mt: 1 }}
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: adding
+                    ? { xs: "minmax(0, 1fr)", md: "repeat(2, minmax(0, 1fr))" }
+                    : "minmax(0, 1fr)",
+                  gap: 2,
+                  alignItems: "start",
+                }}
+              >
+                {adding && (
+                  <Box
+                    component="section"
+                    aria-label="Original page for missing test"
+                    sx={{ minWidth: 0 }}
                   >
-                    Add method
-                  </Button>
-                  {draft.requested_methods.length > 0 && (
+                    <SourceEvidencePreview
+                      data={data}
+                      page={draft.evidence[0]?.page}
+                      height={fullScreen ? 220 : 340}
+                      compactControls
+                      initialFit="width"
+                    />
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", mt: 1, lineHeight: 1.5 }}
+                    >
+                      Enter the missing test, then add its exact quotation in
+                      Source evidence before saving.
+                    </Typography>
+                  </Box>
+                )}
+                <Stack gap={2} sx={{ minWidth: 0 }}>
+                  <TextField
+                    label="Test name"
+                    required
+                    value={draft.original_test_name}
+                    onChange={(event) =>
+                      patch({ original_test_name: event.target.value })
+                    }
+                    fullWidth
+                    multiline
+                    maxRows={3}
+                  />
+                  <Box>
+                    <Typography fontWeight={700} variant="body2" sx={{ mb: 1 }}>
+                      Methods stated in the source
+                    </Typography>
+                    <Stack gap={1}>
+                      {draft.requested_methods.map((method, index) => (
+                        <Stack
+                          key={index}
+                          component="fieldset"
+                          aria-label={`Source method ${index + 1}`}
+                          direction={{ xs: "column", sm: "row" }}
+                          gap={1}
+                          sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
+                        >
+                          <TextField
+                            size="small"
+                            label="Method identifier"
+                            required
+                            value={method.code}
+                            fullWidth
+                            onChange={(event) =>
+                              patch({
+                                requested_methods: draft.requested_methods.map(
+                                  (item, at) =>
+                                    at === index
+                                      ? { ...item, code: event.target.value }
+                                      : item,
+                                ),
+                              })
+                            }
+                          />
+                          <IconButton
+                            aria-label={`Remove method ${index + 1}`}
+                            onClick={() =>
+                              patch({
+                                requested_methods:
+                                  draft.requested_methods.filter(
+                                    (_, at) => at !== index,
+                                  ),
+                              })
+                            }
+                          >
+                            <CloseIcon />
+                          </IconButton>
+                        </Stack>
+                      ))}
+                    </Stack>
+                    <Button
+                      size="small"
+                      startIcon={<AddRoundedIcon />}
+                      onClick={() =>
+                        patch({
+                          requested_methods: [
+                            ...draft.requested_methods,
+                            { code: "" },
+                          ],
+                        })
+                      }
+                      sx={{ mt: 1 }}
+                    >
+                      Add method
+                    </Button>
+                    {draft.requested_methods.length > 0 && (
+                      <Accordion
+                        disableGutters
+                        elevation={0}
+                        sx={{ mt: 1, "&:before": { display: "none" } }}
+                      >
+                        <AccordionSummary
+                          expandIcon={<ExpandMoreIcon />}
+                          sx={{ px: 0, minHeight: 34 }}
+                        >
+                          <Typography variant="caption" color="text.secondary">
+                            Method use (optional)
+                          </Typography>
+                        </AccordionSummary>
+                        <AccordionDetails sx={{ px: 0 }}>
+                          <Stack gap={1.5}>
+                            {draft.requested_methods.map((method, index) => (
+                              <Box key={index}>
+                                <Typography
+                                  variant="caption"
+                                  fontWeight={600}
+                                  sx={{ display: "block", mb: 0.5 }}
+                                >
+                                  {method.code || `Method ${index + 1}`}
+                                </Typography>
+                                <TextField
+                                  size="small"
+                                  label="Method use (optional)"
+                                  value={method.role ?? ""}
+                                  fullWidth
+                                  onChange={(event) =>
+                                    patch({
+                                      requested_methods:
+                                        draft.requested_methods.map(
+                                          (item, at) =>
+                                            at === index
+                                              ? {
+                                                  ...item,
+                                                  role:
+                                                    event.target.value || null,
+                                                }
+                                              : item,
+                                        ),
+                                    })
+                                  }
+                                />
+                              </Box>
+                            ))}
+                          </Stack>
+                        </AccordionDetails>
+                      </Accordion>
+                    )}
+                  </Box>
+                  {canRebuildDetails && (
                     <Accordion
                       disableGutters
                       elevation={0}
-                      sx={{ mt: 1, "&:before": { display: "none" } }}
+                      sx={{
+                        border: "1px solid #e0e7f0",
+                        borderRadius: "8px !important",
+                        "&:before": { display: "none" },
+                      }}
                     >
-                      <AccordionSummary
-                        expandIcon={<ExpandMoreIcon />}
-                        sx={{ px: 0, minHeight: 34 }}
-                      >
-                        <Typography variant="caption" color="text.secondary">
-                          Method use (optional)
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="body2" fontWeight={600}>
+                          Detailed parameters
                         </Typography>
                       </AccordionSummary>
-                      <AccordionDetails sx={{ px: 0 }}>
-                        <Stack gap={1.5}>
-                          {draft.requested_methods.map((method, index) => (
-                            <Box key={index}>
-                              <Typography
-                                variant="caption"
-                                fontWeight={600}
-                                sx={{ display: "block", mb: 0.5 }}
-                              >
-                                {method.code || `Method ${index + 1}`}
-                              </Typography>
-                              <TextField
-                                size="small"
-                                label="Method use (optional)"
-                                value={method.role ?? ""}
-                                fullWidth
-                                onChange={(event) =>
-                                  patch({
-                                    requested_methods:
-                                      draft.requested_methods.map((item, at) =>
-                                        at === index
-                                          ? {
-                                              ...item,
-                                              role: event.target.value || null,
-                                            }
-                                          : item,
-                                      ),
-                                  })
-                                }
-                              />
-                            </Box>
-                          ))}
-                        </Stack>
+                      <AccordionDetails>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={rebuildDetails}
+                              onChange={(event) =>
+                                setRebuildDetails(event.target.checked)
+                              }
+                            />
+                          }
+                          label="Rebuild detailed parameters from these reviewed fields"
+                        />
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          display="block"
+                        >
+                          Rebuild the detailed requirements from the corrected
+                          wording. The original extraction stays available.
+                        </Typography>
                       </AccordionDetails>
                     </Accordion>
                   )}
-                </Box>
-                {canRebuildDetails && (
-                  <Accordion
-                    disableGutters
-                    elevation={0}
-                    sx={{
-                      border: "1px solid #e0e7f0",
-                      borderRadius: "8px !important",
-                      "&:before": { display: "none" },
-                    }}
-                  >
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography variant="body2" fontWeight={600}>
-                        Detailed parameters
-                      </Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={rebuildDetails}
-                            onChange={(event) =>
-                              setRebuildDetails(event.target.checked)
-                            }
-                          />
-                        }
-                        label="Rebuild detailed parameters from these reviewed fields"
-                      />
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        display="block"
-                      >
-                        Rebuild the detailed requirements from the corrected
-                        wording. The original extraction stays available.
-                      </Typography>
-                    </AccordionDetails>
-                  </Accordion>
-                )}
-              </Stack>
+                </Stack>
+              </Box>
             )}
             {(section === "condition" ||
               section === "criterion" ||
@@ -1200,6 +1418,7 @@ export default function SourceFactsEditor({
                         expanded={rawEditExpanded}
                         onChange={(_, expanded) => {
                           if (expanded && Object.keys(atomEdits).length) {
+                            localValidationError.current = null;
                             setError(
                               "Save your parameter corrections before changing the original wording.",
                             );
@@ -1245,45 +1464,58 @@ export default function SourceFactsEditor({
                 </TextField>
                 {draft.evidence[evidenceIndex] && (
                   <Stack
-                    component="fieldset"
-                    aria-label={`Source evidence ${evidenceIndex + 1}`}
-                    gap={1.5}
-                    sx={{ m: 0, p: 0, minWidth: 0, border: 0 }}
+                    direction={{ xs: "column", md: "row" }}
+                    gap={2}
+                    alignItems="stretch"
                   >
-                    <TextField
-                      size="small"
-                      type="number"
-                      label="Source page"
-                      required
-                      value={draft.evidence[evidenceIndex].page}
-                      inputProps={{ min: 1, max: data.document.page_count }}
-                      onChange={(event) =>
-                        patch({
-                          evidence: draft.evidence.map((item, index) =>
-                            index === evidenceIndex
-                              ? { ...item, page: Number(event.target.value) }
-                              : item,
-                          ),
-                        })
-                      }
-                    />
-                    <TextField
-                      label="Source quotation"
-                      required
-                      multiline
-                      minRows={5}
-                      maxRows={12}
-                      value={draft.evidence[evidenceIndex].quote}
-                      onChange={(event) =>
-                        patch({
-                          evidence: draft.evidence.map((item, index) =>
-                            index === evidenceIndex
-                              ? { ...item, quote: event.target.value }
-                              : item,
-                          ),
-                        })
-                      }
-                    />
+                    <Stack
+                      component="fieldset"
+                      aria-label={`Source evidence ${evidenceIndex + 1}`}
+                      gap={1.5}
+                      sx={{ m: 0, p: 0, minWidth: 0, border: 0, flex: 1 }}
+                    >
+                      <TextField
+                        size="small"
+                        type="number"
+                        label="Source page"
+                        required
+                        value={draft.evidence[evidenceIndex].page}
+                        inputProps={{ min: 1, max: data.document.page_count }}
+                        onChange={(event) =>
+                          patch({
+                            evidence: draft.evidence.map((item, index) =>
+                              index === evidenceIndex
+                                ? { ...item, page: Number(event.target.value) }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                      <TextField
+                        label="Source quotation"
+                        required
+                        multiline
+                        minRows={5}
+                        maxRows={12}
+                        value={draft.evidence[evidenceIndex].quote}
+                        onChange={(event) =>
+                          patch({
+                            evidence: draft.evidence.map((item, index) =>
+                              index === evidenceIndex
+                                ? { ...item, quote: event.target.value }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                    </Stack>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <SourceEvidencePreview
+                        data={data}
+                        page={draft.evidence[evidenceIndex].page}
+                        requirementId={adding ? undefined : selected.id}
+                      />
+                    </Box>
                   </Stack>
                 )}
               </Stack>
@@ -1292,6 +1524,7 @@ export default function SourceFactsEditor({
         </DialogContent>
         <Divider />
         <Box
+          inert={saving}
           sx={{ px: { xs: 2, sm: 3 }, pt: 1.5, bgcolor: "#fff", flexShrink: 0 }}
         >
           {wordingRebuildRequired && (

@@ -6,10 +6,12 @@ export default function SourcePageReference({
   page,
   label,
   onClick,
+  compact = false,
 }: {
   page: number;
   label: string;
   onClick: () => void;
+  compact?: boolean;
 }) {
   return (
     <Tooltip title={`Source · Page ${page}`}>
@@ -22,6 +24,7 @@ export default function SourcePageReference({
         }
         sx={{
           minWidth: 0,
+          ...(compact ? { minHeight: 24 } : {}),
           px: 0.65,
           py: 0.25,
           gap: 0.1,

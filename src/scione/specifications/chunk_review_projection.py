@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
 
 from scione.catalogs.normalization import normalized_name
@@ -17,6 +18,8 @@ from scione.schemas import IngestedDocument
 from scione.source_text import citation_contains
 from scione.specifications.models import CustomerExtractionRun
 from scione.specifications.source_chunking import SOURCE_CHUNK_POLICY
+
+CHUNK_REVIEW_PROJECTION_POLICY_VERSION = "chunk_document_context_v5"
 
 _REGIONAL = re.compile(
     r"Page (?P<page>[1-9]\d*) regional annex lists accepted method equivalents "
@@ -34,6 +37,12 @@ _REGIONAL_UNATTACHED = re.compile(
     r"Page (?P<page>[1-9]\d*) lists accepted method equivalents "
     r"\((?P<pairs>[^()]+)\) for tests whose substantive rows are on other pages "
     r"not supplied here; they could not be attached to those tests in this chunk[.]?", re.I,
+)
+_REGIONAL_RETAINED = re.compile(
+    r"Page (?P<page>[1-9]\d*) lists accepted method equivalents "
+    r"\((?P<pairs>[^()]+)\) for tests whose substantive rows are on other pages "
+    r"not supplied as primary here; they are retained here as unresolved for review "
+    r"rather than attached to the regional exposure rows[.]?", re.I,
 )
 _APPROVAL = re.compile(
     r"Page (?P<page>[1-9]\d*) approval-package table \((?P<packages>[^()]+)\) "
@@ -86,6 +95,46 @@ class ChunkReviewProjection:
 
 def _key(code: str) -> str:
     return re.sub(r"\s+", "", code).casefold()
+
+
+def _warning_reference_roots(value: str) -> frozenset[str]:
+    """Detect uncertain ownership only; these roots never establish equivalence.
+
+    A printed edition or formatting variation must not make a potentially
+    affected row disappear from a review queue. Keep standard parts distinct;
+    discard only explicit colon editions and ASTM's trailing two/four-digit
+    edition for this conservative fallback check.
+    """
+    text = unicodedata.normalize("NFKC", value).translate(
+        str.maketrans({dash: "-" for dash in "‐‑‒–—−"})
+    ).replace("_", " ")
+    roots = set()
+    for code in literal_method_designations(text):
+        key = re.sub(r":\d{4}(?:-\d{2})?$", "", _key(code))
+        if key.startswith("astm"):
+            key = re.sub(r"-\d{2}(?:\d{2})?$", "", key)
+        roots.add(key)
+    return frozenset(roots)
+
+
+def _retained_regional_owner_scope(run, pairs: str, mentions: set[str]) -> bool:
+    """Allow narrow routing only when each pair has an exact, complete owner.
+
+    A related but nonexact spelling/edition is a reason to keep global review,
+    never permission to equate the methods or silently omit that requested row.
+    """
+    requested = [method.code for row in run.extraction.requirements
+                 for method in row.requested_methods]
+    exact = {_key(code) for code in requested}
+    if any(not {
+        _key(code) for code in literal_method_designations(pair)
+    } & exact for pair in pairs.split(";")):
+        return False
+    roots = _warning_reference_roots(pairs)
+    return not any(
+        _key(code) not in mentions and _warning_reference_roots(code) & roots
+        for code in requested
+    )
 
 
 def _located(text: str, fragment: str) -> bool:
@@ -306,6 +355,40 @@ def _chunk_coverage_locations(run, manifest, pages):
     return locations
 
 
+def _retained_regional_window_proved(run, manifest, pages, issue, page):
+    """Locate this child-window comment without resolving its method relationships."""
+    chunks = manifest.get("input_partitioning", {}).get("chunks")
+    if not isinstance(chunks, list):
+        return False
+    for chunk in chunks:
+        if not isinstance(chunk, dict):
+            continue
+        primary, supplied = chunk.get("primary_pages"), chunk.get("supplied_pages")
+        if not all(isinstance(value, list) and value and all(
+            type(number) is int and number in pages for number in value
+        ) for value in (primary, supplied)):
+            continue
+        if page not in primary or not set(primary) <= set(supplied):
+            continue
+        for call in run.calls:
+            if (call.purpose != "extraction" or call.request is None
+                    or set(call.focus_pages) != set(primary)):
+                continue
+            received = {int(value) for value in re.findall(
+                r"=== PAGE ([1-9]\d*) ===", call.request.user_prompt,
+            )}
+            if not set(supplied) <= received:
+                continue
+            try:
+                payload = json.loads(call.raw_response)
+            except (ValueError, TypeError):
+                continue
+            comments = payload.get("review_issues") if isinstance(payload, dict) else None
+            if isinstance(comments, list) and issue in comments:
+                return True
+    return False
+
+
 def source_chunk_review_projection(
     run: CustomerExtractionRun, document: IngestedDocument
 ) -> ChunkReviewProjection:
@@ -335,9 +418,10 @@ def source_chunk_review_projection(
     source_locations = {}
     coverage_locations = _chunk_coverage_locations(run, manifest, pages)
     for issue in run.extraction.review_issues:
+        uncertain_regional_owners = False
         text = " ".join(issue.split())
         regional = (_REGIONAL.fullmatch(text) or _REGIONAL_OTHER_PRIMARY.fullmatch(text)
-                    or _REGIONAL_UNATTACHED.fullmatch(text))
+                    or _REGIONAL_UNATTACHED.fullmatch(text) or _REGIONAL_RETAINED.fullmatch(text))
         approval = (_APPROVAL.fullmatch(text) or _APPROVAL_OTHER_SECTIONS.fullmatch(text)
                     or _APPROVAL_SUMMARY.fullmatch(text))
         bake = _BAKE_SCOPE.fullmatch(text)
@@ -362,6 +446,11 @@ def source_chunk_review_projection(
                     row_targets[issue] = _weathering_owners(run)
             continue
         page = int(matched["page"])
+        retained_regional = regional is not None and regional.re is _REGIONAL_RETAINED
+        if retained_regional and not _retained_regional_window_proved(
+            run, manifest, pages, issue, page,
+        ):
+            continue
         comment_sources = [
             source for comments, source in providers
             if issue in comments and f"=== PAGE {page} ===" in source
@@ -417,9 +506,15 @@ def source_chunk_review_projection(
             ) for part in pairs.split(";")):
                 continue
             mentions = {_key(code) for code in codes}
-            row_targets[issue] = frozenset(
-                row.id for row in run.extraction.requirements
-                if any(_key(method.code) in mentions for method in row.requested_methods)
+            uncertain_regional_owners = retained_regional and not _retained_regional_owner_scope(
+                run, regional["pairs"], mentions,
+            )
+            row_targets[issue] = (
+                frozenset(row.id for row in run.extraction.requirements)
+                if uncertain_regional_owners else frozenset(
+                    row.id for row in run.extraction.requirements
+                    if any(_key(method.code) in mentions for method in row.requested_methods)
+                )
             )
         else:
             previous = (
@@ -457,7 +552,10 @@ def source_chunk_review_projection(
                     continue
         document_issues.append(issue)
         source_locations[issue] = {
-            "policy_version": "chunk_document_context_v2",
+            "policy_version": (
+                CHUNK_REVIEW_PROJECTION_POLICY_VERSION
+                if retained_regional else "chunk_document_context_v2"
+            ),
             "source_page": page,
             "source_pages": source_pages,
             "location_kind": "layout_column_tokens" if layout_located else "literal_page_text",
@@ -465,6 +563,8 @@ def source_chunk_review_projection(
             "establishes_limit_or_coverage": False,
             "document_review_required": True,
         }
+        if uncertain_regional_owners:
+            source_locations[issue]["owner_routing"] = "global_ownership_uncertain"
     if _METADATA_VARIANCE in run.extraction.review_issues:
         metadata_pages = _metadata_variance_pages(run, pages)
         if metadata_pages:

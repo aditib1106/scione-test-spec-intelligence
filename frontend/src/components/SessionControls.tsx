@@ -188,7 +188,10 @@ export default function SessionControls() {
           </Menu>
           <Dialog
             open={passwordOpen}
-            onClose={closePassword}
+            onClose={(_, reason) => {
+              if (reason !== "backdropClick") closePassword();
+            }}
+            disableEscapeKeyDown={busy}
             maxWidth="sm"
             fullWidth
           >

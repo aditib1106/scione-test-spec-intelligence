@@ -2,6 +2,7 @@
 
 from datetime import date
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -133,6 +134,26 @@ class AssessmentReview(WriteModel):
     def explain_followup(self):
         if self.decision != "keep" and not self.note:
             raise ValueError("Add a note explaining the selected follow-up decision.")
+        return self
+
+
+class CustomerClarification(WriteModel):
+    comparison_id: str = Field(min_length=1, max_length=32)
+    input_fingerprint: str = Field(min_length=1, max_length=64)
+    requirement_id: str = Field(min_length=1, max_length=100)
+    expected_version: int = Field(ge=0)
+    client_request_id: UUID
+    event_kind: Literal["question", "customer_reply"]
+    text: str = Field(min_length=1, max_length=4000)
+    contact: str = Field(default="", max_length=300)
+    question_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def scoped_reply(self):
+        if self.event_kind == "customer_reply" and self.question_id is None:
+            raise ValueError("Choose the question this customer reply answers.")
+        if self.event_kind == "question" and self.question_id is not None:
+            raise ValueError("A new question cannot answer an earlier question.")
         return self
 
 

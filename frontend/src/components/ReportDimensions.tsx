@@ -49,8 +49,8 @@ const groups = [
   { key: "condition", label: "Condition", accessibleLabel: "Conditions" },
   {
     key: "criterion",
-    label: "Acceptance criteria",
-    accessibleLabel: "Acceptance criteria / reporting",
+    label: "Test specification",
+    accessibleLabel: "Test specification",
   },
 ] as const;
 

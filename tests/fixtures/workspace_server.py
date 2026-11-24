@@ -51,7 +51,10 @@ def main():
     parser.add_argument("--seed-review", action="store_true")
     args = parser.parse_args()
     with TemporaryDirectory(prefix="scione-browser-") as directory:
-        root = Path(directory).resolve()
+        # Reset keeps recovery copies beside its workspace. Keep both inside
+        # the disposable holder so test resets cannot accumulate in system temp.
+        root = Path(directory).resolve() / "workspace"
+        root.mkdir()
         os.environ["SCIONE_WORKSPACE_DIR"] = str(root)
         os.environ["GROQ_API_KEY"] = ""
         os.environ["GEMINI_API_KEY"] = ""

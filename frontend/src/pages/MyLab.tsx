@@ -18,6 +18,7 @@ import {
   IconButton,
   InputAdornment,
   MenuItem,
+  Snackbar,
   Stack,
   Table,
   TableBody,
@@ -36,6 +37,10 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import { ApiError, request, useResource } from "../api";
+import {
+  capabilitiesNewestFirst,
+  capabilityCreationTimes,
+} from "../capabilityOrder";
 import type {
   AtomicClaim,
   Capability,
@@ -46,6 +51,11 @@ import type {
   PageProps,
 } from "../types";
 import CapabilityEditor from "./CapabilityEditor";
+import { CapabilityResourcesSummary } from "../components/CapabilityResources";
+import {
+  shortcutResources,
+  shortcutResourceType,
+} from "../components/labResourceClaims";
 import LabCapabilityDetails, {
   capabilityDetailSx,
   labClaimValue as claimValue,
@@ -159,8 +169,19 @@ function SharedLabDeclarations({
 export default function MyLab({ workspace, onRefresh }: PageProps) {
   const [params, setParams] = useSearchParams();
   const { lab, catalog } = workspace;
+  const creationTimes = useMemo(
+    () => capabilityCreationTimes(lab, workspace.capability_creation),
+    [lab, workspace.capability_creation],
+  );
+  const displayedCapabilities = useMemo(
+    () => capabilitiesNewestFirst(lab.capabilities, creationTimes),
+    [lab.capabilities, creationTimes],
+  );
   const sharedClaims = useMemo(
-    () => sharedDeclarations(lab.capabilities),
+    () =>
+      sharedDeclarations(lab.capabilities).filter(
+        (claim) => !shortcutResourceType(claim),
+      ),
     [lab.capabilities],
   );
   const sharedKeys = useMemo(
@@ -184,6 +205,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [deletingCapability, setDeletingCapability] =
     useState<Capability | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -219,7 +241,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
   );
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
-    return lab.capabilities.filter((capability) => {
+    return displayedCapabilities.filter((capability) => {
       if (!needle) return true;
       const test = tests.get(capability.canonical_test_id);
       const methodText = capability.method_ids
@@ -234,7 +256,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
         .toLocaleLowerCase()
         .includes(needle);
     });
-  }, [lab.capabilities, methods, query, tests]);
+  }, [displayedCapabilities, methods, query, tests]);
 
   async function saveCapability(submission: CapabilitySubmission) {
     setSaveError("");
@@ -248,6 +270,9 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
       },
     );
     setCapabilityOpen(false);
+    setSuccessMessage(
+      editingCapability ? "Capability updated." : "Capability added.",
+    );
     setEditingCapability(undefined);
     if (!updated) return;
     onRefresh();
@@ -267,6 +292,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
       );
       if (viewingId === deletingCapability.id) setViewingId(null);
       setDeletingCapability(null);
+      setSuccessMessage("Capability deleted.");
       onRefresh();
     } catch (reason) {
       setDeleteError(
@@ -292,6 +318,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
         }),
       });
       setProfileOpen(false);
+      setSuccessMessage("Lab details updated.");
       onRefresh();
     } catch (reason) {
       const message =
@@ -429,9 +456,23 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
           sx={{ px: 2, py: 1.5 }}
         >
           <Box>
-            <Typography variant="h6" fontWeight={650}>
-              Capabilities
-            </Typography>
+            <Stack
+              direction="row"
+              alignItems="center"
+              gap={1.5}
+              flexWrap="wrap"
+            >
+              <Typography variant="h6" fontWeight={650}>
+                Capabilities
+              </Typography>
+              {creationTimes.size > 0 && (
+                <Tooltip title="Newly added tests appear first. Older entries without a recorded date keep their saved order.">
+                  <Typography variant="caption" color="text.secondary">
+                    Newest added first
+                  </Typography>
+                </Tooltip>
+              )}
+            </Stack>
             <Typography variant="caption" color="text.secondary">
               View declared conditions, reportable measurements and rates.
               Select a test for full details.
@@ -506,7 +547,7 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                   <TableCell sx={{ width: "15%" }}>Method</TableCell>
                   <TableCell sx={{ width: "23%" }}>Conditions</TableCell>
                   <TableCell sx={{ width: "22%" }}>
-                    Acceptance criteria / reporting
+                    Measurements & reporting
                   </TableCell>
                   <TableCell sx={{ width: "13%" }}>Rate</TableCell>
                   <TableCell sx={{ width: "10%" }} align="right">
@@ -806,12 +847,17 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
                     details.
                   </Alert>
                 )}
+              <CapabilityResourcesSummary claims={viewed.atomic_claims ?? []} />
               <LabCapabilityDetails
                 key={`${viewed.id}-conditions`}
                 title="Operating conditions"
                 description="Supported settings, materials and test preparation."
                 claims={viewedClaims.filter(
-                  (claim) => !["reporting", "criterion"].includes(claim.kind),
+                  (claim) =>
+                    !["reporting", "criterion"].includes(claim.kind) &&
+                    !Object.values(
+                      shortcutResources(viewed.atomic_claims ?? []),
+                    ).some((resource) => resource!.id === claim.id),
                 )}
                 wording={viewed.declared_constraints}
                 limits={viewed.structured_limits}
@@ -943,7 +989,10 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
       </Dialog>
       <Dialog
         open={profileOpen}
-        onClose={savingProfile ? undefined : () => setProfileOpen(false)}
+        onClose={(_, reason) => {
+          if (!savingProfile && reason !== "backdropClick")
+            setProfileOpen(false);
+        }}
         fullWidth
         maxWidth="sm"
       >
@@ -995,6 +1044,23 @@ export default function MyLab({ workspace, onRefresh }: PageProps) {
           </Button>
         </DialogActions>
       </Dialog>
+      <Snackbar
+        open={Boolean(successMessage)}
+        autoHideDuration={5000}
+        onClose={(_, reason) => {
+          if (reason !== "clickaway") setSuccessMessage("");
+        }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setSuccessMessage("")}
+          sx={{ width: "100%" }}
+        >
+          {successMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+
+test.use({ actionTimeout: 15_000 });
 import type { LibraryDetail, LibraryDocument } from "../src/libraryTypes";
 import type { ComparisonCheck, ComparisonData } from "../src/comparisonTypes";
 
@@ -137,8 +139,14 @@ test("library keeps source versions separate and links atomic fields to their PD
     "/specifications?document=source-b&requirement=req_adhesion&page=2",
   );
 
-  await page.getByRole("combobox", { name: "Specification date" }).click();
-  await page.getByRole("option", { name: "Oct 3, 2026" }).click();
+  await page.getByRole("button", { name: "Versions (2)", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Specification versions", exact: true })
+    .getByRole("button", {
+      name: "Open version Oct 3, 2026: fascia-a.pdf",
+      exact: true,
+    })
+    .click();
   await page.getByRole("button", { name: /Cross-cut adhesion/ }).click();
   await expect(
     page.getByRole("table", { name: "Saved requirement records" }),
@@ -190,7 +198,8 @@ test("library edits a specification date while retaining its original revision",
     }
   });
   await page.goto(`${base}/specifications/library?document=source-b`);
-  await page.getByRole("button", { name: "Edit details" }).click();
+  await page.getByRole("button", { name: "Specification actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit details" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByLabel("Specification date")).toHaveValue("");
   await expect(

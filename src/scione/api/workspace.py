@@ -44,6 +44,7 @@ from scione.reports.models import (
 )
 from scione.reports.review import batch_eligible, needs_review, quote_eligible, scope_review_state
 from scione.reports.store import FileReportStore
+from scione.specifications.chunk_review_projection import CHUNK_REVIEW_PROJECTION_POLICY_VERSION
 from scione.specifications.context_coverage import source_context_coverage_audits
 from scione.specifications.corrections import SQLFactsStore, effective_facts
 from scione.specifications.document_notes import document_notes_view
@@ -140,6 +141,7 @@ class Workspace:
         document = self.current_document(document_id).document
         return {
             "review_policy_version": REVIEW_POLICY_VERSION,
+            "chunk_review_projection_policy_version": CHUNK_REVIEW_PROJECTION_POLICY_VERSION,
             "source_run_id": run.run_id,
             "document_sha256": document.sha256,
             "summary_reconciliation": list(source_summary_reconciliation(run, document).proofs),
@@ -313,6 +315,7 @@ class Workspace:
         lab = self.labs.load_or_create()
         return {
             "lab": lab,
+            "capability_creation": self.labs.creation_metadata(lab),
             "catalog": self.catalog_for_lab(lab),
             "documents": [asdict(item) for item in self.active_documents()],
             "providers": providers,

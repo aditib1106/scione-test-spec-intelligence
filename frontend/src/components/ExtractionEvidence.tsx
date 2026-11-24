@@ -27,6 +27,7 @@ export default function ExtractionEvidence({
   requirement,
   claims,
   notices,
+  reviewReasons = [],
   note,
   onNote,
   onSource,
@@ -34,6 +35,7 @@ export default function ExtractionEvidence({
   requirement: Requirement;
   claims?: SourceReviewClaim[];
   notices: string[];
+  reviewReasons?: string[];
   note: string;
   onNote: (value: string) => void;
   onSource: (field: SourceField | null, page: number, claimId?: string) => void;
@@ -62,7 +64,7 @@ export default function ExtractionEvidence({
       text: originalValue(item),
     })),
     ...requirement.acceptance_criteria.map((item) => ({
-      label: "Acceptance criteria text",
+      label: "Test specification text",
       text: originalValue(item),
     })),
   ].filter(
@@ -92,18 +94,18 @@ export default function ExtractionEvidence({
       disableGutters
       elevation={0}
       sx={{
-        border: "1px solid #dce6f3",
-        borderRadius: "8px !important",
+        borderBottom: "1px solid #e2e8f0",
+        borderRadius: "0 !important",
         overflow: "hidden",
         "&:before": { display: "none" },
       }}
     >
       <AccordionSummary
+        aria-label="View extraction evidence"
         expandIcon={<ExpandMoreRoundedIcon fontSize="small" />}
         sx={{
-          minHeight: 36,
-          px: 1.25,
-          bgcolor: "#f7faff",
+          minHeight: 32,
+          px: 0.5,
           "& .MuiAccordionSummary-content": { my: 0.75 },
         }}
       >
@@ -112,9 +114,30 @@ export default function ExtractionEvidence({
           <Typography variant="body2" fontWeight={650} color="#315b96">
             View extraction evidence
           </Typography>
+          {reviewReasons.length > 0 && (
+            <Typography variant="caption" color="warning.dark">
+              · Review note
+            </Typography>
+          )}
         </Stack>
       </AccordionSummary>
       <AccordionDetails sx={{ px: 1.5, pt: 0.5, pb: 1.5 }}>
+        {reviewReasons.length > 0 && (
+          <Box sx={{ mb: 1.5, pl: 1.25, borderLeft: "3px solid #cc861e" }}>
+            <Typography variant="caption" fontWeight={700} color="warning.dark">
+              Why this needs review
+            </Typography>
+            {reviewReasons.map((reason, index) => (
+              <Typography
+                key={index}
+                variant="body2"
+                sx={{ mt: 0.5, overflowWrap: "anywhere" }}
+              >
+                {reason.replace(/\breq_[A-Za-z0-9_-]+\b[: ]*/g, "")}
+              </Typography>
+            ))}
+          </Box>
+        )}
         {hasInstructions && (
           <Tabs
             value={tab}

@@ -1,3 +1,4 @@
+import { documentAction } from "./workspaceActions";
 import { expect, test, type Page } from "@playwright/test";
 import type { SpecificationData, Workspace } from "../src/types";
 
@@ -122,10 +123,7 @@ for (const reload of [false, true]) {
       await route.fulfill({ json: updated }).catch(() => {});
     });
     await page.goto(`/specifications?document=${id}`);
-    const analyze = page.getByRole("button", {
-      name: "Analyze again",
-      exact: true,
-    });
+    const analyze = await documentAction(page, "Analyze again");
     await expect(analyze).toBeEnabled();
     await analyze.evaluate((button: HTMLButtonElement) => {
       button.click();
@@ -133,8 +131,14 @@ for (const reload of [false, true]) {
     });
     await expect.poll(() => calls).toBe(1);
     await expect(
-      page.getByText("You can browse other pages while this finishes."),
+      page.getByRole("status", {
+        name: "Document analysis in progress",
+        exact: true,
+      }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "View progress", exact: true }),
+    ).not.toBeVisible();
     if (reload) await page.reload();
     else {
       await navigate(page, "Lab capability");
@@ -144,13 +148,24 @@ for (const reload of [false, true]) {
           exact: true,
         }),
       ).toBeVisible();
+      await expect(
+        page.getByText("You can browse other pages while this finishes."),
+      ).toBeVisible();
       await page
         .getByRole("link", { name: "View progress", exact: true })
         .click();
     }
+    await expect(await documentAction(page, "Analyze again")).toBeDisabled();
+    await page.keyboard.press("Escape");
     await expect(
-      page.getByRole("button", { name: "Analyzing…", exact: true }),
-    ).toBeDisabled();
+      page.getByRole("status", {
+        name: "Document analysis in progress",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "View progress", exact: true }),
+    ).not.toBeVisible();
     expect(calls).toBe(1);
     finished = true;
     release();

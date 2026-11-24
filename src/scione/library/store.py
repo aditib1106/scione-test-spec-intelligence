@@ -37,7 +37,7 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.dialects.mysql import LONGBLOB
-from sqlalchemy.engine import Engine, make_url
+from sqlalchemy.engine import Connection, Engine, RowMapping, make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import StaticPool
 
@@ -153,6 +153,27 @@ comparisons = Table(
     Column("payload", JSON, nullable=False),
     Column("pdf", LargeBinary().with_variant(LONGBLOB(), "mysql")),
 )
+
+# Storage-only representation. Public callers always receive the reconstructed
+# immutable snapshot, never this envelope or the small monitoring projection.
+_EXPORT_REFERENCE = "_scione_comparison_export_reference"
+_EXPORT_REFERENCE_VERSION = 1
+_COMPARISON_IDENTITY = frozenset({"comparison_id", "created_at"})
+_EXPORT_OVERLAYS = frozenset({
+    "machine_comparison_id", "assessment_reviews", "customer_clarifications",
+    "export_format_version",
+})
+
+
+def _export_monitoring_projection(payload: dict) -> dict:
+    """Keep the existing SQL summary/source-review readers losslessly useful."""
+    return {
+        "summary": deepcopy(payload.get("summary")),
+        "requirements": [
+            {"source_review_state": row.get("source_review_state")}
+            for row in payload["requirements"]
+        ],
+    }
 
 
 def now() -> str:
@@ -700,13 +721,21 @@ class LibraryStore:
                 )
 
     def save_comparison(self, input_fingerprint: str, payload: dict) -> dict:
+        if _EXPORT_REFERENCE in payload:
+            raise LibraryConflict("Internal comparison storage metadata is not an assessment.")
         with self._lock, self._db().begin() as connection:
-            existing = connection.execute(
-                select(comparisons.c.payload).where(
-                    comparisons.c.input_fingerprint == input_fingerprint
+            existing_row = (
+                connection.execute(
+                    select(
+                        comparisons.c.comparison_id, comparisons.c.document_id,
+                        comparisons.c.created_at, comparisons.c.payload,
+                    ).where(comparisons.c.input_fingerprint == input_fingerprint)
                 )
-            ).scalar_one_or_none()
-            if existing is not None:
+                .mappings()
+                .first()
+            )
+            if existing_row is not None:
+                existing = self._resolve_comparison(connection, existing_row)
                 original = {
                     key: value
                     for key, value in existing.items()
@@ -723,25 +752,150 @@ class LibraryStore:
                     )
                 return existing
             saved = {**deepcopy(payload), "comparison_id": uuid4().hex, "created_at": now()}
+            stored = self._compact_comparison_export(connection, saved)
             connection.execute(
                 insert(comparisons).values(
                     comparison_id=saved["comparison_id"],
                     document_id=saved["document"]["document_id"],
                     input_fingerprint=input_fingerprint,
                     created_at=saved["created_at"],
-                    payload=saved,
+                    payload=stored,
                 )
             )
             return saved
 
+    @staticmethod
+    def _comparison_row(connection: Connection, comparison_id: str) -> RowMapping | None:
+        return (
+            connection.execute(
+                select(
+                    comparisons.c.comparison_id, comparisons.c.document_id,
+                    comparisons.c.created_at, comparisons.c.payload,
+                ).where(comparisons.c.comparison_id == comparison_id)
+            )
+            .mappings()
+            .first()
+        )
+
+    def _compact_comparison_export(self, connection: Connection, saved: dict) -> dict:
+        """Reference an exact machine body; unknown export changes stay full.
+
+        This affects only new SQL rows. Existing snapshots and their first-rendered
+        PDF bytes remain untouched. A reference is deliberately one hop, in this
+        store's own database, and must belong to the same document.
+        """
+        if "machine_comparison_id" not in saved:
+            return saved
+        base_id = saved["machine_comparison_id"]
+        if not isinstance(base_id, str) or not base_id:
+            raise LibraryConflict("An export needs its original machine comparison.")
+        base_row = self._comparison_row(connection, base_id)
+        if base_row is None:
+            raise LibraryConflict("The export's original machine comparison was not found.")
+        base = base_row["payload"]
+        if (
+            not isinstance(base, dict)
+            or _EXPORT_REFERENCE in base
+            or "machine_comparison_id" in base
+            or base.get("comparison_id") != base_id
+            or base.get("created_at") != base_row["created_at"]
+            or base_row["document_id"] != saved["document"]["document_id"]
+            or not isinstance(base.get("document"), dict)
+            or base["document"].get("document_id") != base_row["document_id"]
+        ):
+            raise LibraryConflict(
+                "An export must reference the same document's machine comparison."
+            )
+        original_body = {
+            key: value for key, value in base.items() if key not in _COMPARISON_IDENTITY
+        }
+        export_body = {
+            key: value for key, value in saved.items()
+            if key not in _COMPARISON_IDENTITY | _EXPORT_OVERLAYS
+        }
+        rows = saved.get("requirements")
+        if (
+            digest(original_body) != digest(export_body)
+            or not isinstance(rows, list)
+            or any(not isinstance(row, dict) for row in rows)
+        ):
+            # A generic caller can legitimately supply a different full body.
+            # Preserve it in full rather than dropping or guessing any field.
+            return saved
+        overlays = {
+            key: deepcopy(saved[key]) for key in _COMPARISON_IDENTITY | _EXPORT_OVERLAYS
+            if key in saved
+        }
+        return {
+            _EXPORT_REFERENCE: {
+                "version": _EXPORT_REFERENCE_VERSION,
+                "machine_comparison_id": base_id,
+                "machine_digest": digest(base),
+                "snapshot_digest": digest(saved),
+                "overlays": overlays,
+            },
+            **_export_monitoring_projection(saved),
+        }
+
+    def _resolve_comparison(self, connection: Connection, row: RowMapping) -> dict:
+        payload = row["payload"]
+        if not isinstance(payload, dict):
+            raise LibraryStoreError("This saved comparison has an invalid stored snapshot.")
+        if _EXPORT_REFERENCE not in payload:
+            return deepcopy(payload)
+        reference = payload[_EXPORT_REFERENCE]
+        reference_keys = {
+            "version", "machine_comparison_id", "machine_digest", "snapshot_digest", "overlays",
+        }
+        if (
+            set(payload) != {_EXPORT_REFERENCE, "summary", "requirements"}
+            or not isinstance(reference, dict)
+            or set(reference) != reference_keys
+            or type(reference["version"]) is not int
+            or reference["version"] != _EXPORT_REFERENCE_VERSION
+            or not isinstance(reference["machine_comparison_id"], str)
+            or not isinstance(reference["overlays"], dict)
+            or not {"comparison_id", "created_at", "machine_comparison_id"}
+                <= reference["overlays"].keys()
+            or not reference["overlays"].keys() <= _COMPARISON_IDENTITY | _EXPORT_OVERLAYS
+            or reference["overlays"]["comparison_id"] != row["comparison_id"]
+            or reference["overlays"]["created_at"] != row["created_at"]
+            or reference["overlays"]["machine_comparison_id"]
+                != reference["machine_comparison_id"]
+        ):
+            raise LibraryStoreError("This saved comparison has an invalid export reference.")
+        base_id = reference["machine_comparison_id"]
+        base_row = self._comparison_row(connection, base_id)
+        base = base_row["payload"] if base_row is not None else None
+        if (
+            not isinstance(base, dict)
+            or _EXPORT_REFERENCE in base
+            or "machine_comparison_id" in base
+            or base_row["document_id"] != row["document_id"]
+            or not isinstance(base.get("document"), dict)
+            or base["document"].get("document_id") != row["document_id"]
+            or base.get("comparison_id") != base_id
+            or base.get("created_at") != base_row["created_at"]
+            or digest(base) != reference["machine_digest"]
+        ):
+            raise LibraryStoreError(
+                "The saved export's original machine evidence is unavailable or changed."
+            )
+        resolved = {**deepcopy(base), **deepcopy(reference["overlays"])}
+        if (
+            digest(resolved) != reference["snapshot_digest"]
+            or digest(_export_monitoring_projection(resolved))
+                != digest({key: payload[key] for key in ("summary", "requirements")})
+        ):
+            raise LibraryStoreError("This saved export does not match its frozen snapshot.")
+        return resolved
+
     def comparison(self, comparison_id: str) -> dict:
         with self._db().connect() as connection:
-            payload = connection.execute(
-                select(comparisons.c.payload).where(comparisons.c.comparison_id == comparison_id)
-            ).scalar_one_or_none()
-        if payload is None:
-            raise LibraryStoreError("This saved comparison was not found.")
-        return payload
+            row = self._comparison_row(connection, comparison_id)
+            if row is None:
+                raise LibraryStoreError("This saved comparison was not found.")
+            return self._resolve_comparison(connection, row)
 
     def comparison_pdf(self, comparison_id: str, renderer: Callable[[dict], bytes]) -> bytes:
         """Freeze the first successful PDF export with its immutable JSON snapshot.
@@ -754,18 +908,22 @@ class LibraryStore:
         with self._db().connect() as connection:
             row = (
                 connection.execute(
-                    select(comparisons.c.payload, comparisons.c.pdf).where(
+                    select(
+                        comparisons.c.comparison_id, comparisons.c.document_id,
+                        comparisons.c.created_at, comparisons.c.payload, comparisons.c.pdf,
+                    ).where(
                         comparisons.c.comparison_id == comparison_id
                     )
                 )
                 .mappings()
                 .first()
             )
-        if row is None:
-            raise LibraryStoreError("This saved comparison was not found.")
+            if row is None:
+                raise LibraryStoreError("This saved comparison was not found.")
+            payload = self._resolve_comparison(connection, row)
         if row["pdf"] is not None:
             return bytes(row["pdf"])
-        rendered = renderer(deepcopy(row["payload"]))
+        rendered = renderer(payload)
         if not isinstance(rendered, bytes) or not rendered.startswith(b"%PDF-"):
             raise LibraryStoreError("The report renderer did not return a valid PDF artifact.")
         with self._lock, self._db().begin() as connection:

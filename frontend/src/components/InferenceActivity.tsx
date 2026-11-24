@@ -28,8 +28,30 @@ import { inferenceStepDisplay } from "./InferenceProgress";
 const Context = createContext<{
   active: InferenceActivity[];
   refresh: () => Promise<InferenceActivity[] | null>;
-}>({ active: [], refresh: async () => null });
+  inlineActivity: string | null;
+  registerInline: (
+    documentId: string,
+    kind: InferenceActivity["kind"],
+  ) => () => void;
+}>({
+  active: [],
+  refresh: async () => null,
+  inlineActivity: null,
+  registerInline: () => () => {},
+});
 export const useInferenceActivity = () => useContext(Context);
+
+/** Hide duplicate global progress only while this exact task has a mounted view. */
+export function useInlineInferenceActivity(
+  documentId: string,
+  kind: InferenceActivity["kind"],
+  visible: boolean,
+) {
+  const { registerInline } = useInferenceActivity();
+  useEffect(() => {
+    if (visible && documentId) return registerInline(documentId, kind);
+  }, [documentId, kind, visible, registerInline]);
+}
 
 /** Follow accepted work across routes; the server remains the authority on reload. */
 export function InferenceActivityProvider({
@@ -43,6 +65,20 @@ export function InferenceActivityProvider({
   const mounted = useRef(false);
   const polling = useRef(false);
   const controller = useRef<AbortController | null>(null);
+  const [inline, setInline] = useState<{
+    key: string;
+    owner: symbol;
+  } | null>(null);
+  const registerInline = useCallback(
+    (documentId: string, kind: InferenceActivity["kind"]) => {
+      const owner = Symbol();
+      setInline({ key: `${documentId}:${kind}`, owner });
+      return () => {
+        setInline((current) => (current?.owner === owner ? null : current));
+      };
+    },
+    [],
+  );
   const refresh = useCallback(async () => {
     if (!mounted.current || polling.current) return null;
     polling.current = true;
@@ -127,20 +163,35 @@ export function InferenceActivityProvider({
     return () => window.clearInterval(interval);
   }, [active.length, refresh]);
   return (
-    <Context.Provider value={{ active, refresh }}>{children}</Context.Provider>
+    <Context.Provider
+      value={{
+        active,
+        refresh,
+        inlineActivity: inline?.key ?? null,
+        registerInline,
+      }}
+    >
+      {children}
+    </Context.Provider>
   );
 }
 
 export function InferenceActivityBanner() {
-  const { active } = useInferenceActivity();
+  const { active, inlineActivity } = useInferenceActivity();
+  const visible = active.filter(
+    (item) =>
+      item.observation_state === "stale" ||
+      Boolean(item.connection_notice) ||
+      `${item.document_id}:${item.kind}` !== inlineActivity,
+  );
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    if (!active.length) return;
+    if (!visible.length) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [active.length]);
-  if (!active.length) return null;
-  const item = active[0];
+  }, [visible.length]);
+  if (!visible.length) return null;
+  const item = visible[0];
   const stale = item.observation_state === "stale";
   const steps = stale ? null : inferenceStepDisplay(item.progress);
   const elapsed = Math.max(
@@ -173,7 +224,7 @@ export function InferenceActivityBanner() {
                 : "Generating your report"}
             {Number.isFinite(elapsed) &&
               ` · ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`}
-            {active.length > 1 && ` · ${active.length} active tasks`}
+            {visible.length > 1 && ` · ${visible.length} active tasks`}
           </Typography>
           {steps && (
             <Typography

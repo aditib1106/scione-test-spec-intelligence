@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { SpecificationData, Workspace } from "../src/types";
+import { documentAction } from "./workspaceActions";
 
 test("failed analysis is not retried and requires fresh consent before another call", async ({
   page,
@@ -60,17 +61,26 @@ test("failed analysis is not retried and requires fresh consent before another c
       modelPosts++;
       failed = true;
       await route.fulfill({
-        status: 400,
+        status: 202,
         json: {
-          detail:
-            "Fixture structured output did not conform to the schema. No automatic retry was made.",
+          operation_id: `00000000-0000-4000-8000-${String(modelPosts).padStart(12, "0")}`,
+          request_id: route.request().headers()["x-inference-request-id"],
+          document_id: documentId,
+          kind: "extraction",
+          state: "failed",
+          started_at: new Date().toISOString(),
+          error: {
+            status: 400,
+            detail:
+              "Fixture structured output did not conform to the schema. No automatic retry was made.",
+          },
         },
       });
     },
   );
 
   await page.goto(`/specifications?document=${documentId}`);
-  await page.getByRole("button", { name: /^Analysis settings/ }).click();
+  await (await documentAction(page, "Analysis settings")).click();
   await expect(
     page.getByText(/browse other pages while analysis continues/),
   ).toBeVisible();

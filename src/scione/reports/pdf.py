@@ -145,7 +145,7 @@ def _business_note(line: GapLine, current_lab: str) -> str:
             else "The lab reviewer marked the requested conditions or scope unsupported."
         )
     elif line.status == "in_house" and support_basis(line, current_lab) is None:
-        notes.append("Lab review of customer conditions, acceptance criteria and scope is pending.")
+        notes.append("Lab review of customer conditions, test specification and scope is pending.")
     return " ".join(notes)
 
 
@@ -292,7 +292,7 @@ def _line_html(line: GapLine, number: int, current_lab: str, content_review_note
     if line.unknown_methods:
         parts.append(_paragraph("Method details to confirm", "; ".join(line.unknown_methods)))
     parts.append(_values("Customer conditions", requirement.conditions))
-    parts.append(_values("Acceptance criteria", requirement.acceptance_criteria))
+    parts.append(_values("Test specification", requirement.acceptance_criteria))
     if requirement.applicability:
         parts.append(_paragraph("Applicability", "; ".join(requirement.applicability)))
     if requirement.special_instructions:

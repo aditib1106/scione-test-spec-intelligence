@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Link as RouterLink,
   useNavigate,
@@ -14,12 +14,15 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
+  FormHelperText,
   InputAdornment,
   InputLabel,
   IconButton,
   List,
   ListItemButton,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -45,9 +48,11 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
-import DocumentScannerOutlinedIcon from "@mui/icons-material/DocumentScannerOutlined";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
+import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
+import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import { ApiError, request, useResource } from "../api";
 import { useAuth } from "../auth";
 import {
@@ -144,6 +149,8 @@ export default function SpecificationLibrary({
   const documents = library.data?.documents ?? [];
   const [query, setQuery] = useState("");
   const [company, setCompany] = useState("");
+  const [listPage, setListPage] = useState(0);
+  const [listRowsPerPage, setListRowsPerPage] = useState(10);
   const selectedId = params.get("document") || "";
   const detail = useResource<LibraryDetail>(
     selectedId ? `/api/library/${encodeURIComponent(selectedId)}` : null,
@@ -152,11 +159,15 @@ export default function SpecificationLibrary({
   const [editing, setEditing] = useState<LibraryDocument | null>(null);
   const [metadata, setMetadata] = useState<LibraryMetadata>(emptyMetadata);
   const [file, setFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const submitting = useRef(false);
   const [uploadedId, setUploadedId] = useState<string | null>(null);
   const [uploadReceipt, setUploadReceipt] =
     useState<SpecificationUploadReceipt | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const saveErrorRef = useRef<HTMLDivElement>(null);
+  const [saveAttempt, setSaveAttempt] = useState(0);
   const [notice, setNotice] = useState("");
   const [selectedTestId, setSelectedTestId] = useState("");
   const [detailTab, setDetailTab] = useState("tests");
@@ -167,6 +178,13 @@ export default function SpecificationLibrary({
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState("");
   const [removeStale, setRemoveStale] = useState(false);
+  const [specificationActions, setSpecificationActions] =
+    useState<HTMLElement | null>(null);
+  const [versionsFamilyId, setVersionsFamilyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (dialogOpen && saveError) saveErrorRef.current?.focus();
+  }, [dialogOpen, saveError, saveAttempt]);
 
   useEffect(() => {
     library.refresh();
@@ -177,6 +195,8 @@ export default function SpecificationLibrary({
     setDetailTab("tests");
     setRecordQuery("");
     setRecordPage(0);
+    setSpecificationActions(null);
+    setVersionsFamilyId(null);
   }, [selectedId]);
 
   useEffect(() => {
@@ -210,17 +230,39 @@ export default function SpecificationLibrary({
     0,
   );
 
-  const families = useMemo(() => {
-    const latest = new Map<string, LibraryDocument>();
+  const versionGroups = useMemo(() => {
+    const groups = new Map<string, LibraryDocument[]>();
     for (const document of documents) {
-      const current = latest.get(document.family_id);
-      if (!current || compareSpecificationDates(document, current) < 0)
-        latest.set(document.family_id, document);
+      const versions = groups.get(document.family_id) ?? [];
+      versions.push(document);
+      groups.set(document.family_id, versions);
     }
-    return [...latest.values()].sort((a, b) =>
-      b.updated_at.localeCompare(a.updated_at),
-    );
+    for (const versions of groups.values())
+      versions.sort(compareSpecificationDates);
+    return groups;
   }, [documents]);
+  const families = useMemo(
+    () =>
+      [...versionGroups.values()]
+        .map((versions) => versions[0])
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
+    [versionGroups],
+  );
+  const versionChoices = useMemo(() => {
+    if (!versionsFamilyId) return [];
+    const detailed =
+      detail.data?.document.document_id === selectedId &&
+      detail.data.document.family_id === versionsFamilyId
+        ? detail.data.versions
+        : undefined;
+    return [...(detailed ?? versionGroups.get(versionsFamilyId) ?? [])]
+      .filter((document) => document.family_id === versionsFamilyId)
+      .sort(compareSpecificationDates);
+  }, [versionsFamilyId, versionGroups, detail.data, selectedId]);
+  const versionFamily = versionChoices[0];
+  useEffect(() => {
+    if (versionsFamilyId && !versionChoices.length) setVersionsFamilyId(null);
+  }, [versionsFamilyId, versionChoices]);
 
   const companies = useMemo(
     () =>
@@ -240,21 +282,36 @@ export default function SpecificationLibrary({
           : document.company_name === company);
       return (
         companyMatches &&
-        [
-          document.company_name,
-          document.specification_id,
-          document.title,
-          document.original_name,
-          document.revision,
-          document.specification_date,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLocaleLowerCase()
-          .includes(needle)
+        (versionGroups.get(document.family_id) ?? [document]).some((version) =>
+          [
+            version.company_name,
+            version.specification_id,
+            version.title,
+            version.original_name,
+            version.revision,
+            version.specification_date,
+            specificationVersionLabel(version),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLocaleLowerCase()
+            .includes(needle),
+        )
       );
     });
-  }, [families, query, company]);
+  }, [families, versionGroups, query, company]);
+
+  useEffect(() => {
+    setListPage(0);
+  }, [query, company, listRowsPerPage]);
+  const visibleListPage = Math.min(
+    listPage,
+    Math.max(0, Math.ceil(filtered.length / listRowsPerPage) - 1),
+  );
+  const visibleFamilies = filtered.slice(
+    visibleListPage * listRowsPerPage,
+    (visibleListPage + 1) * listRowsPerPage,
+  );
 
   const current = detail.data?.document;
   const selectedTest =
@@ -309,7 +366,8 @@ export default function SpecificationLibrary({
   };
 
   const save = async () => {
-    if (saving) return;
+    if (submitting.current) return;
+    setSaveAttempt((attempt) => attempt + 1);
     setSaveError("");
     if (!editing && !uploadedId && !file) {
       setSaveError("Choose the specification PDF first.");
@@ -319,6 +377,7 @@ export default function SpecificationLibrary({
       setSaveError("Choose a PDF smaller than 25 MB.");
       return;
     }
+    submitting.current = true;
     setSaving(true);
     try {
       let documentId = editing?.document_id || uploadedId;
@@ -385,6 +444,7 @@ export default function SpecificationLibrary({
           : "The specification could not be saved. Please try again.",
       );
     } finally {
+      submitting.current = false;
       setSaving(false);
     }
   };
@@ -479,7 +539,12 @@ export default function SpecificationLibrary({
       )}
 
       {!selectedId && (
-        <Paper variant="outlined" sx={{ overflow: "hidden", mb: 3 }}>
+        <Paper
+          variant="outlined"
+          role="region"
+          aria-label="Saved specification list"
+          sx={{ overflow: "hidden", mb: 3 }}
+        >
           <Stack
             direction={{ xs: "column", sm: "row" }}
             spacing={1.5}
@@ -491,7 +556,7 @@ export default function SpecificationLibrary({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               inputProps={{ "aria-label": "Search specification library" }}
-              sx={{ flex: 1 }}
+              sx={{ flex: 1, minWidth: 0 }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -539,7 +604,7 @@ export default function SpecificationLibrary({
             <Box
               sx={{
                 px: 3,
-                py: 6,
+                py: { xs: 4, sm: 5 },
                 textAlign: "center",
                 borderTop: "1px solid",
                 borderColor: "divider",
@@ -570,21 +635,36 @@ export default function SpecificationLibrary({
             </Box>
           ) : (
             <TableContainer
-              sx={{ maxHeight: "calc(100dvh - 280px)", minHeight: 240 }}
+              role="region"
+              aria-label="Specification table scroll area"
+              tabIndex={0}
+              sx={{ maxHeight: "min(760px, calc(100dvh - 280px))" }}
             >
               <Table
                 stickyHeader
                 size="small"
                 aria-label="Saved customer specifications"
                 sx={{
+                  minWidth: 960,
+                  tableLayout: "fixed",
                   "& th": {
                     bgcolor: "#f5f7fb",
                     color: "#53647b",
                     fontWeight: 650,
                   },
                   "& td": { py: 1.75, borderColor: "#e6ebf2" },
+                  "& tbody tr:last-child td": { borderBottom: 0 },
                 }}
               >
+                <colgroup>
+                  <col style={{ width: 144 }} />
+                  <col />
+                  <col style={{ width: 132 }} />
+                  <col style={{ width: 60 }} />
+                  <col style={{ width: 140 }} />
+                  <col style={{ width: 116 }} />
+                  <col style={{ width: 88 }} />
+                </colgroup>
                 <TableHead>
                   <TableRow>
                     <TableCell>Customer</TableCell>
@@ -597,7 +677,7 @@ export default function SpecificationLibrary({
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filtered.map((document) => (
+                  {visibleFamilies.map((document) => (
                     <TableRow
                       key={document.family_id}
                       selected={document.family_id === selectedFamily}
@@ -608,11 +688,12 @@ export default function SpecificationLibrary({
                           color: document.company_name
                             ? "text.primary"
                             : "text.secondary",
+                          overflowWrap: "anywhere",
                         }}
                       >
                         {document.company_name || "Not assigned"}
                       </TableCell>
-                      <TableCell sx={{ minWidth: 220 }}>
+                      <TableCell>
                         <Button
                           onClick={() =>
                             setParams({ document: document.document_id })
@@ -622,6 +703,8 @@ export default function SpecificationLibrary({
                             minWidth: 0,
                             textAlign: "left",
                             justifyContent: "flex-start",
+                            lineHeight: 1.5,
+                            overflowWrap: "anywhere",
                           }}
                         >
                           {documentTitle(document)}
@@ -630,12 +713,29 @@ export default function SpecificationLibrary({
                           variant="caption"
                           color="text.secondary"
                           display="block"
+                          sx={{ overflowWrap: "anywhere" }}
                         >
                           {document.specification_id && document.title
                             ? `${document.specification_id} · `
                             : ""}
                           {document.original_name}
                         </Typography>
+                        {(versionGroups.get(document.family_id)?.length ?? 0) >
+                          1 && (
+                          <Button
+                            size="small"
+                            startIcon={
+                              <HistoryRoundedIcon sx={{ fontSize: 15 }} />
+                            }
+                            onClick={() =>
+                              setVersionsFamilyId(document.family_id)
+                            }
+                            sx={{ mt: 0.25, p: 0, minWidth: 0, fontSize: 12 }}
+                          >
+                            {versionGroups.get(document.family_id)!.length}{" "}
+                            versions
+                          </Button>
+                        )}
                       </TableCell>
                       <TableCell>
                         {specificationVersionLabel(document)}
@@ -712,6 +812,34 @@ export default function SpecificationLibrary({
               </Table>
             </TableContainer>
           )}
+          {filtered.length > 10 && (
+            <TablePagination
+              component="div"
+              count={filtered.length}
+              page={visibleListPage}
+              rowsPerPage={listRowsPerPage}
+              rowsPerPageOptions={[10, 25, 50]}
+              labelRowsPerPage="Specifications per page"
+              onPageChange={(_event, value) => setListPage(value)}
+              onRowsPerPageChange={(event) =>
+                setListRowsPerPage(Number(event.target.value))
+              }
+              sx={{
+                borderTop: "1px solid",
+                borderColor: "divider",
+                "& .MuiTablePagination-toolbar": {
+                  flexWrap: "wrap",
+                  justifyContent: "flex-end",
+                  px: { xs: 1, sm: 2 },
+                  py: { xs: 0.5, sm: 0 },
+                },
+                "& .MuiTablePagination-spacer": {
+                  display: { xs: "none", sm: "block" },
+                },
+                "& .MuiTablePagination-actions": { ml: { xs: 1, sm: 2 } },
+              }}
+            />
+          )}
         </Paper>
       )}
 
@@ -772,25 +900,13 @@ export default function SpecificationLibrary({
                   {` · ${specificationVersionLabel(current)}`}
                 </Typography>
               </Box>
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                <Tooltip title="Remove from library">
-                  <IconButton
-                    aria-label="Remove specification"
-                    onClick={() => {
-                      setRemoving(current);
-                      setRemoveError("");
-                      setRemoveStale(false);
-                    }}
-                  >
-                    <DeleteOutlineRoundedIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Button
-                  startIcon={<EditOutlinedIcon />}
-                  onClick={() => openEdit(current)}
-                >
-                  Edit details
-                </Button>
+              <Stack
+                direction="row"
+                spacing={1}
+                flexWrap="wrap"
+                useFlexGap
+                sx={{ flexShrink: 0 }}
+              >
                 <Button
                   component={RouterLink}
                   to={reviewUrl(
@@ -799,7 +915,7 @@ export default function SpecificationLibrary({
                       ? selectedTest?.requirement_id
                       : selectedTestId || undefined,
                   )}
-                  variant="outlined"
+                  variant="contained"
                   endIcon={<ArrowForwardRoundedIcon />}
                 >
                   Read PDF & review
@@ -808,9 +924,60 @@ export default function SpecificationLibrary({
                   component={RouterLink}
                   to={`/reports?document=${encodeURIComponent(current.document_id)}`}
                   startIcon={<AssessmentOutlinedIcon />}
+                  variant="outlined"
                 >
                   Gap report
                 </Button>
+                <Tooltip title="Specification actions">
+                  <IconButton
+                    id="specification-actions-button"
+                    aria-label="Specification actions"
+                    aria-haspopup="menu"
+                    aria-expanded={Boolean(specificationActions)}
+                    aria-controls={
+                      specificationActions
+                        ? "specification-actions-menu"
+                        : undefined
+                    }
+                    onClick={(event) =>
+                      setSpecificationActions(event.currentTarget)
+                    }
+                  >
+                    <MoreHorizRoundedIcon />
+                  </IconButton>
+                </Tooltip>
+                <Menu
+                  id="specification-actions-menu"
+                  anchorEl={specificationActions}
+                  open={Boolean(specificationActions)}
+                  onClose={() => setSpecificationActions(null)}
+                  slotProps={{
+                    list: {
+                      "aria-labelledby": "specification-actions-button",
+                    },
+                  }}
+                >
+                  <MenuItem
+                    onClick={() => {
+                      setSpecificationActions(null);
+                      openEdit(current);
+                    }}
+                  >
+                    <EditOutlinedIcon fontSize="small" sx={{ mr: 1 }} />
+                    Edit details
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      setSpecificationActions(null);
+                      setRemoving(current);
+                      setRemoveError("");
+                      setRemoveStale(false);
+                    }}
+                  >
+                    <DeleteOutlineRoundedIcon fontSize="small" sx={{ mr: 1 }} />
+                    Remove from library
+                  </MenuItem>
+                </Menu>
               </Stack>
             </Stack>
             <Stack
@@ -820,33 +987,15 @@ export default function SpecificationLibrary({
               sx={{ mt: 2 }}
             >
               {detail.data.versions.length > 1 && (
-                <FormControl size="small" sx={{ minWidth: 240 }}>
-                  <InputLabel id="library-version-label">
-                    Specification date
-                  </InputLabel>
-                  <Select
-                    labelId="library-version-label"
-                    label="Specification date"
-                    value={current.document_id}
-                    onChange={(event) =>
-                      setParams({ document: event.target.value })
-                    }
-                  >
-                    {[...detail.data.versions]
-                      .sort(compareSpecificationDates)
-                      .map((version) => (
-                        <MenuItem
-                          key={version.document_id}
-                          value={version.document_id}
-                        >
-                          {specificationVersionLabel(version)}
-                          {!version.specification_date
-                            ? ` · ${version.original_name}`
-                            : ""}
-                        </MenuItem>
-                      ))}
-                  </Select>
-                </FormControl>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<HistoryRoundedIcon fontSize="small" />}
+                  onClick={() => setVersionsFamilyId(current.family_id)}
+                  sx={{ alignSelf: "flex-start", flexShrink: 0 }}
+                >
+                  Versions ({detail.data.versions.length})
+                </Button>
               )}
               <Typography variant="caption" color="text.secondary">
                 {current.original_name} · {current.page_count} pages ·{" "}
@@ -859,16 +1008,10 @@ export default function SpecificationLibrary({
               <Typography fontWeight={600}>
                 No extracted requirements yet
               </Typography>
-              <Typography color="text.secondary" sx={{ mt: 0.5, mb: 1 }}>
-                The PDF is saved. Open it to extract its test requirements.
+              <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                The PDF is saved. Choose Read PDF &amp; review above to extract
+                its test requirements.
               </Typography>
-              <Button
-                component={RouterLink}
-                to={reviewUrl(current.document_id)}
-                endIcon={<ArrowForwardRoundedIcon />}
-              >
-                Analyze this specification
-              </Button>
             </Box>
           ) : (
             <>
@@ -1000,7 +1143,7 @@ export default function SpecificationLibrary({
                         {(
                           [
                             ["condition", "Conditions and scope"],
-                            ["criterion", "Acceptance criteria / reporting"],
+                            ["criterion", "Test specification"],
                           ] as const
                         ).map(([kind, label]) => {
                           const claims = selectedTest.claims.filter((claim) =>
@@ -1304,6 +1447,97 @@ export default function SpecificationLibrary({
       )}
 
       <Dialog
+        open={Boolean(versionsFamilyId && versionFamily)}
+        onClose={() => setVersionsFamilyId(null)}
+        maxWidth="sm"
+        fullWidth
+        scroll="paper"
+        aria-labelledby="specification-versions-title"
+      >
+        <DialogTitle id="specification-versions-heading">
+          <Box component="span" id="specification-versions-title">
+            Specification versions
+          </Box>
+          {versionFamily && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mt: 0.5, overflowWrap: "anywhere" }}
+            >
+              {versionFamily.company_name || "Customer not assigned"} ·{" "}
+              {documentTitle(versionFamily)}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 0 }}>
+          <List disablePadding aria-label="Saved specification versions">
+            {versionChoices.map((version) => (
+              <ListItemButton
+                key={version.document_id}
+                selected={version.document_id === selectedId}
+                aria-label={`Open version ${specificationVersionLabel(version)}: ${version.original_name}`}
+                onClick={() => {
+                  setVersionsFamilyId(null);
+                  if (version.document_id !== selectedId)
+                    setParams({ document: version.document_id });
+                }}
+                sx={{
+                  px: 2.5,
+                  py: 1.75,
+                  gap: 1.25,
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                  alignItems: "center",
+                }}
+              >
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    gap={0.75}
+                    useFlexGap
+                    flexWrap="wrap"
+                  >
+                    <Typography variant="body2" fontWeight={650}>
+                      {specificationVersionLabel(version)}
+                    </Typography>
+                    {version.document_id === selectedId && (
+                      <Chip
+                        size="small"
+                        label="Viewing"
+                        color="primary"
+                        variant="outlined"
+                        sx={{ height: 20, fontSize: 11 }}
+                      />
+                    )}
+                  </Stack>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.5, overflowWrap: "anywhere" }}
+                  >
+                    {version.original_name}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", mt: 0.25 }}
+                  >
+                    {version.run_id
+                      ? `${version.requirement_count} tests · ${version.review_count ? `${version.review_count} to review` : "Extracted"}`
+                      : "Ready to analyze"}
+                  </Typography>
+                </Box>
+                <ChevronRightRoundedIcon fontSize="small" color="action" />
+              </ListItemButton>
+            ))}
+          </List>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5 }}>
+          <Button onClick={() => setVersionsFamilyId(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
         open={Boolean(removing)}
         onClose={() => {
           if (!removeBusy) setRemoving(null);
@@ -1360,10 +1594,12 @@ export default function SpecificationLibrary({
       </Dialog>
       <Dialog
         open={dialogOpen}
-        onClose={() => {
-          if (!saving) setDialogOpen(false);
+        onClose={(_, reason) => {
+          if (!saving && reason !== "backdropClick") setDialogOpen(false);
         }}
+        disableEscapeKeyDown={saving}
         maxWidth="sm"
+        fullWidth
       >
         <DialogTitle>
           {editing ? "Specification details" : "Add customer specification"}
@@ -1371,49 +1607,107 @@ export default function SpecificationLibrary({
         <DialogContent>
           <Stack spacing={2.25} sx={{ pt: 0.75 }}>
             {!editing && (
-              <Box>
+              <Box
+                component="section"
+                aria-label="Specification PDF"
+                sx={{
+                  p: 2,
+                  border: "1px solid",
+                  borderColor: file ? "primary.light" : "divider",
+                  borderRadius: 2,
+                  bgcolor: file ? "#f5f8ff" : "#f8fafc",
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                  Specification PDF
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 1.5 }}
+                >
+                  Text-based PDF · up to 25 MB
+                </Typography>
+                {file && (
+                  <Stack direction="row" gap={1.25} sx={{ mb: 1.5 }}>
+                    <DescriptionOutlinedIcon
+                      color="primary"
+                      sx={{ mt: 0.25, flexShrink: 0 }}
+                    />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        variant="body2"
+                        fontWeight={600}
+                        sx={{ overflowWrap: "anywhere" }}
+                      >
+                        {file.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {file.size < 1024 * 1024
+                          ? `${Math.max(1, Math.round(file.size / 1024))} KB`
+                          : `${(file.size / (1024 * 1024)).toFixed(1)} MB`}
+                        {uploadedId
+                          ? " · Uploaded"
+                          : " · Selected, not uploaded yet"}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                )}
                 <Stack direction="row" gap={1} useFlexGap flexWrap="wrap">
                   <Button
                     component="label"
-                    variant="outlined"
+                    variant={file ? "outlined" : "contained"}
                     startIcon={<UploadFileOutlinedIcon />}
                     disabled={saving || Boolean(uploadedId)}
                   >
-                    {file ? "Change PDF" : "Choose PDF"}
+                    {file ? "Replace PDF" : "Choose PDF"}
                     <input
+                      ref={fileInput}
                       type="file"
                       hidden
                       accept="application/pdf,.pdf"
+                      aria-label="Choose specification PDF"
+                      disabled={saving || Boolean(uploadedId)}
                       onChange={(event) => {
-                        setFile(event.target.files?.[0] ?? null);
+                        const selectedFile = event.target.files?.[0];
+                        if (selectedFile) {
+                          setFile(selectedFile);
+                          setSaveError("");
+                        }
                         event.currentTarget.value = "";
                       }}
                     />
                   </Button>
-                  <Tooltip title="Scan and handwriting support is coming soon.">
-                    <span>
-                      <Button
-                        disabled
-                        startIcon={<DocumentScannerOutlinedIcon />}
-                        sx={{
-                          color: "#566476 !important",
-                          bgcolor: "#e6eaf0 !important",
-                          border: "1px solid #d2d9e3",
-                        }}
-                      >
-                        OCR · coming soon
-                      </Button>
-                    </span>
-                  </Tooltip>
+                  {file && (
+                    <Button
+                      startIcon={<DeleteOutlineRoundedIcon />}
+                      disabled={saving || Boolean(uploadedId)}
+                      onClick={() => {
+                        setFile(null);
+                        setSaveError("");
+                        if (fileInput.current) fileInput.current.value = "";
+                      }}
+                    >
+                      Remove PDF
+                    </Button>
+                  )}
                 </Stack>
                 <Typography
-                  variant="body2"
+                  variant="caption"
                   color="text.secondary"
-                  sx={{ mt: 0.75 }}
+                  display="block"
+                  sx={{ mt: 1.25 }}
                 >
-                  {file?.name || "Text PDF, up to 25 MB"}
+                  Scanned PDFs are not supported yet. OCR is coming soon.
                 </Typography>
               </Box>
+            )}
+            {!editing && (
+              <Divider textAlign="left">
+                <Typography variant="subtitle2" color="text.secondary">
+                  Specification details
+                </Typography>
+              </Divider>
             )}
             {!editing && (
               <FormControl fullWidth size="small">
@@ -1433,6 +1727,13 @@ export default function SpecificationLibrary({
                     </MenuItem>
                   ))}
                 </Select>
+                <FormHelperText>
+                  {metadata.family_id
+                    ? "A new version of this specification. Earlier versions are kept."
+                    : families.length
+                      ? "Start a new specification, or select an existing one to add a version."
+                      : "Your first upload starts a new specification. You can add versions later."}
+                </FormHelperText>
               </FormControl>
             )}
             <TextField
@@ -1489,13 +1790,14 @@ export default function SpecificationLibrary({
                 Original source revision: {editing.revision}
               </Typography>
             )}
-            <Typography variant="caption" color="text.secondary">
-              {editing
-                ? "These details organize the saved customer specification. Earlier versions remain available."
-                : "Choose an existing specification to save a new version. Earlier PDFs and extracted requirements are kept."}
-            </Typography>
+            {editing && (
+              <Typography variant="caption" color="text.secondary">
+                These details organize the saved customer specification. Earlier
+                versions remain available.
+              </Typography>
+            )}
             {saveError && (
-              <Alert severity="error">
+              <Alert severity="error" ref={saveErrorRef} tabIndex={-1}>
                 {saveError}
                 {uploadedId && (
                   <Typography

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { SpecificationData, Workspace } from "../src/types";
+import { documentAction } from "./workspaceActions";
 
 test("new providers are selectable, reset consent, and never run on selection", async ({
   page,
@@ -73,7 +74,7 @@ test("new providers are selectable, reset consent, and never run on selection", 
   );
 
   await page.goto(`/specifications?document=${documentId}`);
-  await page.getByRole("button", { name: /^Analysis settings/ }).click();
+  await (await documentAction(page, "Analysis settings")).click();
   await expect(
     page.getByRole("combobox", { name: "Provider", exact: true }),
   ).toHaveText("Fireworks");

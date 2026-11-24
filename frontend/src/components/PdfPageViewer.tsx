@@ -13,6 +13,8 @@ import {
   CircularProgress,
   Dialog,
   IconButton,
+  Menu,
+  MenuItem,
   Stack,
   Tooltip,
   Typography,
@@ -23,6 +25,7 @@ import OpenInFullRoundedIcon from "@mui/icons-material/OpenInFullRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import ZoomInRoundedIcon from "@mui/icons-material/ZoomInRounded";
 import ZoomOutRoundedIcon from "@mui/icons-material/ZoomOutRounded";
+import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
 
 interface Props {
   imageUrl: string;
@@ -37,6 +40,7 @@ interface Props {
   focusY?: number | null;
   focusRequest?: number | string;
   initialFit?: "width" | "page";
+  compactControls?: boolean;
 }
 
 /** Source PDFs fit width; exported reports can fit a complete page by default. */
@@ -53,12 +57,20 @@ export default function PdfPageViewer({
   focusY,
   focusRequest,
   initialFit = "width",
+  compactControls = false,
 }: Props) {
   const [zoom, setZoom] = useState(100);
   const [fit, setFit] = useState(initialFit);
   const [aspectRatio, setAspectRatio] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [expandedReady, setExpandedReady] = useState(false);
+  const [viewMenu, setViewMenu] = useState<{
+    anchor: HTMLElement;
+    fullscreen: boolean;
+  } | null>(null);
+  useEffect(() => {
+    setViewMenu(null);
+  }, [documentUrl, imageUrl]);
   const [viewportWidths, setViewportWidths] = useState({
     normal: { width: 0, height: 0 },
     expanded: { width: 0, height: 0 },
@@ -329,23 +341,51 @@ export default function PdfPageViewer({
                 </IconButton>
               </span>
             </Tooltip>
-            <Button
-              size="small"
-              startIcon={<FitScreenRoundedIcon fontSize="small" />}
-              onClick={() => fitView(fullscreen, "width")}
-              aria-pressed={fit === "width" && zoom === 100}
-              sx={{ ml: 0.5, whiteSpace: "nowrap" }}
-            >
-              Fit width
-            </Button>
-            <Button
-              size="small"
-              onClick={() => fitView(fullscreen, "page")}
-              aria-pressed={fit === "page" && zoom === 100}
-              sx={{ whiteSpace: "nowrap" }}
-            >
-              Fit page
-            </Button>
+            {compactControls ? (
+              <>
+                <Tooltip title="Fit width">
+                  <IconButton
+                    size="small"
+                    aria-label="Fit width"
+                    onClick={() => fitView(fullscreen, "width")}
+                    aria-pressed={fit === "width" && zoom === 100}
+                  >
+                    <FitScreenRoundedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="PDF view options">
+                  <IconButton
+                    size="small"
+                    aria-label="PDF view options"
+                    onClick={(event) =>
+                      setViewMenu({ anchor: event.currentTarget, fullscreen })
+                    }
+                  >
+                    <MoreHorizRoundedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </>
+            ) : (
+              <>
+                <Button
+                  size="small"
+                  startIcon={<FitScreenRoundedIcon fontSize="small" />}
+                  onClick={() => fitView(fullscreen, "width")}
+                  aria-pressed={fit === "width" && zoom === 100}
+                  sx={{ ml: 0.5, whiteSpace: "nowrap" }}
+                >
+                  Fit width
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => fitView(fullscreen, "page")}
+                  aria-pressed={fit === "page" && zoom === 100}
+                  sx={{ whiteSpace: "nowrap" }}
+                >
+                  Fit page
+                </Button>
+              </>
+            )}
           </Stack>
         </Stack>
         {error && (
@@ -443,6 +483,21 @@ export default function PdfPageViewer({
       >
         {contents(true)}
       </Dialog>
+      <Menu
+        anchorEl={viewMenu?.anchor ?? null}
+        open={Boolean(viewMenu)}
+        onClose={() => setViewMenu(null)}
+      >
+        <MenuItem
+          selected={fit === "page" && zoom === 100}
+          onClick={() => {
+            fitView(viewMenu?.fullscreen ?? false, "page");
+            setViewMenu(null);
+          }}
+        >
+          Fit page
+        </MenuItem>
+      </Menu>
     </>
   );
 }

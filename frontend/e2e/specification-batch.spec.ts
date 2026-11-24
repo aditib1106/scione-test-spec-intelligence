@@ -1,3 +1,4 @@
+import { documentAction, reviewAction } from "./workspaceActions";
 import { expect, test } from "@playwright/test";
 import type { SpecificationData, Workspace } from "../src/types";
 
@@ -65,9 +66,7 @@ for (const change of ["document", "run"] as const) {
     }
 
     await page.goto(`${base}/specifications?document=${first.document_id}`);
-    await page
-      .getByRole("button", { name: "Batch review", exact: true })
-      .click();
+    await (await reviewAction(page, "Review selected tests")).click();
     const boxes = requirements.slice(0, 2).map((item) =>
       page.getByRole("checkbox", {
         name: item.original_test_name,
@@ -93,11 +92,9 @@ for (const change of ["document", "run"] as const) {
       await page.getByRole("combobox", { name: "Saved specification" }).click();
       await page.getByRole("option", { name: second.original_name }).click();
       // Loading a document remounts the collapsed batch panel.
-      await page
-        .getByRole("button", { name: "Batch review", exact: true })
-        .click();
+      await (await reviewAction(page, "Review selected tests")).click();
     } else {
-      await page.getByRole("button", { name: /Analysis settings/ }).click();
+      await (await documentAction(page, "Analysis settings")).click();
       await page
         .getByRole("checkbox", { name: /I have permission to send/ })
         .check();
@@ -113,10 +110,11 @@ for (const change of ["document", "run"] as const) {
       // A successful analysis closes its settings; the submit button is hidden.
       await expect(
         page.getByRole("button", { name: /Analysis settings/ }),
-      ).toHaveAttribute("aria-expanded", "false");
-      await page
-        .getByRole("button", { name: "Batch review", exact: true })
-        .click();
+      ).not.toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Analyze again", exact: true }),
+      ).not.toBeVisible();
+      await (await reviewAction(page, "Review selected tests")).click();
     }
 
     for (const box of boxes) await expect(box).not.toBeChecked();

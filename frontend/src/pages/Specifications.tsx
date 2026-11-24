@@ -5,6 +5,7 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -19,6 +20,7 @@ import {
   FormControlLabel,
   IconButton,
   InputLabel,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -35,7 +37,6 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import DocumentScannerOutlinedIcon from "@mui/icons-material/DocumentScannerOutlined";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
-import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
 import ExtractionEvidence from "../components/ExtractionEvidence";
 import {
@@ -46,7 +47,10 @@ import {
   requestOperation,
   useResource,
 } from "../api";
-import { useInferenceActivity } from "../components/InferenceActivity";
+import {
+  useInferenceActivity,
+  useInlineInferenceActivity,
+} from "../components/InferenceActivity";
 import { useAuth } from "../auth";
 import PdfPageViewer from "../components/PdfPageViewer";
 import SourceFactsEditor from "../components/SourceFactsEditor";
@@ -60,6 +64,7 @@ import SpecificationReviewSummary from "../components/SpecificationReviewSummary
 import DocumentNotes from "../components/DocumentNotes";
 import type {
   PageProps,
+  DocumentSummary,
   Requirement,
   SpecificationData,
   SpecificationUploadReceipt,
@@ -120,12 +125,19 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const { canDevelop } = useAuth();
   const [params, setParams] = useSearchParams();
   const lastRequirementParam = useRef(params.get("requirement"));
+  const documentNavigationIntent = useRef<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const compact = useMediaQuery("(max-width:1099px)");
   const docs = workspace.documents;
   const requestedId = params.get("document");
   const documentId = requestedId || docs[0]?.document_id || "";
+  useEffect(() => {
+    // The intent protects only the gap before Router commits navigation. Once
+    // the route changes, Back or another navigation must not inherit it while
+    // the destination's source request is still pending or has failed.
+    documentNavigationIntent.current = null;
+  }, [documentId]);
   const { active: activeOperations, refresh: refreshActivity } =
     useInferenceActivity();
   const analysisOperation = activeOperations.find(
@@ -161,6 +173,8 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
   const sourceLocateSequence = useRef(0);
   const [sourceOpen, setSourceOpen] = useState(false);
   const sourcePreviewRef = useRef<HTMLDivElement>(null);
+  const workbenchRef = useRef<HTMLDivElement>(null);
+  const [workbenchTop, setWorkbenchTop] = useState(220);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removeReason, setRemoveReason] = useState("Not a requested test");
   const [removeNote, setRemoveNote] = useState("");
@@ -179,6 +193,11 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         item.kind === "extraction" &&
         item.observation_state !== "stale",
     );
+  useInlineInferenceActivity(
+    documentId,
+    "extraction",
+    analyzing && Boolean(data) && data?.document_id === documentId && !loading,
+  );
   const [analysisDocumentName, setAnalysisDocumentName] = useState("");
   const analysisSubmitting = useRef(false);
   const ownedAnalysisDocument = useRef("");
@@ -254,16 +273,59 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     });
   }, [documentId, location, navigate]);
   const [batchOpen, setBatchOpen] = useState(false);
+  const [documentActions, setDocumentActions] = useState<HTMLElement | null>(
+    null,
+  );
+  const [reviewActions, setReviewActions] = useState<HTMLElement | null>(null);
+  const [addTestRequest, setAddTestRequest] = useState<{
+    documentId: string;
+    nonce: number;
+  } | null>(null);
+  const addTestSequence = useRef(0);
+  useEffect(() => {
+    setReviewActions(null);
+  }, [selectedId]);
   const [batchIds, setBatchIds] = useState<string[]>([]);
   const [batchNote, setBatchNote] = useState("");
   const [batchAck, setBatchAck] = useState(false);
   const [batchSaving, setBatchSaving] = useState(false);
+  const reviewBusy = saving || batchSaving;
+  const reviewSubmitting = useRef(false);
   const [batchError, setBatchError] = useState("");
   const [analysisOpen, setAnalysisOpen] = useState(!data?.run);
+  useEffect(() => {
+    if (compact || loading || !data || data.document_id !== documentId) return;
+    const workbench = workbenchRef.current;
+    if (!workbench) return;
+    let frame = 0;
+    const measure = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const top = Math.max(
+          0,
+          Math.ceil(workbench.getBoundingClientRect().top + window.scrollY),
+        );
+        setWorkbenchTop((current) => (current === top ? current : top));
+      });
+    };
+    const observer = new ResizeObserver(measure);
+    if (workbench.parentElement) observer.observe(workbench.parentElement);
+    const main = document.getElementById("main");
+    if (main) observer.observe(main);
+    window.addEventListener("resize", measure);
+    measure();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [compact, loading, documentId, data?.run?.run_id, analysisOpen]);
   const requestedSourcePage = params.get("page");
 
   useEffect(() => {
     setBatchOpen(false);
+    setDocumentActions(null);
+    setReviewActions(null);
     setBatchIds([]);
     setBatchAck(false);
     setBatchNote("");
@@ -296,6 +358,20 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
           { signal },
         );
         if (isCurrent()) {
+          if (documentNavigationIntent.current === id)
+            documentNavigationIntent.current = null;
+          // Choose a useful initial view for a newly opened document. After
+          // this point an explicit Pending filter remains Pending, including
+          // when its last item is confirmed or the queue is empty.
+          if (dataRef.current?.document_id !== id)
+            setFilter(
+              preferredRequirementId ||
+                !next.run?.extraction.requirements.some(
+                  (item) => statusOf(next, item.id) === "needs_attention",
+                )
+                ? "all"
+                : "pending",
+            );
           setData(next);
           setPage(1);
           setAnalysisError("");
@@ -454,7 +530,9 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         item.original_test_name
       : item.original_test_name;
   const selected: Requirement | undefined = requirements.find(
-    (item) => item.id === selectedId,
+    (item) =>
+      item.id === selectedId &&
+      (filter === "all" || statusOf(data!, item.id) === "needs_attention"),
   );
   useEffect(() => {
     setSourceField(null);
@@ -496,13 +574,32 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         .map((item) => item.id),
     [data, requirements],
   );
-  useEffect(() => {
-    if (data?.run && actionableIds.length === 0) setFilter("all");
-  }, [data?.run?.run_id, actionableIds.length]);
   const displayed =
     filter === "pending"
       ? requirements.filter((item) => actionableIds.includes(item.id))
       : requirements;
+  useEffect(() => {
+    // Router navigation can commit after a synchronous selection reset. The
+    // outgoing document must not write its old ID back over that navigation.
+    if (
+      documentNavigationIntent.current &&
+      documentNavigationIntent.current !== documentId
+    )
+      return;
+    if (!data?.run || data.document_id !== documentId) return;
+    if (displayed.some((item) => item.id === selectedId)) return;
+    const next = displayed[0]?.id ?? "";
+    if (next === selectedId) return;
+    setSelectedId(next);
+    lastRequirementParam.current = next || null;
+    setParams(
+      next
+        ? { document: documentId, requirement: next }
+        : { document: documentId },
+      { replace: true },
+    );
+    setNote(data.review?.decisions[next]?.note ?? "");
+  }, [data, displayed, documentId, selectedId, setParams]);
   const state = selected && data ? statusOf(data, selected.id) : "";
   const canReviewSelected =
     state === "needs_attention" ||
@@ -624,6 +721,24 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     if (first) setPage(first.page);
     setNote(data?.review?.decisions[id]?.note ?? "");
   };
+  const selectedSourceIndex = requirements.findIndex(
+    (item) => item.id === selected?.id,
+  );
+  const previousPendingId =
+    selectedSourceIndex > 0
+      ? requirements
+          .slice(0, selectedSourceIndex)
+          .reverse()
+          .find((item) => actionableIds.includes(item.id))?.id
+      : undefined;
+  const nextPendingId = requirements
+    .slice(selectedSourceIndex + 1)
+    .find((item) => actionableIds.includes(item.id))?.id;
+  const navigatePending = (id?: string) => {
+    if (!id || reviewBusy || data?.document_id !== documentId) return;
+    setFilter("pending");
+    selectRequirement(id);
+  };
   const advance = (
     nextData: SpecificationData,
     actedIds: string[],
@@ -646,6 +761,9 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     selectedNote: string,
     acknowledged: boolean,
   ) => {
+    if (reviewSubmitting.current) return false;
+    const fromBatchReview = batchOpen;
+    const showReviewError = fromBatchReview ? setBatchError : setError;
     if (
       !data?.run ||
       !data.review ||
@@ -654,15 +772,16 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     )
       return;
     if (decision === "excluded" && !selectedNote.trim()) {
-      setError("Add a reason before excluding source records.");
+      showReviewError("Add a reason before excluding source records.");
       return;
     }
     if (ids.length > 1 && !acknowledged) {
-      setError(
+      showReviewError(
         "Acknowledge that you checked every selected record against the PDF.",
       );
       return;
     }
+    reviewSubmitting.current = true;
     setSaving(ids.length === 1);
     setBatchSaving(ids.length > 1);
     setError("");
@@ -714,9 +833,10 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
           ? `${reason.message} Your draft is still here. Reload saved review only after deciding whether to keep it.`
           : errorText(reason);
       if (activeDocumentRef.current === documentAtSubmit)
-        ids.length > 1 ? setBatchError(message) : setError(message);
+        showReviewError(message);
       return false;
     } finally {
+      reviewSubmitting.current = false;
       setSaving(false);
       setBatchSaving(false);
     }
@@ -911,7 +1031,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
             ),
           );
         }}
-        sx={{ width: 115 }}
+        sx={{ width: 92 }}
         inputProps={{ min: 1, max: data?.document.page_count ?? 1 }}
       />
       <IconButton
@@ -974,6 +1094,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         navigation={sourceNavigation}
         height={compact ? "72vh" : "100%"}
         focusY={highlightFocus}
+        compactControls
         focusRequest={
           pageImageKey === currentPreviewKey ? sourceLocateRequest : undefined
         }
@@ -1082,65 +1203,19 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       />
     ) : null;
   const detail = selected ? (
-    <Stack spacing={1.25}>
+    <Stack spacing={0.5}>
       <ExtractionEvidence
         key={`${documentId}-${selected.id}`}
         requirement={selected}
         claims={data?.normalized_requirements?.[selected.id]?.claims}
         notices={sourceNotices}
+        reviewReasons={state === "needs_attention" ? reviewReasons : []}
         note={note}
         onNote={setNote}
         onSource={locateSource}
       />
-      {state === "needs_attention" && (
-        <Box
-          sx={{
-            p: 1.25,
-            borderLeft: "3px solid #cc861e",
-            bgcolor: "#fff8e9",
-            borderRadius: 1,
-          }}
-        >
-          <Typography variant="body2" fontWeight={650}>
-            Check this item against the PDF
-          </Typography>
-          {reviewReasons.length > 0 && (
-            <Accordion
-              disableGutters
-              elevation={0}
-              sx={{ bgcolor: "transparent", "&:before": { display: "none" } }}
-            >
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
-                sx={{
-                  p: 0,
-                  minHeight: 32,
-                  "& .MuiAccordionSummary-content": { my: 0.5 },
-                }}
-              >
-                <Typography variant="caption" fontWeight={600}>
-                  Why this needs review
-                </Typography>
-              </AccordionSummary>
-              <AccordionDetails sx={{ p: 0 }}>
-                <Stack gap={0.75}>
-                  {reviewReasons.map((reason, i) => (
-                    <Typography
-                      key={i}
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ overflowWrap: "anywhere" }}
-                    >
-                      {reason.replace(/\breq_[A-Za-z0-9_-]+\b[: ]*/g, "")}
-                    </Typography>
-                  ))}
-                </Stack>
-              </AccordionDetails>
-            </Accordion>
-          )}
-        </Box>
-      )}
       <ExtractionReviewTable
+        compactIdentity
         requirement={selected}
         claims={data?.normalized_requirements?.[selected.id]?.claims}
         displayName={displayTestName(selected)}
@@ -1151,9 +1226,24 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
     </Stack>
   ) : (
     <Box sx={{ py: 5, textAlign: "center" }}>
-      <Typography color="text.secondary">
-        Select a test to see what was extracted.
-      </Typography>
+      {filter === "pending" && requirements.length > 0 ? (
+        <>
+          <CheckRoundedIcon
+            sx={{ color: "success.main", fontSize: 32, mb: 1 }}
+          />
+          <Typography fontWeight={700}>No tests need your review</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            You can still inspect all extracted tests or continue to the report.
+          </Typography>
+          <Button onClick={() => setFilter("all")} sx={{ mt: 1 }}>
+            View all tests
+          </Button>
+        </>
+      ) : (
+        <Typography color="text.secondary">
+          Select a test to see what was extracted.
+        </Typography>
+      )}
     </Box>
   );
 
@@ -1163,29 +1253,34 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       spacing={1.5}
       alignItems={{ md: "center" }}
     >
-      <FormControl
+      <Autocomplete<DocumentSummary, false, boolean, false>
         size="small"
-        sx={{ minWidth: { xs: "100%", md: 310 }, bgcolor: "#fff" }}
-      >
-        <InputLabel id="spec-doc-label">Saved specification</InputLabel>
-        <Select
-          labelId="spec-doc-label"
-          label="Saved specification"
-          value={documentId}
-          onChange={(event) => {
-            setParams({ document: event.target.value });
-            setSelectedId("");
-            setError("");
-          }}
-        >
-          {docs.map((doc) => (
-            <MenuItem value={doc.document_id} key={doc.document_id}>
-              {doc.original_name}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      <Stack direction="row" spacing={1}>
+        disableClearable
+        options={docs}
+        value={docs.find((doc) => doc.document_id === documentId) ?? null}
+        getOptionKey={(doc) => doc.document_id}
+        getOptionLabel={(doc) => doc.original_name}
+        isOptionEqualToValue={(option, value) =>
+          option.document_id === value.document_id
+        }
+        onChange={(_, document) => {
+          if (!document || document.document_id === documentId) return;
+          documentNavigationIntent.current = document.document_id;
+          setParams({ document: document.document_id });
+          setSelectedId("");
+          setError("");
+        }}
+        noOptionsText="No saved PDF matches this search."
+        sx={{ minWidth: { xs: "100%", md: 250 }, bgcolor: "#fff" }}
+        renderInput={(input) => (
+          <TextField
+            {...input}
+            label="Saved specification"
+            placeholder="Search saved PDFs"
+          />
+        )}
+      />
+      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
         <Button
           component="label"
           variant="outlined"
@@ -1203,21 +1298,32 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
             }}
           />
         </Button>
-
-        <Tooltip title="Scanned and handwritten PDFs will be supported here when OCR is connected.">
-          <span>
-            <Button
-              disabled
-              startIcon={<DocumentScannerOutlinedIcon />}
-              sx={{
-                color: "#566476 !important",
-                bgcolor: "#e6eaf0 !important",
-                border: "1px solid #d2d9e3",
-              }}
-            >
-              OCR · coming soon
-            </Button>
-          </span>
+        {data?.run && data.document_id === documentId && (
+          <Button
+            variant="contained"
+            endIcon={<ArrowForwardIcon />}
+            disabled={saving || batchSaving}
+            onClick={() =>
+              navigate(`/reports?document=${encodeURIComponent(documentId)}`, {
+                state: {
+                  generateReportFor: documentId,
+                  generationIntentId: crypto.randomUUID(),
+                },
+              })
+            }
+            sx={{ bgcolor: blue, whiteSpace: "nowrap" }}
+          >
+            Generate report
+          </Button>
+        )}
+        <Tooltip title="Document actions">
+          <IconButton
+            size="small"
+            aria-label="Document actions"
+            onClick={(event) => setDocumentActions(event.currentTarget)}
+          >
+            <MoreHorizRoundedIcon />
+          </IconButton>
         </Tooltip>
       </Stack>
       {uploadError && <Alert severity="error">{uploadError}</Alert>}
@@ -1229,18 +1335,18 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
       sx={{
         minHeight: "100%",
         bgcolor: pageBg,
-        p: { xs: 1.5, sm: 2.5, lg: 3 },
+        p: { xs: 1.5, sm: 1.5, lg: 2 },
         color: "#17243b",
       }}
     >
-      <Stack spacing={1.5} sx={{ maxWidth: 1800, mx: "auto" }}>
+      <Stack spacing={1} sx={{ maxWidth: 1800, mx: "auto" }}>
         <Stack
           direction={{ xs: "column", lg: "row" }}
           alignItems={{ lg: "center" }}
           justifyContent="space-between"
           spacing={1.5}
         >
-          <Box>
+          <Stack direction="row" alignItems="center" gap={1.5} flexWrap="wrap">
             <Typography
               variant="h5"
               fontWeight={750}
@@ -1248,25 +1354,25 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
             >
               PDF review
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Check extracted requirements against their highlighted source.
-            </Typography>
-          </Box>
-          <Stack gap={1} alignItems={{ lg: "flex-end" }}>
-            {documentControls}
-            {!canDevelop && data?.run && data.document_id === documentId && (
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={() => void analyze()}
-                disabled={
-                  analyzing || !selectedProvider?.available || !model.trim()
-                }
-              >
-                {analyzing ? "Analyzing…" : "Analyze again"}
-              </Button>
-            )}
+            {!loading &&
+              data?.document_id === documentId &&
+              data.document_notes_review && (
+                <DocumentNotes
+                  key={`document-notes-${documentId}`}
+                  documentId={documentId}
+                  review={data.document_notes_review}
+                  presentation="dialog"
+                  onUpdated={(notes) =>
+                    setData((saved) =>
+                      saved?.document_id === documentId
+                        ? { ...saved, document_notes_review: notes }
+                        : saved,
+                    )
+                  }
+                />
+              )}
           </Stack>
+          {documentControls}
         </Stack>
 
         {uploadReceipt?.document_id === documentId && uploadReceipt.reused && (
@@ -1315,20 +1421,13 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                 />
               </Button>
 
-              <Tooltip title="Scanned and handwritten PDFs will be supported here when OCR is connected.">
-                <span>
-                  <Button
-                    disabled
-                    startIcon={<DocumentScannerOutlinedIcon />}
-                    sx={{
-                      color: "#566476 !important",
-                      bgcolor: "#e6eaf0 !important",
-                    }}
-                  >
-                    OCR · coming soon
-                  </Button>
-                </span>
-              </Tooltip>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ alignSelf: "center" }}
+              >
+                Scanned PDFs: OCR coming soon.
+              </Typography>
             </Stack>
             {uploadError && (
               <Alert severity="error" sx={{ mt: 2 }}>
@@ -1360,12 +1459,6 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
         )}
         {!loading && data && data.document_id === documentId && (
           <>
-            {canDevelop && data.run?.provider === "manual_reference" && (
-              <Alert severity="info" sx={{ py: 0 }}>
-                Manually prepared example requirements. Analyze the PDF to
-                evaluate a model.
-              </Alert>
-            )}
             {data.document.warnings.map((warning, index) => (
               <Alert severity="warning" key={index}>
                 {canDevelop
@@ -1379,316 +1472,335 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               </Alert>
             ))}
             {canDevelop ? (
-              <Accordion
-                expanded={analysisOpen}
-                onChange={(_, expanded) => setAnalysisOpen(expanded)}
-                disableGutters
-                sx={{
-                  ...panelSx,
-                  borderRadius: "12px !important",
-                  "&:before": { display: "none" },
-                }}
-              >
-                <AccordionSummary
-                  expandIcon={<ExpandMoreIcon />}
-                  sx={{ px: 2 }}
+              <Box hidden={Boolean(data.run) && !analysisOpen}>
+                <Accordion
+                  expanded={analysisOpen}
+                  onChange={(_, expanded) => setAnalysisOpen(expanded)}
+                  disableGutters
+                  sx={{
+                    ...panelSx,
+                    borderRadius: "12px !important",
+                    "&:before": { display: "none" },
+                  }}
                 >
-                  <Box>
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      {data.run
-                        ? "Analysis settings"
-                        : "Analyze this specification"}
-                    </Typography>
-                    {analysisOpen && (
-                      <Typography variant="body2" color="text.secondary">
-                        Previous extracted content stays available if a new
-                        request fails.
-                      </Typography>
-                    )}
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails sx={{ pt: 0 }}>
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: {
-                        xs: "1fr",
-                        lg: "minmax(0,1fr) minmax(280px, auto)",
-                      },
-                      gap: 2,
-                      alignItems: "start",
-                    }}
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    sx={{ px: 2 }}
                   >
                     <Box>
-                      <Stack
-                        direction={{ xs: "column", sm: "row" }}
-                        spacing={1.25}
-                        sx={{ mt: 1.5 }}
-                      >
-                        <FormControl
-                          size="small"
-                          sx={{ minWidth: 160 }}
-                          disabled={analyzing}
+                      <Typography variant="subtitle1" fontWeight={700}>
+                        {data.run
+                          ? "Analysis settings"
+                          : "Analyze this specification"}
+                      </Typography>
+                      {analysisOpen && (
+                        <Typography variant="body2" color="text.secondary">
+                          Previous extracted content stays available if a new
+                          request fails.
+                        </Typography>
+                      )}
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ pt: 0 }}>
+                    {data.run?.provider === "manual_reference" && (
+                      <Alert severity="info" sx={{ mb: 1.5, py: 0 }}>
+                        Manually prepared example requirements. Analyze the PDF
+                        to evaluate a model.
+                      </Alert>
+                    )}
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          lg: "minmax(0,1fr) minmax(280px, auto)",
+                        },
+                        gap: 2,
+                        alignItems: "start",
+                      }}
+                    >
+                      <Box>
+                        <Stack
+                          direction={{ xs: "column", sm: "row" }}
+                          spacing={1.25}
+                          sx={{ mt: 1.5 }}
                         >
-                          <InputLabel id="provider-label">Provider</InputLabel>
-                          <Select
-                            labelId="provider-label"
-                            label="Provider"
-                            value={provider}
-                            onChange={(event) =>
-                              setProvider(event.target.value)
-                            }
+                          <FormControl
+                            size="small"
+                            sx={{ minWidth: 160 }}
+                            disabled={analyzing}
                           >
-                            {workspace.providers.map((item) => (
-                              <MenuItem
-                                key={item.id}
-                                value={item.id}
-                                disabled={!item.available}
-                              >
-                                {item.label}
-                                {!item.available ? " · unavailable" : ""}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                        <FormControl
-                          size="small"
-                          sx={{ minWidth: 200, flex: 1 }}
-                          disabled={analyzing}
-                        >
-                          <InputLabel id="strategy-label">
-                            Reading mode
-                          </InputLabel>
-                          <Select
-                            labelId="strategy-label"
-                            label="Reading mode"
-                            value={strategy}
-                            onChange={(event) => {
-                              setStrategy(
-                                event.target.value as typeof strategy,
-                              );
-                              setPermission(false);
-                              setFreeTierConfirmed(false);
-                            }}
+                            <InputLabel id="provider-label">
+                              Provider
+                            </InputLabel>
+                            <Select
+                              labelId="provider-label"
+                              label="Provider"
+                              value={provider}
+                              onChange={(event) =>
+                                setProvider(event.target.value)
+                              }
+                            >
+                              {workspace.providers.map((item) => (
+                                <MenuItem
+                                  key={item.id}
+                                  value={item.id}
+                                  disabled={!item.available}
+                                >
+                                  {item.label}
+                                  {!item.available ? " · unavailable" : ""}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <FormControl
+                            size="small"
+                            sx={{ minWidth: 200, flex: 1 }}
+                            disabled={analyzing}
                           >
-                            <MenuItem value="inventory_compact_document">
-                              Inventory + extraction · two requests
-                            </MenuItem>
-                            <MenuItem value="compact_document">
-                              Compact · complete document
-                            </MenuItem>
-                            <MenuItem value="whole_document">
-                              Detailed · one request
-                            </MenuItem>
-                            <MenuItem value="focused_passes">
-                              Focused coverage passes
-                            </MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Stack>
-                      <Accordion
-                        disableGutters
-                        elevation={0}
-                        sx={{
-                          mt: 0.5,
-                          bgcolor: "transparent",
-                          "&:before": { display: "none" },
-                        }}
-                      >
-                        <AccordionSummary
-                          expandIcon={<ExpandMoreIcon />}
-                          sx={{ px: 0, minHeight: 40 }}
-                        >
-                          <Typography variant="body2" color="primary">
-                            Advanced model settings
-                          </Typography>
-                        </AccordionSummary>
-                        <AccordionDetails sx={{ px: 0 }}>
-                          <Stack
-                            direction={{ xs: "column", sm: "row" }}
-                            spacing={1.25}
-                          >
-                            <TextField
-                              size="small"
-                              label="Model"
-                              value={model}
-                              disabled={analyzing}
+                            <InputLabel id="strategy-label">
+                              Reading mode
+                            </InputLabel>
+                            <Select
+                              labelId="strategy-label"
+                              label="Reading mode"
+                              value={strategy}
                               onChange={(event) => {
-                                setModel(event.target.value);
-                                setPermission(false);
-                                setFreeTierConfirmed(false);
-                              }}
-                              fullWidth
-                            />
-                            <TextField
-                              size="small"
-                              type="number"
-                              label="Max output tokens per request"
-                              value={outputLimit}
-                              disabled={analyzing}
-                              onChange={(event) => {
-                                setOutputLimit(
-                                  Math.max(
-                                    512,
-                                    Number(event.target.value) || 512,
-                                  ),
+                                setStrategy(
+                                  event.target.value as typeof strategy,
                                 );
                                 setPermission(false);
                                 setFreeTierConfirmed(false);
                               }}
-                              sx={{ width: { sm: 240 } }}
-                              inputProps={{ min: 512, step: 128 }}
-                            />
-                          </Stack>
-                        </AccordionDetails>
-                      </Accordion>
-                    </Box>
-                    <Stack spacing={0.25} sx={{ minWidth: { lg: 300 } }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={permission}
-                            disabled={analyzing}
-                            onChange={(event) =>
-                              setPermission(event.target.checked)
-                            }
-                          />
-                        }
-                        label={
-                          <Typography variant="body2">
-                            I have permission to send this document to{" "}
-                            {selectedProvider?.label ?? "the selected provider"}
-                          </Typography>
-                        }
-                      />
-                      {requiresUsageAcknowledgment && (
+                            >
+                              <MenuItem value="inventory_compact_document">
+                                Inventory + extraction · two requests
+                              </MenuItem>
+                              <MenuItem value="compact_document">
+                                Compact · complete document
+                              </MenuItem>
+                              <MenuItem value="whole_document">
+                                Detailed · one request
+                              </MenuItem>
+                              <MenuItem value="focused_passes">
+                                Focused coverage passes
+                              </MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Stack>
+                        <Accordion
+                          disableGutters
+                          elevation={0}
+                          sx={{
+                            mt: 0.5,
+                            bgcolor: "transparent",
+                            "&:before": { display: "none" },
+                          }}
+                        >
+                          <AccordionSummary
+                            expandIcon={<ExpandMoreIcon />}
+                            sx={{ px: 0, minHeight: 40 }}
+                          >
+                            <Typography variant="body2" color="primary">
+                              Advanced model settings
+                            </Typography>
+                          </AccordionSummary>
+                          <AccordionDetails sx={{ px: 0 }}>
+                            <Stack
+                              direction={{ xs: "column", sm: "row" }}
+                              spacing={1.25}
+                            >
+                              <TextField
+                                size="small"
+                                label="Model"
+                                value={model}
+                                disabled={analyzing}
+                                onChange={(event) => {
+                                  setModel(event.target.value);
+                                  setPermission(false);
+                                  setFreeTierConfirmed(false);
+                                }}
+                                fullWidth
+                              />
+                              <TextField
+                                size="small"
+                                type="number"
+                                label="Max output tokens per request"
+                                value={outputLimit}
+                                disabled={analyzing}
+                                onChange={(event) => {
+                                  setOutputLimit(
+                                    Math.max(
+                                      512,
+                                      Number(event.target.value) || 512,
+                                    ),
+                                  );
+                                  setPermission(false);
+                                  setFreeTierConfirmed(false);
+                                }}
+                                sx={{ width: { sm: 240 } }}
+                                inputProps={{ min: 512, step: 128 }}
+                              />
+                            </Stack>
+                          </AccordionDetails>
+                        </Accordion>
+                      </Box>
+                      <Stack spacing={0.25} sx={{ minWidth: { lg: 300 } }}>
                         <FormControlLabel
                           control={
                             <Checkbox
-                              checked={freeTierConfirmed}
+                              checked={permission}
                               disabled={analyzing}
                               onChange={(event) =>
-                                setFreeTierConfirmed(event.target.checked)
+                                setPermission(event.target.checked)
                               }
                             />
                           }
                           label={
                             <Typography variant="body2">
-                              {provider === "gemini"
-                                ? "I understand this uses my Google project's API quota and may incur charges"
-                                : `I understand this uses my ${selectedProvider?.label ?? "provider"} API quota or credits and may incur charges`}
+                              I have permission to send this document to{" "}
+                              {selectedProvider?.label ??
+                                "the selected provider"}
                             </Typography>
                           }
                         />
-                      )}
-                      <Button
-                        variant="contained"
-                        onClick={() => void analyze()}
-                        disabled={
-                          analyzing ||
-                          !permission ||
-                          (requiresUsageAcknowledgment && !freeTierConfirmed) ||
-                          !model.trim() ||
-                          !selectedProvider?.available ||
-                          (strategy === "focused_passes" &&
-                            Math.ceil(data.document.page_count / 3) > 8)
-                        }
-                        sx={{ alignSelf: { lg: "flex-start" }, bgcolor: blue }}
-                      >
-                        {analyzing
-                          ? "Analyzing…"
-                          : data.run
-                            ? "Analyze again"
-                            : "Analyze PDF"}
-                      </Button>
-                    </Stack>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ gridColumn: "1/-1" }}
-                    >
-                      Analysis starts only when you press the button. Failed
-                      requests are not retried automatically. You can browse
-                      other pages while analysis continues. Closing the browser
-                      does not cancel work already accepted by the server.
-                    </Typography>
-                    {strategy === "focused_passes" && (
+                        {requiresUsageAcknowledgment && (
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={freeTierConfirmed}
+                                disabled={analyzing}
+                                onChange={(event) =>
+                                  setFreeTierConfirmed(event.target.checked)
+                                }
+                              />
+                            }
+                            label={
+                              <Typography variant="body2">
+                                {provider === "gemini"
+                                  ? "I understand this uses my Google project's API quota and may incur charges"
+                                  : `I understand this uses my ${selectedProvider?.label ?? "provider"} API quota or credits and may incur charges`}
+                              </Typography>
+                            }
+                          />
+                        )}
+                        <Button
+                          variant="contained"
+                          onClick={() => void analyze()}
+                          disabled={
+                            analyzing ||
+                            !permission ||
+                            (requiresUsageAcknowledgment &&
+                              !freeTierConfirmed) ||
+                            !model.trim() ||
+                            !selectedProvider?.available ||
+                            (strategy === "focused_passes" &&
+                              Math.ceil(data.document.page_count / 3) > 8)
+                          }
+                          sx={{
+                            alignSelf: { lg: "flex-start" },
+                            bgcolor: blue,
+                          }}
+                        >
+                          {analyzing
+                            ? "Analyzing…"
+                            : data.run
+                              ? "Analyze again"
+                              : "Analyze PDF"}
+                        </Button>
+                      </Stack>
                       <Typography
                         variant="caption"
-                        color={
-                          Math.ceil(data.document.page_count / 3) > 8
-                            ? "error.main"
-                            : "text.secondary"
-                        }
+                        color="text.secondary"
                         sx={{ gridColumn: "1/-1" }}
                       >
-                        Focused passes would make{" "}
-                        {Math.ceil(data.document.page_count / 3)} provider
-                        requests (one for each 3-page focus). Each pass still
-                        receives full document context; the limit is 8 passes
-                        per analysis.
+                        Analysis starts only when you press the button. Failed
+                        requests are not retried automatically. You can browse
+                        other pages while analysis continues. Closing the
+                        browser does not cancel work already accepted by the
+                        server.
                       </Typography>
-                    )}
-                    {analysisError && (
-                      <Alert severity="error" sx={{ gridColumn: "1/-1" }}>
-                        {analysisError}
-                      </Alert>
-                    )}
-                    {data.failure &&
-                      (!data.run ||
-                        Date.parse(data.failure.occurred_at) >
-                          Date.parse(data.run.started_at)) && (
-                        <Alert severity="warning" sx={{ gridColumn: "1/-1" }}>
-                          The latest analysis attempt failed. Showing the saved
-                          result from{" "}
-                          {data.failure.previous_run_id
-                            ? "the previous successful run"
-                            : "before analysis"}
-                          : {data.failure.message}
+                      {strategy === "focused_passes" && (
+                        <Typography
+                          variant="caption"
+                          color={
+                            Math.ceil(data.document.page_count / 3) > 8
+                              ? "error.main"
+                              : "text.secondary"
+                          }
+                          sx={{ gridColumn: "1/-1" }}
+                        >
+                          Focused passes would make{" "}
+                          {Math.ceil(data.document.page_count / 3)} provider
+                          requests (one for each 3-page focus). Each pass still
+                          receives full document context; the limit is 8 passes
+                          per analysis.
+                        </Typography>
+                      )}
+                      {analysisError && (
+                        <Alert severity="error" sx={{ gridColumn: "1/-1" }}>
+                          {analysisError}
                         </Alert>
                       )}
-                    {data.failure?.attempt_id && (
-                      <Accordion
-                        disableGutters
-                        elevation={0}
-                        sx={{
-                          gridColumn: "1/-1",
-                          bgcolor: "transparent",
-                          "&:before": { display: "none" },
-                        }}
-                      >
-                        <AccordionSummary
-                          expandIcon={<ExpandMoreIcon />}
-                          sx={{ px: 0 }}
+                      {data.failure &&
+                        (!data.run ||
+                          Date.parse(data.failure.occurred_at) >
+                            Date.parse(data.run.started_at)) && (
+                          <Alert severity="warning" sx={{ gridColumn: "1/-1" }}>
+                            The latest analysis attempt failed. Showing the
+                            saved result from{" "}
+                            {data.failure.previous_run_id
+                              ? "the previous successful run"
+                              : "before analysis"}
+                            : {data.failure.message}
+                          </Alert>
+                        )}
+                      {data.failure?.attempt_id && (
+                        <Accordion
+                          disableGutters
+                          elevation={0}
+                          sx={{
+                            gridColumn: "1/-1",
+                            bgcolor: "transparent",
+                            "&:before": { display: "none" },
+                          }}
                         >
-                          <Typography variant="caption" color="text.secondary">
-                            Developer details · failed analysis
-                          </Typography>
-                        </AccordionSummary>
-                        <AccordionDetails sx={{ px: 0 }}>
-                          <Button
-                            size="small"
-                            component="a"
-                            href={`/api/specifications/${encodeURIComponent(documentId)}/analysis-failures/${encodeURIComponent(data.failure.attempt_id)}/artifacts`}
-                            download
+                          <AccordionSummary
+                            expandIcon={<ExpandMoreIcon />}
+                            sx={{ px: 0 }}
                           >
-                            Download failed attempt
-                          </Button>
-                          <Typography
-                            variant="caption"
-                            display="block"
-                            color="text.secondary"
-                          >
-                            Includes source prompts, original model output and
-                            reported usage. Review before explicitly starting
-                            another analysis.
-                          </Typography>
-                        </AccordionDetails>
-                      </Accordion>
-                    )}
-                  </Box>
-                </AccordionDetails>
-              </Accordion>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Developer details · failed analysis
+                            </Typography>
+                          </AccordionSummary>
+                          <AccordionDetails sx={{ px: 0 }}>
+                            <Button
+                              size="small"
+                              component="a"
+                              href={`/api/specifications/${encodeURIComponent(documentId)}/analysis-failures/${encodeURIComponent(data.failure.attempt_id)}/artifacts`}
+                              download
+                            >
+                              Download failed attempt
+                            </Button>
+                            <Typography
+                              variant="caption"
+                              display="block"
+                              color="text.secondary"
+                            >
+                              Includes source prompts, original model output and
+                              reported usage. Review before explicitly starting
+                              another analysis.
+                            </Typography>
+                          </AccordionDetails>
+                        </Accordion>
+                      )}
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+              </Box>
             ) : (
               <>
                 {!data.run && (
@@ -1708,7 +1820,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                         <Typography variant="body2" color="text.secondary">
                           {data.run
                             ? "Review the extracted test items below, or run a fresh analysis."
-                            : "Extract the test items, conditions and acceptance criteria from this PDF."}
+                            : "Extract the test items, conditions and test specifications from this PDF."}
                         </Typography>
                       </Box>
                       <Button
@@ -1781,20 +1893,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               />
             )}
 
-            {data.document_notes_review ? (
-              <DocumentNotes
-                key={`document-notes-${documentId}`}
-                documentId={documentId}
-                review={data.document_notes_review}
-                onUpdated={(notes) =>
-                  setData((saved) =>
-                    saved?.document_id === documentId
-                      ? { ...saved, document_notes_review: notes }
-                      : saved,
-                  )
-                }
-              />
-            ) : (
+            {!data.document_notes_review && (
               <SpecificationReviewSummary
                 key={`summary-${documentId}`}
                 documentNotes={data.document_review_issues}
@@ -1802,6 +1901,9 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               />
             )}
             <Stack
+              ref={workbenchRef}
+              role="region"
+              aria-label="Source review workbench"
               direction={compact ? "column" : "row"}
               spacing={2}
               alignItems="stretch"
@@ -1809,7 +1911,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                 minWidth: 0,
                 height: compact
                   ? "auto"
-                  : "clamp(680px, calc(100dvh - 250px), 980px)",
+                  : `max(320px, calc(100dvh - ${workbenchTop + 12}px))`,
               }}
             >
               {!compact && (
@@ -1839,6 +1941,8 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                 </Accordion>
               )}
               <Paper
+                component="section"
+                aria-label="Extracted test review"
                 sx={{
                   ...panelSx,
                   p: { xs: 1.25, sm: 1.75 },
@@ -1848,7 +1952,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                   display: "flex",
                   flexDirection: "column",
                   height: compact ? "auto" : "100%",
-                  minHeight: compact ? 0 : 680,
+                  minHeight: 0,
                   overflow: "hidden",
                 }}
               >
@@ -1860,20 +1964,31 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                       justifyContent="space-between"
                       gap={1}
                     >
-                      <Box>
-                        <Typography variant="subtitle1" fontWeight={700}>
-                          Test requirements
-                        </Typography>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          gap={0.75}
+                          flexWrap="wrap"
+                        >
+                          <Typography variant="subtitle1" fontWeight={700}>
+                            Test requirements
+                          </Typography>
+                          {selectedStatusChip}
+                        </Stack>
                         <Typography variant="caption" color="text.secondary">
                           {requirements.length} tests · {actionableIds.length}{" "}
                           {actionableIds.length === 1 ? "needs" : "need"} your
                           review
+                          {state === "needs_attention" &&
+                            ` · Pending item ${actionableIds.indexOf(selectedId) + 1} of ${actionableIds.length}`}
                         </Typography>
                       </Box>
                       <Stack direction="row" spacing={0.5}>
                         <Button
                           size="small"
                           variant={filter === "pending" ? "contained" : "text"}
+                          disabled={reviewBusy}
                           onClick={() => setFilter("pending")}
                         >
                           Pending
@@ -1881,76 +1996,116 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                         <Button
                           size="small"
                           variant={filter === "all" ? "contained" : "text"}
+                          disabled={reviewBusy}
                           onClick={() => setFilter("all")}
                         >
                           All
                         </Button>
-                        {requirements.length > 1 && (
-                          <Tooltip title="Review several tests">
-                            <IconButton
-                              size="small"
-                              aria-label="Batch review"
-                              onClick={() => {
-                                setBatchOpen(true);
-                                setBatchError("");
-                              }}
-                            >
-                              <MoreHorizRoundedIcon />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                        <Tooltip title="More review actions">
+                          <IconButton
+                            size="small"
+                            aria-label="More review actions"
+                            disabled={reviewBusy}
+                            onClick={(event) =>
+                              setReviewActions(event.currentTarget)
+                            }
+                          >
+                            <MoreHorizRoundedIcon />
+                          </IconButton>
+                        </Tooltip>
                       </Stack>
                     </Stack>
-                    <FormControl fullWidth size="small" sx={{ mt: 1.5 }}>
-                      <InputLabel id="selected-test-label">
-                        Selected test
-                      </InputLabel>
-                      <Select
-                        labelId="selected-test-label"
-                        label="Selected test"
-                        value={selectedId}
-                        onChange={(event) =>
-                          selectRequirement(event.target.value)
-                        }
-                        disabled={!requirements.length}
-                      >
-                        {[
-                          ...displayed,
-                          ...(selected &&
-                          !displayed.some((item) => item.id === selected.id)
-                            ? [selected]
-                            : []),
-                        ].map((item) => (
-                          <MenuItem key={item.id} value={item.id}>
-                            <Typography
-                              variant="body2"
-                              sx={{ whiteSpace: "normal" }}
-                            >
-                              {displayTestName(item)}
-                            </Typography>
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <Box
-                      sx={{
-                        mt: 1,
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      gap={0.5}
+                      sx={{ mt: 1.25 }}
                     >
-                      {selectedStatusChip}
-                      <SourceFactsEditor
-                        key={`add-${documentId}`}
-                        data={data}
-                        selected={blankRequirement}
-                        adding
-                        onSaved={onAdded}
-                      />
-                    </Box>
+                      <FormControl fullWidth size="small" sx={{ minWidth: 0 }}>
+                        <InputLabel id="selected-test-label">
+                          Selected test
+                        </InputLabel>
+                        <Select
+                          labelId="selected-test-label"
+                          label="Selected test"
+                          value={selected?.id ?? ""}
+                          onChange={(event) =>
+                            selectRequirement(event.target.value)
+                          }
+                          disabled={!displayed.length || reviewBusy}
+                        >
+                          {displayed.map((item) => (
+                            <MenuItem key={item.id} value={item.id}>
+                              <Typography
+                                variant="body2"
+                                sx={{ whiteSpace: "normal" }}
+                              >
+                                {displayTestName(item)}
+                              </Typography>
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      {actionableIds.length > 0 && (
+                        <Stack
+                          direction="row"
+                          spacing={0.25}
+                          alignItems="center"
+                        >
+                          <Tooltip title="Previous pending test">
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={reviewBusy || !previousPendingId}
+                                onClick={() =>
+                                  navigatePending(previousPendingId)
+                                }
+                                aria-label="Previous pending test"
+                              >
+                                <ChevronLeftIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Next pending test">
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={reviewBusy || !nextPendingId}
+                                onClick={() => navigatePending(nextPendingId)}
+                                aria-label="Next pending test"
+                              >
+                                <ChevronRightIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </Stack>
+                      )}
+                    </Stack>
+                    <SourceFactsEditor
+                      key={`add-${documentId}`}
+                      data={data}
+                      selected={blankRequirement}
+                      adding
+                      hideTrigger
+                      openRequest={
+                        addTestRequest?.documentId === documentId
+                          ? addTestRequest.nonce
+                          : undefined
+                      }
+                      onOpenRequestHandled={(nonce) =>
+                        setAddTestRequest((current) =>
+                          current?.documentId === documentId &&
+                          current.nonce === nonce
+                            ? null
+                            : current,
+                        )
+                      }
+                      onSaved={onAdded}
+                    />
                     <Divider sx={{ my: 0.75 }} />
                     <Box
+                      role="region"
+                      aria-label="Selected test details"
                       sx={{
                         flex: 1,
                         minHeight: 0,
@@ -1961,7 +2116,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                     >
                       <Box
                         sx={{
-                          p: { xs: 0.25, sm: 0.75 },
+                          p: { xs: 0.25, sm: 0.5 },
                           minHeight: 140,
                         }}
                       >
@@ -1970,26 +2125,25 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                     </Box>
                     <Divider sx={{ mt: 1 }} />
                     <Box
+                      role="group"
+                      aria-label="Source review actions"
+                      hidden={!selected}
                       sx={{
                         p: 0.75,
                         bgcolor: "#fff",
                         flexShrink: 0,
                       }}
                     >
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        display="block"
-                        sx={{ mb: 0.75 }}
-                      >
-                        {state === "confirmed"
-                          ? "Reviewed"
-                          : state === "excluded"
-                            ? "Removed from this request. The original is kept."
-                            : state === "ready"
-                              ? "Ready for comparison"
-                              : "Check this extraction against the PDF. Lab capability is compared in the report."}
-                      </Typography>
+                      {state === "excluded" && (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          display="block"
+                          sx={{ mb: 0.75 }}
+                        >
+                          Removed from this request. The original is kept.
+                        </Typography>
+                      )}
                       {error && (
                         <Alert severity="error" sx={{ mb: 1 }}>
                           {error}
@@ -2028,8 +2182,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                             sx={{
                               bgcolor:
                                 state === "needs_attention" ? blue : undefined,
-                              flex: state === "needs_attention" ? 1 : undefined,
-                              minWidth: 135,
+                              minWidth: 120,
                               whiteSpace: "nowrap",
                             }}
                           >
@@ -2052,55 +2205,27 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                             }}
                           />
                         )}
-                        <Button
-                          variant="outlined"
-                          startIcon={<DeleteOutlineRoundedIcon />}
-                          disabled={
-                            !selected || saving || batchSaving || !data.review
-                          }
-                          onClick={() => {
-                            if (state === "excluded") {
-                              void review(
-                                "needs_review",
-                                [selectedId],
-                                "Restored for source review.",
-                                false,
-                              );
-                            } else {
-                              setRemoveReason("Not a requested test");
-                              setRemoveNote("");
-                              setRemoveOpen(true);
-                            }
-                          }}
-                          sx={{
-                            whiteSpace: "nowrap",
-                            color:
-                              state === "excluded" ? "primary.main" : "#ad3340",
-                            borderColor: "#d6dce6",
-                          }}
-                        >
-                          {state === "excluded" ? "Restore" : "Remove"}
-                        </Button>
+                        {selected &&
+                          state !== "confirmed" &&
+                          state !== "excluded" && (
+                            <Button
+                              size="small"
+                              disabled={saving || batchSaving || !data.review}
+                              onClick={() =>
+                                void review(
+                                  "needs_review",
+                                  [selectedId],
+                                  note.trim() || "More source review needed.",
+                                  false,
+                                )
+                              }
+                              aria-label="Keep pending & next"
+                              sx={{ color: "text.secondary", ml: "auto" }}
+                            >
+                              Keep pending
+                            </Button>
+                          )}
                       </Stack>
-                      {selected &&
-                        state !== "confirmed" &&
-                        state !== "excluded" && (
-                          <Button
-                            size="small"
-                            disabled={saving || batchSaving || !data.review}
-                            onClick={() =>
-                              void review(
-                                "needs_review",
-                                [selectedId],
-                                note.trim() || "More source review needed.",
-                                false,
-                              )
-                            }
-                            sx={{ mt: 0.5, color: "text.secondary" }}
-                          >
-                            Keep pending & next
-                          </Button>
-                        )}
                     </Box>
                   </>
                 ) : (
@@ -2116,40 +2241,93 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                 )}
               </Paper>
             </Stack>
-            {data.run && (
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                alignItems={{ sm: "center" }}
-                spacing={1.5}
-              >
-                <Button
-                  variant="contained"
-                  endIcon={<ArrowForwardIcon />}
-                  disabled={saving || batchSaving}
-                  onClick={() =>
-                    navigate(
-                      `/reports?document=${encodeURIComponent(documentId)}`,
-                      {
-                        state: {
-                          generateReportFor: documentId,
-                          generationIntentId: crypto.randomUUID(),
-                        },
-                      },
-                    )
-                  }
-                  sx={{ bgcolor: blue, alignSelf: "flex-start" }}
-                >
-                  Generate report
-                </Button>
-                <Typography variant="body2" color="text.secondary">
-                  Compare these requirements with your saved lab information
-                  using AI.
-                </Typography>
-              </Stack>
-            )}
           </>
         )}
       </Stack>
+      <Menu
+        anchorEl={documentActions}
+        open={Boolean(documentActions)}
+        onClose={() => setDocumentActions(null)}
+      >
+        {data?.run &&
+          data.document_id === documentId &&
+          (canDevelop ? (
+            <MenuItem
+              onClick={() => {
+                setDocumentActions(null);
+                setAnalysisOpen(true);
+              }}
+            >
+              Analysis settings
+            </MenuItem>
+          ) : (
+            <MenuItem
+              disabled={
+                analyzing || !selectedProvider?.available || !model.trim()
+              }
+              onClick={() => {
+                setDocumentActions(null);
+                void analyze();
+              }}
+            >
+              Analyze again
+            </MenuItem>
+          ))}
+        <MenuItem disabled>
+          <DocumentScannerOutlinedIcon fontSize="small" sx={{ mr: 1 }} />
+          OCR · coming soon
+        </MenuItem>
+      </Menu>
+      <Menu
+        anchorEl={reviewActions}
+        open={Boolean(reviewActions)}
+        onClose={() => setReviewActions(null)}
+      >
+        <MenuItem
+          disabled={reviewBusy || !data?.run}
+          onClick={() => {
+            setReviewActions(null);
+            setAddTestRequest({ documentId, nonce: ++addTestSequence.current });
+          }}
+        >
+          Add missing test
+        </MenuItem>
+        {requirements.length > 1 && (
+          <MenuItem
+            disabled={reviewBusy}
+            onClick={() => {
+              setReviewActions(null);
+              setBatchOpen(true);
+              setBatchError("");
+            }}
+          >
+            Review selected tests
+          </MenuItem>
+        )}
+        <MenuItem
+          disabled={!selected || reviewBusy || !data?.review}
+          sx={{ color: state === "excluded" ? "primary.main" : "error.main" }}
+          onClick={() => {
+            setReviewActions(null);
+            if (state === "excluded")
+              void review(
+                "needs_review",
+                [selectedId],
+                "Restored for source review.",
+                false,
+              );
+            else {
+              setRemoveReason("Not a requested test");
+              setRemoveNote("");
+              setRemoveOpen(true);
+            }
+          }}
+        >
+          {state === "excluded"
+            ? "Restore selected test"
+            : "Remove selected test"}
+        </MenuItem>
+      </Menu>
       <Dialog
         open={removeOpen}
         onClose={() => {
@@ -2248,7 +2426,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
             <Stack direction="row" gap={1}>
               <Button
                 size="small"
-                disabled={!actionableIds.length}
+                disabled={reviewBusy || !actionableIds.length}
                 onClick={() => {
                   setBatchIds(actionableIds);
                   setBatchAck(false);
@@ -2258,7 +2436,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               </Button>
               <Button
                 size="small"
-                disabled={!batchIds.length}
+                disabled={reviewBusy || !batchIds.length}
                 onClick={() => {
                   setBatchIds([]);
                   setBatchAck(false);
@@ -2281,6 +2459,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                   control={
                     <Checkbox
                       size="small"
+                      disabled={reviewBusy}
                       inputProps={{ "aria-label": item.original_test_name }}
                       checked={batchIds.includes(item.id)}
                       onChange={(event) => {
@@ -2307,12 +2486,14 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
               minRows={2}
               label="Batch note / exclusion reason"
               value={batchNote}
+              disabled={reviewBusy}
               onChange={(event) => setBatchNote(event.target.value)}
             />
             {batchIds.length > 1 && (
               <FormControlLabel
                 control={
                   <Checkbox
+                    disabled={reviewBusy}
                     checked={batchAck}
                     onChange={(event) => setBatchAck(event.target.checked)}
                   />
@@ -2332,7 +2513,7 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                 variant="contained"
                 disabled={
                   !batchIds.length ||
-                  batchSaving ||
+                  reviewBusy ||
                   (batchIds.length > 1 && !batchAck)
                 }
                 onClick={async () => {
@@ -2340,13 +2521,13 @@ export default function Specifications({ workspace, onRefresh }: PageProps) {
                     setBatchOpen(false);
                 }}
               >
-                {batchSaving ? "Saving…" : "Confirm selected"}
+                {reviewBusy ? "Saving…" : "Confirm selected"}
               </Button>
               <Button
                 variant="outlined"
                 disabled={
                   !batchIds.length ||
-                  batchSaving ||
+                  reviewBusy ||
                   !batchNote.trim() ||
                   (batchIds.length > 1 && !batchAck)
                 }

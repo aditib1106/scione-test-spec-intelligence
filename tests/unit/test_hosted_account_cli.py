@@ -18,6 +18,10 @@ def operator_environment(monkeypatch, tmp_path):
         "SCIONE_COOKIE_SECURE",
         "SCIONE_TRUSTED_ORIGINS",
     ):
+        # The hosted CLI may create these keys directly. Track their original
+        # state even when absent so teardown cannot leak a hosted allowlist
+        # into a later local TestClient or account test.
+        monkeypatch.setenv(key, "")
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("SCIONE_WORKSPACE_DIR", str(tmp_path))
     events = []

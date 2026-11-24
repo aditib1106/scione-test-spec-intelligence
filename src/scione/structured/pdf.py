@@ -179,6 +179,54 @@ def _excluded(row: dict) -> bool:
     )
 
 
+def _clarification_log(payload: dict, requirement_id: str) -> str:
+    """Flow escaped manual notes as short paragraphs, never unbreakable table rows."""
+    thread = payload.get("customer_clarifications", {}).get(requirement_id, {})
+    events = thread.get("events", []) if isinstance(thread, dict) else []
+    if not events:
+        return ""
+    parts = [
+        "<h3>Customer clarifications</h3>",
+        "<p class='meta'>Manually recorded by the lab; no customer messages are sent. "
+        "These records do not change the capability findings.</p>",
+    ]
+    question_numbers = {
+        event["event_id"]: index
+        for index, event in enumerate(
+            (event for event in events if event.get("event_kind") == "question"), 1
+        )
+    }
+    for event in events:
+        question = question_numbers.get(event.get("question_id"))
+        label = "Question" if event.get("event_kind") == "question" else "Customer reply"
+        if question is not None:
+            label += f" {question}"
+        previous = (
+            " · Earlier assessment"
+            if event.get("comparison_id") != payload.get(
+                "machine_comparison_id", payload.get("comparison_id")
+            )
+            else ""
+        )
+        parts.append(f"<p><b>{_text(label + previous)}</b></p>")
+        # Bound each layout paragraph while retaining the full saved text in
+        # order. The JSON snapshot remains the exact original plain text.
+        text = str(event.get("text", ""))
+        while text:
+            end = len(text) if len(text) <= 800 else text.rfind(" ", 0, 801)
+            if end <= 0:
+                end = min(800, len(text))
+            parts.append(f"<p>{_text(text[:end])}</p>")
+            text = text[end:].lstrip(" ")
+        contact = f" · Contact: {event['contact']}" if event.get("contact") else ""
+        parts.append(
+            "<p class='meta'>Recorded by "
+            + _text(event.get("actor_label") or event.get("actor") or "Lab user")
+            + " · " + _text(_date(event.get("created_at"))) + _text(contact) + "</p>"
+        )
+    return "".join(parts)
+
+
 def _signature(check: ClaimCheck) -> tuple:
     # Legacy unparsed instruction labels include the current test name. The
     # identical instruction's text, stage, result and evidence define its scope;
@@ -449,6 +497,7 @@ def _html(payload: dict, *, section_breaks: bool = False, flowing_checks: bool =
                     else ""
                 ),
                 review_text,
+                _clarification_log(payload, row.get("requirement_id", "")),
                 _check_rows(
                     comparison.model_copy(update={"checks": own_checks}),
                     section_breaks=section_breaks,

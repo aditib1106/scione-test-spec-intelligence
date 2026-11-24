@@ -135,9 +135,13 @@ test("corrected source facts clear approval and flow into library and reports wi
   await dialog
     .getByRole("button", { name: "Save corrected draft", exact: true })
     .click();
-  await expect(dialog.getByRole("alert").last()).toContainText(
-    `Select a source page from 1 to ${initial.document.page_count}`,
-  );
+  // The source preview has its own guidance; target the save validation,
+  // rather than assuming that it is the final alert in the editor.
+  const sourcePageError = dialog.getByRole("alert").filter({
+    hasText: `Select a source page from 1 to ${initial.document.page_count}`,
+  });
+  await expect(sourcePageError).toBeVisible();
+  await expect(sourcePageError).toBeFocused();
   await evidence
     .getByLabel("Source page")
     .fill(String(selected.evidence[0].page));

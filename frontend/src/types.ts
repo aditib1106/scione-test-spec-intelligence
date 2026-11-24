@@ -143,6 +143,11 @@ export interface ProviderOption {
 }
 export interface Workspace {
   lab: LabProfile;
+  capability_creation?: {
+    lab_id: string;
+    lab_version: number;
+    created_at: Record<string, string>;
+  } | null;
   catalog: Catalog;
   documents: DocumentSummary[];
   providers: ProviderOption[];

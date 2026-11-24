@@ -157,6 +157,9 @@ test("confirmed tests keep document notes separate and checked notes persist acr
   ).toBeVisible();
   const position = await page.evaluate(() => window.scrollY);
   await page.getByRole("button", { name: "Mark checked", exact: true }).click();
+  let dialog = page.getByRole("dialog", { name: /Document notes/ });
+  await expect(dialog.getByText("Reviewed", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
   await expect(notes).toContainText("Reviewed");
   expect(
     Math.abs((await page.evaluate(() => window.scrollY)) - position),
@@ -168,8 +171,11 @@ test("confirmed tests keep document notes separate and checked notes persist acr
     page.getByText("Check extracted requirements", { exact: true }),
   ).toHaveCount(0);
   await savedNotes.click();
+  dialog = page.getByRole("dialog", { name: /Document notes/ });
   await expect(page.getByText("Checked", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Reopen", exact: true }).click();
+  await expect(dialog.getByText("1 to check", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
   await expect(savedNotes).toContainText("1 to check");
   await page.reload();
   await expect(
@@ -188,17 +194,20 @@ test("a stale note review stays unsaved until current notes are loaded", async (
   await page.goto(`/reports?document=${state.id}`);
   const notes = page.getByRole("button", { name: /Document notes/ });
   await notes.click();
+  const dialog = page.getByRole("dialog", { name: /Document notes/ });
   state.conflict();
   await page.getByRole("button", { name: "Mark checked", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText(
     "These notes have changed",
   );
-  await expect(notes).toContainText("1 to check");
+  await expect(dialog.getByText("1 to check", { exact: true })).toBeVisible();
   await page
     .getByRole("button", { name: "Load current notes", exact: true })
     .click();
   await expect(page.getByRole("alert")).toHaveCount(0);
   await page.getByRole("button", { name: "Mark checked", exact: true }).click();
+  await expect(dialog.getByText("Reviewed", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
   await expect(notes).toContainText("Reviewed");
   expect(state.getModelPosts()).toBe(0);
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
@@ -20,6 +20,8 @@ import {
   Tab,
   Tabs,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
@@ -67,9 +69,15 @@ export default function TestCatalog({ workspace }: PageProps) {
   const { catalog } = workspace;
   const [query, setQuery] = useState("");
   const [view, setView] = useState("all");
+  const [catalogView, setCatalogView] = useState<"tests" | "methods">("tests");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
+  useEffect(() => {
+    setSelectedId(null);
+    setSelectedMethodId(null);
+  }, [workspace.lab.id, catalog.id, catalog.version]);
   const methodById = useMemo(
     () => new Map(catalog.methods.map((method) => [method.id, method])),
     [catalog.methods],
@@ -102,15 +110,42 @@ export default function TestCatalog({ workspace }: PageProps) {
         .includes(needle);
     });
   }, [catalog.tests, methodById, query, view]);
+  const testsByMethod = useMemo(() => {
+    const related = new Map<string, typeof catalog.tests>();
+    for (const test of catalog.tests)
+      for (const methodId of test.method_ids)
+        related.set(methodId, [...(related.get(methodId) ?? []), test]);
+    return related;
+  }, [catalog.tests]);
+  const filteredMethods = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase();
+    return catalog.methods.filter((method) => {
+      if (view === "shared" && privateMethod(method.id)) return false;
+      if (view === "private" && !privateMethod(method.id)) return false;
+      return [
+        method.identifier,
+        method.name,
+        method.edition ?? "",
+        ...method.aliases.map((alias) => alias.text),
+        ...(testsByMethod.get(method.id) ?? []).map((test) => test.name),
+      ]
+        .join(" ")
+        .toLocaleLowerCase()
+        .includes(needle);
+    });
+  }, [catalog.methods, testsByMethod, query, view]);
+  const filteredCount =
+    catalogView === "methods" ? filteredMethods.length : filtered.length;
   const currentPage = Math.min(
     page,
-    Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1),
+    Math.max(0, Math.ceil(filteredCount / rowsPerPage) - 1),
   );
   const visible = filtered.slice(
     currentPage * rowsPerPage,
     (currentPage + 1) * rowsPerPage,
   );
   const selected = catalog.tests.find((test) => test.id === selectedId);
+  const selectedMethod = methodById.get(selectedMethodId ?? "");
   const selectedMethods =
     selected?.method_ids.map((id) => methodById.get(id)).filter(Boolean) ?? [];
 
@@ -131,17 +166,30 @@ export default function TestCatalog({ workspace }: PageProps) {
             Browse test names, methods and alternative names.
           </Typography>
         </Box>
-        <Stack direction="row" gap={1} alignItems="center">
-          <Chip
+        <Stack gap={1} alignItems={{ xs: "flex-start", sm: "flex-end" }}>
+          <ToggleButtonGroup
+            exclusive
             size="small"
-            label={`${catalog.tests.length} test types`}
-            sx={{ bgcolor: "#eaf0fc", color: "#315c9f", fontWeight: 600 }}
-          />
-          <Chip
-            size="small"
-            variant="outlined"
-            label={`${catalog.methods.length} methods`}
-          />
+            value={catalogView}
+            aria-label="Catalog view"
+            onChange={(_, next: "tests" | "methods" | null) => {
+              if (!next) return;
+              setCatalogView(next);
+              setPage(0);
+              setSelectedId(null);
+              setSelectedMethodId(null);
+            }}
+          >
+            <ToggleButton value="tests" sx={{ px: 2 }}>
+              Tests
+            </ToggleButton>
+            <ToggleButton value="methods" sx={{ px: 2 }}>
+              Methods
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <Typography variant="caption" color="text.secondary">
+            {catalog.tests.length} test types · {catalog.methods.length} methods
+          </Typography>
         </Stack>
       </Stack>
       <Paper variant="outlined" sx={{ overflow: "hidden", borderRadius: 3 }}>
@@ -162,7 +210,10 @@ export default function TestCatalog({ workspace }: PageProps) {
             minHeight: 48,
           }}
         >
-          <Tab value="all" label="All tests" />
+          <Tab
+            value="all"
+            label={catalogView === "methods" ? "All methods" : "All tests"}
+          />
           <Tab value="shared" label="Shared reference" />
           <Tab value="private" label="Private to this lab" />
         </Tabs>
@@ -174,7 +225,11 @@ export default function TestCatalog({ workspace }: PageProps) {
           sx={{ p: 2 }}
         >
           <TextField
-            placeholder="Search tests, aliases or method codes"
+            placeholder={
+              catalogView === "methods"
+                ? "Search methods, aliases or linked tests"
+                : "Search tests, aliases or method codes"
+            }
             inputProps={{ "aria-label": "Search test catalog" }}
             value={query}
             onChange={(event) => {
@@ -192,13 +247,22 @@ export default function TestCatalog({ workspace }: PageProps) {
             }}
           />
           <Typography variant="body2" color="text.secondary">
-            {filtered.length} {filtered.length === 1 ? "test" : "tests"}
+            {filteredCount}{" "}
+            {catalogView === "methods"
+              ? filteredCount === 1
+                ? "method"
+                : "methods"
+              : filteredCount === 1
+                ? "test"
+                : "tests"}
           </Typography>
         </Stack>
         <TableContainer>
           <Table
             size="small"
-            aria-label="Test catalog"
+            aria-label={
+              catalogView === "methods" ? "Method catalog" : "Test catalog"
+            }
             sx={{
               minWidth: 720,
               tableLayout: "fixed",
@@ -212,114 +276,191 @@ export default function TestCatalog({ workspace }: PageProps) {
             }}
           >
             <TableHead>
-              <TableRow>
-                <TableCell sx={{ width: "30%" }}>Test item</TableCell>
-                <TableCell sx={{ width: "43%" }}>Test methods</TableCell>
-                <TableCell>Also known as</TableCell>
-              </TableRow>
+              {catalogView === "methods" ? (
+                <TableRow>
+                  <TableCell sx={{ width: "38%" }}>Method</TableCell>
+                  <TableCell sx={{ width: "12%" }}>Edition</TableCell>
+                  <TableCell sx={{ width: "30%" }}>
+                    Related test items
+                  </TableCell>
+                  <TableCell>Visibility</TableCell>
+                </TableRow>
+              ) : (
+                <TableRow>
+                  <TableCell sx={{ width: "30%" }}>Test item</TableCell>
+                  <TableCell sx={{ width: "43%" }}>Test methods</TableCell>
+                  <TableCell>Also known as</TableCell>
+                </TableRow>
+              )}
             </TableHead>
             <TableBody>
-              {visible.map((test) => {
-                const methods = test.method_ids
-                  .map((id) => methodById.get(id))
-                  .filter(Boolean)
-                  .sort((left, right) =>
-                    view === "private"
-                      ? Number(privateMethod(right!.id)) -
-                        Number(privateMethod(left!.id))
-                      : 0,
-                  );
-                const aliases = [
-                  ...new Set(test.aliases.map((alias) => alias.text)),
-                ].filter((text) => text !== test.name);
-                return (
-                  <TableRow
-                    key={test.id}
-                    hover
-                    onClick={() => setSelectedId(test.id)}
-                    sx={{
-                      cursor: "pointer",
-                      "& td": { py: 1.5, verticalAlign: "top" },
-                    }}
-                  >
-                    <TableCell>
-                      <Stack alignItems="flex-start" spacing={0.75}>
-                        <Button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedId(test.id);
-                          }}
-                          sx={{
-                            p: 0,
-                            minWidth: 0,
-                            textAlign: "left",
-                            justifyContent: "flex-start",
-                          }}
-                        >
-                          {test.name}
-                        </Button>
-                        {privateTest(test.id) && (
-                          <VisibilityBadge isPrivate compact />
-                        )}
-                      </Stack>
-                    </TableCell>
-                    <TableCell>
-                      <Stack gap={0.5}>
-                        {methods.slice(0, 3).map((method) => (
-                          <Stack
-                            key={method!.id}
-                            direction="row"
-                            gap={0.75}
-                            alignItems="center"
-                            flexWrap="wrap"
-                          >
-                            <Typography
-                              variant="body2"
-                              sx={{ overflowWrap: "anywhere" }}
-                            >
-                              {method!.identifier || method!.name}
-                            </Typography>
-                            {privateMethod(method!.id) &&
-                              !privateTest(test.id) && (
-                                <VisibilityBadge isPrivate compact />
-                              )}
-                          </Stack>
-                        ))}
-                        {methods.length > 3 && (
-                          <Typography
-                            variant="caption"
-                            color="primary.main"
-                            sx={{ fontWeight: 600 }}
-                          >
-                            +{methods.length - 3} more
-                          </Typography>
-                        )}
-                        {!methods.length && (
-                          <Typography variant="body2" color="text.secondary">
-                            No method recorded
-                          </Typography>
-                        )}
-                      </Stack>
-                    </TableCell>
-                    <TableCell>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={previewSx}
+              {catalogView === "methods" &&
+                filteredMethods
+                  .slice(
+                    currentPage * rowsPerPage,
+                    (currentPage + 1) * rowsPerPage,
+                  )
+                  .map((method) => {
+                    const related = testsByMethod.get(method.id) ?? [];
+                    return (
+                      <TableRow
+                        key={method.id}
+                        hover
+                        onClick={() => setSelectedMethodId(method.id)}
+                        sx={{
+                          cursor: "pointer",
+                          "& td": { py: 1.5, verticalAlign: "top" },
+                        }}
                       >
-                        {aliases.join(" · ") || "—"}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {!filtered.length && (
+                        <TableCell>
+                          <Button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedMethodId(method.id);
+                            }}
+                            sx={{
+                              p: 0,
+                              minWidth: 0,
+                              textAlign: "left",
+                              justifyContent: "flex-start",
+                              overflowWrap: "anywhere",
+                            }}
+                          >
+                            {method.identifier || method.name}
+                          </Button>
+                          {method.identifier &&
+                            method.name !== method.identifier && (
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={previewSx}
+                              >
+                                {method.name}
+                              </Typography>
+                            )}
+                        </TableCell>
+                        <TableCell>
+                          {method.edition || "Not recorded"}
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={previewSx}>
+                            {related.map((test) => test.name).join(" · ") ||
+                              "Not linked"}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <VisibilityBadge
+                            isPrivate={privateMethod(method.id)}
+                            compact
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+              {catalogView === "tests" &&
+                visible.map((test) => {
+                  const methods = test.method_ids
+                    .map((id) => methodById.get(id))
+                    .filter(Boolean)
+                    .sort((left, right) =>
+                      view === "private"
+                        ? Number(privateMethod(right!.id)) -
+                          Number(privateMethod(left!.id))
+                        : 0,
+                    );
+                  const aliases = [
+                    ...new Set(test.aliases.map((alias) => alias.text)),
+                  ].filter((text) => text !== test.name);
+                  return (
+                    <TableRow
+                      key={test.id}
+                      hover
+                      onClick={() => setSelectedId(test.id)}
+                      sx={{
+                        cursor: "pointer",
+                        "& td": { py: 1.5, verticalAlign: "top" },
+                      }}
+                    >
+                      <TableCell>
+                        <Stack alignItems="flex-start" spacing={0.75}>
+                          <Button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedId(test.id);
+                            }}
+                            sx={{
+                              p: 0,
+                              minWidth: 0,
+                              textAlign: "left",
+                              justifyContent: "flex-start",
+                            }}
+                          >
+                            {test.name}
+                          </Button>
+                          {privateTest(test.id) && (
+                            <VisibilityBadge isPrivate compact />
+                          )}
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        <Stack gap={0.5}>
+                          {methods.slice(0, 3).map((method) => (
+                            <Stack
+                              key={method!.id}
+                              direction="row"
+                              gap={0.75}
+                              alignItems="center"
+                              flexWrap="wrap"
+                            >
+                              <Typography
+                                variant="body2"
+                                sx={{ overflowWrap: "anywhere" }}
+                              >
+                                {method!.identifier || method!.name}
+                              </Typography>
+                              {privateMethod(method!.id) &&
+                                !privateTest(test.id) && (
+                                  <VisibilityBadge isPrivate compact />
+                                )}
+                            </Stack>
+                          ))}
+                          {methods.length > 3 && (
+                            <Typography
+                              variant="caption"
+                              color="primary.main"
+                              sx={{ fontWeight: 600 }}
+                            >
+                              +{methods.length - 3} more
+                            </Typography>
+                          )}
+                          {!methods.length && (
+                            <Typography variant="body2" color="text.secondary">
+                              No method recorded
+                            </Typography>
+                          )}
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={previewSx}
+                        >
+                          {aliases.join(" · ") || "—"}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              {!filteredCount && (
                 <TableRow>
                   <TableCell
-                    colSpan={3}
+                    colSpan={catalogView === "methods" ? 4 : 3}
                     sx={{ py: 5, textAlign: "center", color: "text.secondary" }}
                   >
-                    No tests match this search.
+                    {catalogView === "methods"
+                      ? "No methods match this search."
+                      : "No tests match this search."}
                   </TableCell>
                 </TableRow>
               )}
@@ -328,7 +469,7 @@ export default function TestCatalog({ workspace }: PageProps) {
         </TableContainer>
         <TablePagination
           component="div"
-          count={filtered.length}
+          count={filteredCount}
           page={currentPage}
           onPageChange={(_, next) => setPage(next)}
           rowsPerPage={rowsPerPage}
@@ -350,8 +491,10 @@ export default function TestCatalog({ workspace }: PageProps) {
         color="text.secondary"
         sx={{ display: "block", mt: 1.25 }}
       >
-        Select a test for all methods and alternative names. Manage your lab's
-        supported tests in Lab capability.
+        {catalogView === "methods"
+          ? "Select a method for its recorded details and related tests."
+          : "Select a test for all methods and alternative names."}{" "}
+        Manage your lab's supported tests in Lab capability.
       </Typography>
       <Dialog
         open={Boolean(selected)}
@@ -360,7 +503,7 @@ export default function TestCatalog({ workspace }: PageProps) {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle sx={{ pb: 1 }}>
+        <DialogTitle id="catalog-test-heading" sx={{ pb: 1 }}>
           <Typography variant="overline" color="text.secondary">
             Test reference
           </Typography>
@@ -471,6 +614,84 @@ export default function TestCatalog({ workspace }: PageProps) {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSelectedId(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={Boolean(selectedMethod)}
+        onClose={() => setSelectedMethodId(null)}
+        aria-labelledby="catalog-method-title"
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle id="catalog-method-heading" sx={{ pb: 1 }}>
+          <Typography variant="overline" color="text.secondary">
+            Method reference
+          </Typography>
+          <Typography variant="h6" component="div" id="catalog-method-title">
+            {selectedMethod?.identifier || selectedMethod?.name}
+          </Typography>
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedMethod && (
+            <Stack gap={2.5}>
+              <Box>
+                <VisibilityBadge isPrivate={privateMethod(selectedMethod.id)} />
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  {selectedMethod.name}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2">Edition</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedMethod.edition || "Not recorded"}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2">Also known as</Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ overflowWrap: "anywhere" }}
+                >
+                  {[
+                    ...new Set(
+                      selectedMethod.aliases.map((alias) => alias.text),
+                    ),
+                  ].join(" · ") || "No aliases recorded."}
+                </Typography>
+              </Box>
+              <Box component="section" aria-label="Related test items">
+                <Typography variant="subtitle2">Related test items</Typography>
+                <Stack gap={0.5}>
+                  {(testsByMethod.get(selectedMethod.id) ?? []).map((test) => (
+                    <Typography variant="body2" key={test.id}>
+                      {test.name}
+                    </Typography>
+                  ))}
+                  {!testsByMethod.get(selectedMethod.id)?.length && (
+                    <Typography variant="body2" color="text.secondary">
+                      Not linked
+                    </Typography>
+                  )}
+                </Stack>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2">
+                  Procedure and source file
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Not recorded in this catalog.
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                A reference identifies a method. It does not establish lab
+                support or make different methods interchangeable.
+              </Typography>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedMethodId(null)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

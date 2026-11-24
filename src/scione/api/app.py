@@ -26,6 +26,7 @@ from scione.api.contracts import (
     AssessmentReview,
     CapabilityRemoval,
     CapabilityWrite,
+    CustomerClarification,
     DocumentNotesReview,
     ExclusionReview,
     LabExample,
@@ -539,6 +540,29 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
                 headers={"Content-Disposition": 'attachment; filename="assessment-reviews.json"'},
             )
         return payload
+
+    @app.get("/api/comparisons/{document_id}/clarifications")
+    def customer_clarification_history(
+        document_id: str, requirement_id: str, comparison_id: str,
+        input_fingerprint: str | None = None,
+    ):
+        return workspace.library.clarification_history(
+            document_id, requirement_id, comparison_id, input_fingerprint
+        )
+
+    @app.get("/api/comparisons/{document_id}/related-reviews")
+    def related_assessment_reviews(
+        document_id: str, requirement_id: str, comparison_id: str, input_fingerprint: str,
+    ):
+        from scione.library.related_reviews import related_review_references
+
+        return related_review_references(
+            workspace, document_id, requirement_id, comparison_id, input_fingerprint
+        )
+
+    @app.post("/api/comparisons/{document_id}/clarifications")
+    def record_customer_clarification(document_id: str, body: CustomerClarification):
+        return workspace.library.record_clarification(document_id, body)
 
     @app.get("/api/specifications/{document_id}/matching")
     def matching_status(document_id: str):

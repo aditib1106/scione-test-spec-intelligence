@@ -8,7 +8,7 @@ test("AI matching requires consent, reuses results and keeps the last success af
   page,
 }) => {
   const source: LibraryDocument = {
-    document_id: "matching-source",
+    document_id: "a1b2c3d4e5f60718",
     company_name: "Customer A",
     specification_id: "CSP-301",
     title: "Coating requirements",
@@ -88,21 +88,56 @@ test("AI matching requires consent, reuses results and keeps the last success af
   };
   let submissions = 0;
   let failNext = false;
+  const requestIds = new Set<string>();
+  interface MatchingJob {
+    operation_id: string;
+    request_id: string;
+    document_id: string;
+    kind: "matching";
+    state: "running" | "completed" | "failed";
+    started_at: string;
+    result?: { run_id: string; status: "completed"; cached: boolean };
+    error?: {
+      status: number;
+      detail: { message: string; run_id: string; error_code: string };
+    };
+  }
+  const jobs = new Map<
+    string,
+    { job: MatchingJob; cached: boolean; fail: boolean }
+  >();
+  let latestJob: MatchingJob | null = null;
+  let operationReads = 0;
   let release!: () => void;
   const heldResponse = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route("**/api/comparisons/matching-source", (route) =>
+  await page.route(`**/api/comparisons/${source.document_id}`, (route) =>
     route.fulfill({ json: comparison }),
   );
   await page.route(
-    "**/api/specifications/matching-source/matching",
+    `**/api/specifications/${source.document_id}/operations`,
+    (route) =>
+      route.fulfill({
+        json: {
+          recent_job: latestJob,
+          active: latestJob?.state === "running" ? [latestJob] : [],
+        },
+      }),
+  );
+  await page.route(
+    `**/api/specifications/${source.document_id}/matching`,
     async (route) => {
       if (route.request().method() === "GET") {
         await route.fulfill({ json: overview });
         return;
       }
       submissions += 1;
+      expect(route.request().headers()["prefer"]).toBe("respond-async");
+      const requestId = route.request().headers()["x-inference-request-id"];
+      expect(requestId).toMatch(/^[a-f0-9]{8}-[a-f0-9-]{27}$/i);
+      expect(requestIds.has(requestId)).toBe(false);
+      requestIds.add(requestId);
       expect(route.request().postDataJSON()).toMatchObject({
         run_id: "source-run",
         input_fingerprint: "report-inputs",
@@ -112,7 +147,39 @@ test("AI matching requires consent, reuses results and keeps the last success af
         rerun: false,
         output_limit: 8000,
       });
-      if (failNext) {
+      const cached = submissions > 1 && !failNext;
+      const job: MatchingJob = {
+        operation_id: `offline-matching-operation-${submissions}`,
+        request_id: requestId,
+        document_id: source.document_id,
+        kind: "matching",
+        state: cached ? "completed" : "running",
+        started_at: source.created_at,
+      };
+      latestJob = job;
+      jobs.set(job.operation_id, { job, cached, fail: failNext });
+      // Even a cached terminal receipt must read its saved result when the
+      // admission response contains no result body.
+      await route.fulfill({ status: 202, json: job });
+    },
+  );
+  await page.route(
+    "**/api/operations/offline-matching-operation-*",
+    async (route) => {
+      operationReads++;
+      const operationId = new URL(route.request().url()).pathname
+        .split("/")
+        .at(-1)!;
+      const entry = jobs.get(operationId)!;
+      expect(entry).toBeTruthy();
+      const { job, cached, fail } = entry;
+      if (job.operation_id === "offline-matching-operation-1")
+        await heldResponse;
+      if (job.result || job.error) {
+        await route.fulfill({ json: job });
+        return;
+      }
+      if (fail) {
         overview.runs.unshift({
           run_id: "failed-attempt",
           status: "failed",
@@ -121,21 +188,19 @@ test("AI matching requires consent, reuses results and keeps the last success af
           created_at: source.created_at,
           current_inputs: true,
         });
-        await route.fulfill({
+        job.state = "failed";
+        job.error = {
           status: 502,
-          json: {
-            detail: {
-              message: "Model temporarily unavailable. Please try again later.",
-              run_id: "failed-attempt",
-              error_code: "provider_unavailable",
-            },
+          detail: {
+            message: "Model temporarily unavailable. Please try again later.",
+            run_id: "failed-attempt",
+            error_code: "provider_unavailable",
           },
-        });
+        };
+        await route.fulfill({ json: job });
         return;
       }
-      const cached = submissions > 1;
       if (!cached) {
-        await heldResponse;
         overview.current_run_id = "saved-match";
         overview.runs = [
           {
@@ -151,12 +216,12 @@ test("AI matching requires consent, reuses results and keeps the last success af
         comparison.matching_run_id = "saved-match";
         comparison.comparison_id = "ai-snapshot";
       }
-      await route.fulfill({
-        json: { run_id: "saved-match", status: "completed", cached },
-      });
+      job.state = "completed";
+      job.result = { run_id: "saved-match", status: "completed", cached };
+      await route.fulfill({ json: job });
     },
   );
-  await page.goto(`${base}/reports?document=matching-source`);
+  await page.goto(`${base}/reports?document=${source.document_id}`);
   await expect(
     page.getByRole("button", { name: "Generate report", exact: true }),
   ).toBeVisible();
@@ -224,7 +289,7 @@ test("AI matching requires consent, reuses results and keeps the last success af
     page.getByRole("link", { name: "Download eval artifacts" }),
   ).toHaveAttribute(
     "href",
-    "/api/specifications/matching-source/matching/saved-match/artifacts",
+    `/api/specifications/${source.document_id}/matching/saved-match/artifacts`,
   );
   await page
     .getByRole("button", { name: "Close history", exact: true })
@@ -275,4 +340,8 @@ test("AI matching requires consent, reuses results and keeps the last success af
   ).toContainText(
     "The latest AI matching attempt failed. The last saved comparison is still available.",
   );
+  expect(requestIds.size).toBe(3);
+  expect(operationReads).toBeGreaterThanOrEqual(3);
+  expect(overview.current_run_id).toBe("saved-match");
+  expect(comparison.matching_run_id).toBe("saved-match");
 });

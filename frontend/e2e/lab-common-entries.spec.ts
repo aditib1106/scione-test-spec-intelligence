@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { AtomicClaim, LabProfile } from "../src/types";
+import { ensureCapabilityFieldOpen } from "./capabilityActions";
 
 test("common entries explain their scope and edit only the selected test", async ({
   page,
@@ -77,8 +78,9 @@ test("common entries explain their scope and edit only the selected test", async
     .click();
   const editor = page.getByRole("dialog", { name: "Edit capability" });
   const reporting = editor.getByRole("group", {
-    name: "Acceptance criteria / reporting field 1",
+    name: "Measurements & reporting field 1",
   });
+  await ensureCapabilityFieldOpen(reporting);
   const updatedText =
     "Report each specimen separately with a specimen photograph.";
   await reporting

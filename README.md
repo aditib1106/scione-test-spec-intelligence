@@ -4,6 +4,9 @@ CMU Heinz Capstone: a lab-facing customer-specification archive and capability-g
 React, TypeScript and MUI provide the interface; FastAPI handles extraction, comparison,
 storage and PDF generation. Streamlit remains a legacy compatibility tool.
 
+See [CHANGELOG.md](CHANGELOG.md) for changes and release status. Entries under
+**Unreleased** have not been deployed; the hosted pilot can be on an earlier revision.
+
 ## Quickstart: local preview with login
 
 Use Python 3.11+, Node.js 22.12+ and uv. From the repository root:
@@ -94,8 +97,8 @@ A checkout or local preview does not mean a public deployment is already live.
 | Area                              | Purpose                                                                                                                                                                                          |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Specifications → Library**      | Save customer/company metadata and revisions; search, view or remove a saved version. Expand detailed requirements when needed.                                                                  |
-| **Specifications → PDF & review** | Compare extracted test items, test methods, conditions and acceptance criteria against highlighted PDF evidence. Confirm, edit, remove or add a missing source-backed test.                      |
-| **Gap report**                    | Select a test item, inspect its assessment, and expand Conditions or Acceptance criteria for detailed comparisons. Filter and prioritize items needing attention. PDF/JSON exports are optional. |
+| **Specifications → PDF & review** | Compare extracted test items, test methods, conditions and test specifications against highlighted PDF evidence. Confirm, edit, remove or add a missing source-backed test.                      |
+| **Gap report**                    | Select a test item, inspect its assessment, and expand Conditions or Test specification for detailed comparisons. Filter and prioritize items needing attention. PDF/JSON exports are optional. |
 | **Lab capability**                | Maintain supported test methods, conditions, reportable outputs and optional prices. Typed fields support values, ranges, units and context, including custom parameters.                        |
 | **Test catalog**                  | Read shared test/method identities and aliases. A catalog entry does not establish lab capability or method equivalence.                                                                         |
 | **Developer Tools**               | Maintainer-only run history, original provider output, diagnostics and maintenance.                                                                                                              |
@@ -104,6 +107,14 @@ A checkout or local preview does not mean a public deployment is already live.
 **Generate report** from source review starts the configured-model comparison. Browsing,
 expanding rows and changing filters never start inference. Progress shows elapsed time
 and, when available, a reference from previous completed runs.
+
+The current **Unreleased** follow-up keeps short library/report views compact, paginates
+specification families, and scrolls expanded comparisons within the detail panel.
+New capability additions appear newest first using separate server-recorded dates;
+older/imported entries keep their existing order when no creation date is known.
+Review history and summaries prefer the reviewer name captured when a decision was
+saved. Delayed saves cannot replace a newer manual record, and conflicts retain drafts.
+These local changes preserve lab declarations and make no new AI accuracy claim.
 
 Monitoring is an operational view, not a model evaluation. New records measure handler
 operation wall time; historical extraction records may contain only summed provider time,
@@ -132,8 +143,21 @@ outsourcing or declining a test. Acceptance does not turn gaps or missing inform
 into matches. Reviews belong to the exact saved assessment; changed inputs require a
 new review. Remove/restore changes report scope while keeping source data. Review
 history is a separate JSON export; the PDF remains an immutable assessment snapshot.
+**Review history → Related past reviews** looks up this lab's other documents with
+the same test name and recorded method references. It shows the earlier decision
+and comparison as context, without applying it to the current report. The lookup
+is bounded to recent history and skips oversized snapshots. **Report options →
+Review summary** shows one frozen saved report with a business-facing CSV export;
+it is a record of findings and decisions, not a final sign-off.
 Maintainers can access the older mapping/quantity workflow through **Gap report →
 Report options → Review test matching**.
+
+Lab capability forms include optional **Equipment categories** and **Consumables &
+materials** fields for the selected test. They record resources without requiring
+vendors, models or inventory counts. Supplies are distinct from customer specimen
+material; a recorded resource alone does not establish method support. Test catalog
+also offers a read-only **Methods** view for identifiers, aliases, editions and
+linked test items. Procedure/source files are shown as unrecorded when absent.
 
 Within one lab, uploading identical PDF bytes reopens its saved record using the
 current upload's filename, preserving company/version metadata and earlier analyses.
@@ -419,6 +443,10 @@ managed MySQL, persistent application volume, HTTPS URL, server secrets and acco
 provisioning. React and the API share one origin. Keep the pilot to **one replica and
 one worker**; durable jobs and multiworker leases are not implemented. A generated
 hosting URL is enough for a trial; a custom domain can be added later.
+
+The [Azure provisioning and handoff plan](docs/deployment/azure-handoff.md) lists
+client access, storage, MySQL, proxy/TLS and migration checks for a future move.
+It is a preparation checklist; the current release has not been Azure-validated.
 
 The tracked `.railway/railway.ts` describes the current `sweet-possibility` project and
 its existing 500 MB SFO web data volume. Adapt the project and actual volume settings

@@ -1,3 +1,4 @@
+import { documentAction } from "./workspaceActions";
 import { expect, test } from "@playwright/test";
 import type { SpecificationData } from "../src/types";
 
@@ -59,9 +60,8 @@ test("saved uploads are explicit and review notes stay compact above the PDF", a
   await expect(
     page.getByText("Extracted requirements", { exact: true }),
   ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Analyze again", exact: true }),
-  ).toBeVisible();
+  await expect(await documentAction(page, "Analyze again")).toBeVisible();
+  await page.keyboard.press("Escape");
   if (page.viewportSize()!.width >= 900) {
     const sourcePanel = page.getByText("Source document", { exact: true });
     expect((await sourcePanel.boundingBox())!.y).toBeLessThan(450);
@@ -83,7 +83,7 @@ test("saved uploads are explicit and review notes stay compact above the PDF", a
   ).toBeVisible();
   await expect(
     page.getByRole("combobox", { name: "Saved specification" }),
-  ).toContainText(source.original_name);
+  ).toHaveValue(source.original_name);
   await expect(
     page.getByText("Saved as renamed-copy.pdf.", { exact: false }),
   ).toHaveCount(0);

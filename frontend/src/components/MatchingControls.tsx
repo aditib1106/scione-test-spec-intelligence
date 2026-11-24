@@ -30,6 +30,7 @@ import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import { requestInference, useResource } from "../api";
+import { useInlineInferenceActivity } from "./InferenceActivity";
 import type { ProviderOption } from "../types";
 import InferenceProgress, {
   recordInferenceDuration,
@@ -82,6 +83,7 @@ export default function MatchingControls({
   const [open, setOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  useInlineInferenceActivity(documentId, "matching", open && busy);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const mounted = useRef(true);

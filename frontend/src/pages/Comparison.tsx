@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -20,12 +21,15 @@ import {
   Menu,
   MenuItem,
   Paper,
+  Popover,
   Select,
   Snackbar,
   Stack,
   Tab,
   Tabs,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
   useMediaQuery,
@@ -41,7 +45,13 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import CompareArrowsOutlinedIcon from "@mui/icons-material/CompareArrowsOutlined";
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
-import { apiFetch, useResource } from "../api";
+import FilterListRoundedIcon from "@mui/icons-material/FilterListRounded";
+import { apiFetch, request, useResource } from "../api";
+import {
+  manualAssessmentKey,
+  manualReviewIsBehind,
+  sameManualAssessment,
+} from "../manualReviewVersions";
 import { useAuth } from "../auth";
 import PdfPageViewer from "../components/PdfPageViewer";
 import ReportGenerationControls from "../components/ReportGenerationControls";
@@ -50,12 +60,15 @@ import ReportDimensions, {
 } from "../components/ReportDimensions";
 import ReportScopeControls from "../components/ReportScopeControls";
 import ReportAssessmentReview from "../components/ReportAssessmentReview";
+import ReportReviewSummary, {
+  type ReviewSummarySelection,
+} from "../components/ReportReviewSummary";
 import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
 import SourceCoverageNotice from "../components/SourceCoverageNotice";
 import DocumentNotes from "../components/DocumentNotes";
 import ComparisonCheckSummary from "../components/ComparisonCheckSummary";
 import { specificationVersionLabel } from "../specificationDates";
-import type { PageProps } from "../types";
+import type { DocumentSummary, PageProps } from "../types";
 import type { LibraryDocument } from "../libraryTypes";
 import type {
   ComparisonData,
@@ -299,6 +312,16 @@ export default function Comparison({ workspace }: PageProps) {
       : null,
   );
   const library = useResource<{ documents: LibraryDocument[] }>("/api/library");
+  const libraryDocuments = useMemo(
+    () =>
+      new Map(
+        (library.data?.documents ?? []).map((document) => [
+          document.document_id,
+          document,
+        ]),
+      ),
+    [library.data?.documents],
+  );
   const [views, setViews] = useState(readViews);
   const saved = views[documentId];
   const view: ReportView = {
@@ -323,6 +346,85 @@ export default function Comparison({ workspace }: PageProps) {
   }, [views]);
   const report =
     data.data?.document.document_id === documentId ? data.data : null;
+  // Update synchronously, including between two write callbacks batched by React.
+  const latestManualView = useRef({ documentId, report });
+  latestManualView.current = { documentId, report };
+  const manualRead = useRef<AbortController | null>(null);
+  const manualSequence = useRef(0);
+  const manualViewAlive = useRef(true);
+  useEffect(() => {
+    manualViewAlive.current = true;
+    return () => {
+      manualViewAlive.current = false;
+    };
+  }, []);
+  const [manualSyncIssue, setManualSyncIssue] = useState<string | null>(null);
+  const currentManualKey = report ? manualAssessmentKey(report) : null;
+  useEffect(() => {
+    setManualSyncIssue(null);
+    return () => {
+      manualRead.current?.abort();
+      manualSequence.current += 1;
+    };
+  }, [documentId, currentManualKey]);
+
+  function applyManualReview(updated: ComparisonData) {
+    if (!manualViewAlive.current) return;
+    const current = latestManualView.current;
+    if (
+      !current.report ||
+      current.documentId !== updated.document?.document_id ||
+      !sameManualAssessment(current.report, updated)
+    )
+      return;
+    manualRead.current?.abort();
+    const sequence = ++manualSequence.current;
+    if (!manualReviewIsBehind(current.report, updated)) {
+      latestManualView.current = { ...current, report: updated };
+      setManualSyncIssue(null);
+      data.setData(updated);
+      return;
+    }
+    // Do not merge overlays: an export ID belongs to one exact saved snapshot.
+    const controller = new AbortController();
+    manualRead.current = controller;
+    const key = manualAssessmentKey(current.report);
+    void request<ComparisonData>(
+      `/api/comparisons/${encodeURIComponent(current.documentId)}`,
+      { signal: controller.signal },
+    )
+      .then((fresh) => {
+        if (controller.signal.aborted || manualSequence.current !== sequence)
+          return;
+        const latest = latestManualView.current;
+        if (!latest.report || manualAssessmentKey(latest.report) !== key)
+          return;
+        if (
+          !sameManualAssessment(latest.report, fresh) ||
+          manualReviewIsBehind(latest.report, fresh)
+        )
+          throw new Error("The current saved review changed.");
+        latestManualView.current = { ...latest, report: fresh };
+        setManualSyncIssue(null);
+        data.setData(fresh);
+      })
+      .catch(() => {
+        if (
+          !controller.signal.aborted &&
+          manualSequence.current === sequence &&
+          latestManualView.current.report &&
+          manualAssessmentKey(latestManualView.current.report) === key
+        )
+          setManualSyncIssue(key);
+      });
+  }
+  async function reloadSavedReport() {
+    const key = latestManualView.current.report
+      ? manualAssessmentKey(latestManualView.current.report)
+      : null;
+    const loaded = await data.refresh();
+    if (loaded) setManualSyncIssue((saved) => (saved === key ? null : saved));
+  }
   const recentJob = operationStatus.data?.recent_job;
   const lastObserved = operationStatus.data?.latest;
   const failedAt = Date.parse(recentJob?.started_at ?? "");
@@ -378,6 +480,20 @@ export default function Comparison({ workspace }: PageProps) {
   const [tab, setTab] = useState("comparison");
   const [notice, setNotice] = useState("");
   const [toolsAnchor, setToolsAnchor] = useState<HTMLElement | null>(null);
+  const [summarySelection, setSummarySelection] =
+    useState<ReviewSummarySelection | null>(null);
+  useEffect(() => {
+    setSummarySelection(null);
+    setToolsAnchor(null);
+  }, [documentId, report?.comparison_id]);
+  const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
+  useEffect(() => setFilterAnchor(null), [documentId]);
+  const attentionCount =
+    report?.requirements.filter((item) =>
+      ["partially_matched", "not_matched", "needs_information"].includes(
+        item.comparison.status,
+      ),
+    ).length ?? 0;
   const detailPane = useRef<HTMLDivElement>(null);
   const previousWorkspace = useRef({
     labVersion: workspace.lab.version,
@@ -472,9 +588,7 @@ export default function Comparison({ workspace }: PageProps) {
     ]),
   );
   const docTitle = (id: string, fallback: string) => {
-    const document = library.data?.documents.find(
-      (item) => item.document_id === id,
-    );
+    const document = libraryDocuments.get(id);
     return document
       ? [
           document.company_name,
@@ -499,6 +613,9 @@ export default function Comparison({ workspace }: PageProps) {
         : next[Math.min(Math.max(oldIndex, 0), next.length - 1)]
             ?.requirement_id || "",
     });
+    latestManualView.current = { documentId, report: updated };
+    manualRead.current?.abort();
+    manualSequence.current += 1;
     data.setData(updated);
     setNotice(
       selected?.report_scope_exclusion
@@ -506,12 +623,35 @@ export default function Comparison({ workspace }: PageProps) {
         : "Test removed from this report. You can restore it here.",
     );
   };
+  const documentNotesControl = report?.document_notes_review ? (
+    <DocumentNotes
+      key={`document-notes-${documentId}`}
+      documentId={documentId}
+      presentation="dialog"
+      review={report.document_notes_review}
+      sourceReviewUrl={`/specifications?${new URLSearchParams({ document: documentId })}`}
+      onUpdated={(notes) => {
+        const saved = latestManualView.current.report;
+        if (
+          !saved ||
+          !sameManualAssessment(saved, report) ||
+          saved.document_notes_review?.source_fingerprint !==
+            notes.source_fingerprint ||
+          (saved.document_notes_review?.version ?? 0) > notes.version
+        )
+          return;
+        const updated = { ...saved, document_notes_review: notes };
+        latestManualView.current = { documentId, report: updated };
+        data.setData(updated);
+      }}
+    />
+  ) : null;
 
   return (
     <Box
       sx={{
         px: { xs: 2, md: 2.5 },
-        py: 1.5,
+        py: 1.25,
         maxWidth: 1800,
         mx: "auto",
         height: {
@@ -524,15 +664,15 @@ export default function Comparison({ workspace }: PageProps) {
       }}
     >
       <Stack
-        direction={{ xs: "column", lg: "row" }}
+        direction={{ xs: "column", md: "row" }}
         justifyContent="space-between"
-        alignItems={{ lg: "center" }}
-        spacing={1.5}
+        alignItems={{ md: "center" }}
+        spacing={1}
         sx={{ mb: 0.75, flexShrink: 0, minWidth: 0 }}
       >
         <Typography
           variant="h5"
-          sx={{ fontSize: 25, lineHeight: 1.25, whiteSpace: "nowrap" }}
+          sx={{ fontSize: 24, lineHeight: 1.25, whiteSpace: "nowrap" }}
         >
           Gap report
         </Typography>
@@ -542,43 +682,57 @@ export default function Comparison({ workspace }: PageProps) {
           alignItems="center"
           useFlexGap
           flexWrap={{ xs: "wrap", sm: "nowrap" }}
-          sx={{ minWidth: 0, flex: 1, justifyContent: { lg: "flex-end" } }}
+          sx={{ minWidth: 0, flex: 1, justifyContent: { md: "flex-end" } }}
         >
           {docs.length > 0 && (
-            <FormControl
+            <Autocomplete<DocumentSummary, false, boolean, false>
               size="small"
+              disableClearable
+              options={docs}
+              value={docs.find((doc) => doc.document_id === documentId) ?? null}
+              getOptionKey={(doc) => doc.document_id}
+              getOptionLabel={(doc) =>
+                docTitle(doc.document_id, doc.original_name)
+              }
+              isOptionEqualToValue={(option, value) =>
+                option.document_id === value.document_id
+              }
+              filterOptions={(options, { inputValue }) => {
+                const needle = inputValue.trim().toLocaleLowerCase();
+                return options.filter((doc) => {
+                  const saved = libraryDocuments.get(doc.document_id);
+                  return [
+                    doc.original_name,
+                    docTitle(doc.document_id, doc.original_name),
+                    saved?.title,
+                    saved?.specification_date,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .toLocaleLowerCase()
+                    .includes(needle);
+                });
+              }}
+              onChange={(_, document) => {
+                if (document && document.document_id !== documentId)
+                  setParams({ document: document.document_id });
+              }}
+              noOptionsText="No specification matches this search."
               sx={{
                 flex: { xs: "1 1 100%", sm: "1 1 240px", lg: "0 1 360px" },
                 minWidth: { sm: 220 },
                 maxWidth: { lg: 360 },
+                bgcolor: "background.paper",
               }}
-            >
-              <InputLabel id="comparison-document-label">
-                Customer specification
-              </InputLabel>
-              <Select
-                labelId="comparison-document-label"
-                label="Customer specification"
-                value={
-                  docs.some((item) => item.document_id === documentId)
-                    ? documentId
-                    : ""
-                }
-                onChange={(event) =>
-                  setParams({ document: event.target.value })
-                }
-                sx={{ bgcolor: "background.paper", fontSize: 14 }}
-              >
-                {docs.map((document) => (
-                  <MenuItem
-                    key={document.document_id}
-                    value={document.document_id}
-                  >
-                    {docTitle(document.document_id, document.original_name)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+              renderInput={(input) => (
+                <TextField
+                  {...input}
+                  label="Customer specification"
+                  placeholder="Search customer, specification or PDF"
+                  sx={{ fontSize: 14 }}
+                />
+              )}
+            />
           )}
           {report && (
             <ReportGenerationControls
@@ -616,50 +770,45 @@ export default function Comparison({ workspace }: PageProps) {
           report. No automatic retry was made.
         </Alert>
       )}
-      {report && report.comparison_engine !== "ai_semantic_matching" && (
-        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75 }}>
-          Generate a report to compare these requirements with your saved lab
-          information using AI.
-        </Typography>
-      )}
       {report && !report.document_notes_review && (
         <DocumentRevisionNotice
           issues={report.document.document_review_issues}
           sourceReviewUrl={`/specifications?${new URLSearchParams({ document: documentId })}`}
         />
       )}
-      {report?.document_notes_review ? (
-        <DocumentNotes
-          key={`document-notes-${documentId}`}
-          documentId={documentId}
-          review={report.document_notes_review}
+      {!report?.document_notes_review && report && (
+        <SourceCoverageNotice
+          key={`coverage-${documentId}`}
+          issues={report.source_coverage_issues ?? []}
           sourceReviewUrl={`/specifications?${new URLSearchParams({ document: documentId })}`}
-          onUpdated={(notes) =>
-            data.setData((saved) =>
-              saved?.comparison_id === report.comparison_id
-                ? { ...saved, document_notes_review: notes }
-                : saved,
-            )
-          }
         />
-      ) : (
-        report && (
-          <SourceCoverageNotice
-            key={`coverage-${documentId}`}
-            issues={report.source_coverage_issues ?? []}
-            sourceReviewUrl={`/specifications?${new URLSearchParams({ document: documentId })}`}
-          />
-        )
       )}
       <Menu
         anchorEl={toolsAnchor}
         open={Boolean(toolsAnchor)}
         onClose={() => setToolsAnchor(null)}
       >
+        {report?.export_snapshot_id && (
+          <MenuItem
+            onClick={() => {
+              setToolsAnchor(null);
+              setSummarySelection({
+                documentId,
+                comparisonId: report.comparison_id,
+                exportSnapshotId: report.export_snapshot_id!,
+                sourceRunId: report.source_run_id,
+                inputFingerprint: report.report_input_fingerprint,
+              });
+            }}
+          >
+            <DescriptionOutlinedIcon fontSize="small" sx={{ mr: 1 }} />
+            Review summary
+          </MenuItem>
+        )}
         <MenuItem
           onClick={() => {
             setToolsAnchor(null);
-            data.refresh();
+            void reloadSavedReport();
           }}
           disabled={data.loading}
         >
@@ -676,6 +825,16 @@ export default function Comparison({ workspace }: PageProps) {
           </MenuItem>
         )}
       </Menu>
+      {report &&
+        summarySelection?.documentId === documentId &&
+        summarySelection.comparisonId === report.comparison_id && (
+          <ReportReviewSummary
+            key={`${documentId}-${summarySelection.comparisonId}-${summarySelection.exportSnapshotId}`}
+            selection={summarySelection}
+            latestExportSnapshotId={report.export_snapshot_id}
+            onClose={() => setSummarySelection(null)}
+          />
+        )}
       {!documentId ? (
         <Paper variant="outlined" sx={{ p: 5, textAlign: "center" }}>
           <Typography variant="h6">
@@ -696,6 +855,23 @@ export default function Comparison({ workspace }: PageProps) {
         </Paper>
       ) : (
         <>
+          {manualSyncIssue === currentManualKey && manualSyncIssue && (
+            <Alert
+              severity="info"
+              sx={{ mb: 1.5 }}
+              action={
+                <Button
+                  disabled={data.loading}
+                  onClick={() => void reloadSavedReport()}
+                >
+                  Reload saved report
+                </Button>
+              }
+            >
+              Your changes were saved, but the latest combined review could not
+              be loaded. Your saved records have been kept.
+            </Alert>
+          )}
           {data.error && (
             <Alert
               severity="error"
@@ -716,9 +892,11 @@ export default function Comparison({ workspace }: PageProps) {
           {report && (
             <>
               <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={1}
-                alignItems={{ sm: "center" }}
+                direction="row"
+                gap={1}
+                useFlexGap
+                flexWrap="wrap"
+                alignItems="center"
                 justifyContent="space-between"
                 sx={{ mb: 1, flexShrink: 0, minHeight: 34 }}
               >
@@ -727,14 +905,14 @@ export default function Comparison({ workspace }: PageProps) {
                   onChange={(_, value: string) => setTab(value)}
                   aria-label="Gap report views"
                   sx={{
-                    minHeight: 40,
+                    minHeight: 36,
                     p: 0.5,
                     bgcolor: "#eaf0fa",
                     border: "1px solid #dce5f1",
                     borderRadius: 1.5,
                     "& .MuiTabs-indicator": { display: "none" },
                     "& .MuiTab-root": {
-                      minHeight: 34,
+                      minHeight: 30,
                       px: 1.25,
                       py: 0.5,
                       fontSize: 14,
@@ -765,7 +943,7 @@ export default function Comparison({ workspace }: PageProps) {
                   spacing={{ xs: 1.5, md: 2.25 }}
                   alignItems="center"
                   aria-label="Report summary"
-                  sx={{ overflowX: "auto", minWidth: 0, pb: 0.25 }}
+                  sx={{ overflowX: "auto", minWidth: 0, pb: 0.25, ml: "auto" }}
                 >
                   {(
                     [
@@ -803,6 +981,7 @@ export default function Comparison({ workspace }: PageProps) {
                     </Stack>
                   ))}
                 </Stack>
+                {documentNotesControl}
               </Stack>
               {tab === "comparison" && (
                 <>
@@ -812,7 +991,7 @@ export default function Comparison({ workspace }: PageProps) {
                     gap={1.5}
                     useFlexGap
                     flexWrap="wrap"
-                    sx={{ mb: 1.25, px: 0.5, flexShrink: 0 }}
+                    sx={{ mb: 0.75, px: 0.5, flexShrink: 0 }}
                   >
                     <Typography variant="caption" color="text.secondary">
                       Requirement checks
@@ -823,21 +1002,17 @@ export default function Comparison({ workspace }: PageProps) {
                         .filter((item) => item.comparison.status !== "excluded")
                         .flatMap((item) => item.comparison.checks)}
                     />
-                    <Typography variant="caption" color="text.secondary">
-                      A test is fully matched only when all required checks are
-                      resolved.
-                    </Typography>
                   </Stack>
                   <Box
                     sx={{
                       display: "grid",
                       gridTemplateColumns: {
                         xs: "minmax(0,1fr)",
-                        md: "clamp(260px, 29%, 300px) minmax(0,1fr)",
-                        lg: "clamp(300px, 28%, 340px) minmax(0,1fr)",
-                        xl: "clamp(320px, 26%, 360px) minmax(0,1fr)",
+                        md: "clamp(220px, 23%, 270px) minmax(0,1fr)",
+                        xl: "clamp(250px, 22%, 290px) minmax(0,1fr)",
                       },
-                      gap: { xs: 1.5, md: 2 },
+                      gridTemplateRows: { md: "minmax(0, 1fr)" },
+                      gap: { xs: 1.5, md: 1.5 },
                       flex: 1,
                       minHeight: 0,
                     }}
@@ -898,63 +1073,153 @@ export default function Comparison({ workspace }: PageProps) {
                             ),
                           }}
                         />
-                        <Stack direction="row" spacing={0.75} sx={{ mt: 1.25 }}>
-                          <FormControl
+                        <Stack direction="row" spacing={0.5} sx={{ mt: 1.25 }}>
+                          <ToggleButtonGroup
+                            exclusive
                             size="small"
-                            sx={{ flex: 1, minWidth: 0 }}
+                            value={view.filter}
+                            aria-label="Report list view"
+                            onChange={(_, filter: string | null) => {
+                              if (filter) changeView({ filter });
+                            }}
+                            sx={{
+                              flex: 1,
+                              "& .MuiToggleButton-root": {
+                                flex: 1,
+                                px: 0.75,
+                                py: 0.75,
+                                fontSize: 12,
+                                lineHeight: 1.4,
+                                textTransform: "none",
+                              },
+                              "& .MuiToggleButton-root:first-of-type": {
+                                flex: 1.8,
+                              },
+                            }}
                           >
-                            <InputLabel id="comparison-result-label">
-                              Show
-                            </InputLabel>
-                            <Select
-                              labelId="comparison-result-label"
-                              label="Show"
-                              value={view.filter}
-                              onChange={(event) =>
-                                changeView({ filter: event.target.value })
+                            <ToggleButton
+                              value="attention"
+                              aria-label="Needs attention"
+                            >
+                              Needs attention ({attentionCount})
+                            </ToggleButton>
+                            <ToggleButton value="all" aria-label="All tests">
+                              All tests
+                            </ToggleButton>
+                          </ToggleButtonGroup>
+                          <Tooltip title="Filter and sort tests">
+                            <IconButton
+                              size="small"
+                              aria-label="Filter and sort tests"
+                              aria-haspopup="dialog"
+                              aria-expanded={Boolean(filterAnchor)}
+                              color={
+                                !["all", "attention"].includes(view.filter) ||
+                                view.order !== "priority"
+                                  ? "primary"
+                                  : "default"
+                              }
+                              onClick={(event) =>
+                                setFilterAnchor(event.currentTarget)
                               }
                             >
-                              {filters.map(({ value, label }) => (
-                                <MenuItem key={value} value={value}>
-                                  {label}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                          <FormControl
-                            size="small"
-                            sx={{ width: 108, flexShrink: 0 }}
-                          >
-                            <InputLabel id="comparison-order-label">
-                              Order
-                            </InputLabel>
-                            <Select
-                              labelId="comparison-order-label"
-                              label="Order"
-                              value={view.order}
-                              renderValue={(value) =>
-                                value === "source" ? "Source" : "Priority"
-                              }
-                              sx={{
-                                fontSize: 13,
-                                "& .MuiSelect-select": {
-                                  pl: 1,
-                                  pr: "24px !important",
-                                },
-                                "& .MuiSelect-icon": {
-                                  right: 3,
-                                  fontSize: 20,
-                                },
-                              }}
-                              onChange={(event) =>
-                                changeView({ order: event.target.value })
-                              }
-                            >
-                              <MenuItem value="priority">Priority</MenuItem>
-                              <MenuItem value="source">Source order</MenuItem>
-                            </Select>
-                          </FormControl>
+                              <FilterListRoundedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                         </Stack>
+                        {!["all", "attention"].includes(view.filter) && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ mt: 0.75, display: "block" }}
+                          >
+                            Showing:{" "}
+                            {
+                              filters.find((item) => item.value === view.filter)
+                                ?.label
+                            }
+                          </Typography>
+                        )}
+                        <Popover
+                          open={Boolean(filterAnchor)}
+                          anchorEl={filterAnchor}
+                          onClose={() => setFilterAnchor(null)}
+                          anchorOrigin={{
+                            vertical: "bottom",
+                            horizontal: "right",
+                          }}
+                          transformOrigin={{
+                            vertical: "top",
+                            horizontal: "right",
+                          }}
+                          slotProps={{
+                            paper: {
+                              role: "dialog",
+                              "aria-label": "Filter and sort tests",
+                              sx: { p: 2, width: 290 },
+                            },
+                          }}
+                        >
+                          <Stack gap={1.75}>
+                            <Typography variant="subtitle2">
+                              Filter and sort tests
+                            </Typography>
+                            <FormControl
+                              size="small"
+                              sx={{ flex: 1, minWidth: 0 }}
+                            >
+                              <InputLabel id="comparison-result-label">
+                                Show
+                              </InputLabel>
+                              <Select
+                                labelId="comparison-result-label"
+                                label="Show"
+                                value={view.filter}
+                                onChange={(event) => {
+                                  changeView({ filter: event.target.value });
+                                  setFilterAnchor(null);
+                                }}
+                              >
+                                {filters.map(({ value, label }) => (
+                                  <MenuItem key={value} value={value}>
+                                    {label}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                            <FormControl size="small" sx={{ width: "100%" }}>
+                              <InputLabel id="comparison-order-label">
+                                Order
+                              </InputLabel>
+                              <Select
+                                labelId="comparison-order-label"
+                                label="Order"
+                                value={view.order}
+                                renderValue={(value) =>
+                                  value === "source" ? "Source" : "Priority"
+                                }
+                                sx={{
+                                  fontSize: 13,
+                                  "& .MuiSelect-select": {
+                                    pl: 1,
+                                    pr: "24px !important",
+                                  },
+                                  "& .MuiSelect-icon": {
+                                    right: 3,
+                                    fontSize: 20,
+                                  },
+                                }}
+                                onChange={(event) => {
+                                  changeView({ order: event.target.value });
+                                  setFilterAnchor(null);
+                                }}
+                              >
+                                <MenuItem value="priority">Priority</MenuItem>
+                                <MenuItem value="source">Source order</MenuItem>
+                              </Select>
+                            </FormControl>
+                          </Stack>
+                        </Popover>
                       </Box>
                       <List
                         disablePadding
@@ -1068,16 +1333,21 @@ export default function Comparison({ workspace }: PageProps) {
                             color="text.secondary"
                             sx={{ p: 2 }}
                           >
-                            No tests match this filter.
+                            {view.filter === "attention" && !view.query.trim()
+                              ? "No tests need attention."
+                              : "No tests match this filter."}
                           </Typography>
                         )}
                       </List>
                     </Paper>
                     <Paper
                       variant="outlined"
+                      data-testid="report-comparison-panel"
                       sx={{
                         minWidth: 0,
                         minHeight: { xs: 380, md: 0 },
+                        alignSelf: "start",
+                        maxHeight: { md: "100%" },
                         display: "flex",
                         flexDirection: "column",
                         overflow: "hidden",
@@ -1090,7 +1360,7 @@ export default function Comparison({ workspace }: PageProps) {
                         aria-label="Selected test details"
                         tabIndex={-1}
                         sx={{
-                          flex: 1,
+                          flex: "0 1 auto",
                           minHeight: 0,
                           overflowY: { md: "auto" },
                           overflowAnchor: "none",
@@ -1133,6 +1403,13 @@ export default function Comparison({ workspace }: PageProps) {
                                     resultLabel(selected.comparison.status)
                                       .label
                                   }
+                                />
+                                <ReportScopeControls
+                                  key={`${documentId}-${report.comparison_id}-${selected.requirement_id}`}
+                                  documentId={documentId}
+                                  report={report}
+                                  requirement={selected}
+                                  onSaved={scopeSaved}
                                 />
                               </Stack>
                               {selected.comparison.status !== "excluded" &&
@@ -1236,19 +1513,6 @@ export default function Comparison({ workspace }: PageProps) {
                                 Its source requirements remain saved.
                               </Typography>
                             )}
-                            <ReportAssessmentReview
-                              key={`${report.comparison_id}-${selected.requirement_id}`}
-                              documentId={documentId}
-                              report={report}
-                              requirement={selected}
-                              onSaved={(updated) => data.setData(updated)}
-                            />
-                            <ReportScopeControls
-                              documentId={documentId}
-                              report={report}
-                              requirement={selected}
-                              onSaved={scopeSaved}
-                            />
                           </>
                         ) : (
                           <Stack
@@ -1257,15 +1521,18 @@ export default function Comparison({ workspace }: PageProps) {
                             sx={{ minHeight: 320, height: "100%", p: 3 }}
                           >
                             <Typography variant="subtitle1">
-                              No tests in this view
+                              {view.filter === "attention" && !view.query.trim()
+                                ? "No tests need attention"
+                                : "No tests in this view"}
                             </Typography>
                             <Typography
                               variant="body2"
                               color="text.secondary"
                               sx={{ mt: 0.75, textAlign: "center" }}
                             >
-                              Your filter is still applied. Change it or clear
-                              the search to see other tests.
+                              {view.filter === "attention" && !view.query.trim()
+                                ? "You can still inspect every test in All tests."
+                                : "Your filter is still applied. Change it or clear the search to see other tests."}
                             </Typography>
                             <Button
                               sx={{ mt: 1 }}
@@ -1285,6 +1552,15 @@ export default function Comparison({ workspace }: PageProps) {
                           </Stack>
                         )}
                       </Box>
+                      {selected && (
+                        <ReportAssessmentReview
+                          key={`${report.comparison_id}-${selected.requirement_id}`}
+                          documentId={documentId}
+                          report={report}
+                          requirement={selected}
+                          onSaved={applyManualReview}
+                        />
+                      )}
                     </Paper>
                   </Box>
                 </>
