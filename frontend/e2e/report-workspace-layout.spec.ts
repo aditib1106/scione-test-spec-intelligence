@@ -59,12 +59,16 @@ for (const viewport of [
       viewport.height + 2,
     );
     // Reading an expanded comparison must not push the decision controls below the viewport.
+    const pageScrollBeforeExpansion = await page.evaluate(() => scrollY);
     await page.getByRole("button", { name: "Conditions", exact: true }).click();
     await page.getByTestId("report-detail-pane").evaluate((node) => {
       node.scrollTop = node.scrollHeight;
     });
     const after = await review.boundingBox();
-    expect(Math.abs(after!.y - controls!.y)).toBeLessThan(2);
+    // Short cards follow their content; expansion may move the footer until it
+    // reaches the viewport bound, without scrolling the whole workspace.
+    expect(after!.y + after!.height).toBeLessThanOrEqual(viewport.height + 2);
+    expect(await page.evaluate(() => scrollY)).toBe(pageScrollBeforeExpansion);
     await expect(
       review.getByRole("button", { name: "Review history", exact: true }),
     ).toBeVisible();

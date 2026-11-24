@@ -105,6 +105,7 @@ export interface AssessmentReview {
   decision: "keep" | "clarify_customer" | "outsource" | "decline";
   note: string;
   actor: string;
+  actor_label?: string | null;
   created_at: string;
   machine_status: ComparisonStatus;
   input_fingerprint: string;

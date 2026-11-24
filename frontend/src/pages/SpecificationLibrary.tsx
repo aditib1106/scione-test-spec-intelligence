@@ -149,6 +149,8 @@ export default function SpecificationLibrary({
   const documents = library.data?.documents ?? [];
   const [query, setQuery] = useState("");
   const [company, setCompany] = useState("");
+  const [listPage, setListPage] = useState(0);
+  const [listRowsPerPage, setListRowsPerPage] = useState(10);
   const selectedId = params.get("document") || "";
   const detail = useResource<LibraryDetail>(
     selectedId ? `/api/library/${encodeURIComponent(selectedId)}` : null,
@@ -164,6 +166,8 @@ export default function SpecificationLibrary({
     useState<SpecificationUploadReceipt | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const saveErrorRef = useRef<HTMLDivElement>(null);
+  const [saveAttempt, setSaveAttempt] = useState(0);
   const [notice, setNotice] = useState("");
   const [selectedTestId, setSelectedTestId] = useState("");
   const [detailTab, setDetailTab] = useState("tests");
@@ -177,6 +181,10 @@ export default function SpecificationLibrary({
   const [specificationActions, setSpecificationActions] =
     useState<HTMLElement | null>(null);
   const [versionsFamilyId, setVersionsFamilyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (dialogOpen && saveError) saveErrorRef.current?.focus();
+  }, [dialogOpen, saveError, saveAttempt]);
 
   useEffect(() => {
     library.refresh();
@@ -293,6 +301,18 @@ export default function SpecificationLibrary({
     });
   }, [families, versionGroups, query, company]);
 
+  useEffect(() => {
+    setListPage(0);
+  }, [query, company, listRowsPerPage]);
+  const visibleListPage = Math.min(
+    listPage,
+    Math.max(0, Math.ceil(filtered.length / listRowsPerPage) - 1),
+  );
+  const visibleFamilies = filtered.slice(
+    visibleListPage * listRowsPerPage,
+    (visibleListPage + 1) * listRowsPerPage,
+  );
+
   const current = detail.data?.document;
   const selectedTest =
     detail.data?.requirements.find(
@@ -347,6 +367,7 @@ export default function SpecificationLibrary({
 
   const save = async () => {
     if (submitting.current) return;
+    setSaveAttempt((attempt) => attempt + 1);
     setSaveError("");
     if (!editing && !uploadedId && !file) {
       setSaveError("Choose the specification PDF first.");
@@ -518,7 +539,12 @@ export default function SpecificationLibrary({
       )}
 
       {!selectedId && (
-        <Paper variant="outlined" sx={{ overflow: "hidden", mb: 3 }}>
+        <Paper
+          variant="outlined"
+          role="region"
+          aria-label="Saved specification list"
+          sx={{ overflow: "hidden", mb: 3 }}
+        >
           <Stack
             direction={{ xs: "column", sm: "row" }}
             spacing={1.5}
@@ -530,7 +556,7 @@ export default function SpecificationLibrary({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               inputProps={{ "aria-label": "Search specification library" }}
-              sx={{ flex: 1 }}
+              sx={{ flex: 1, minWidth: 0 }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -578,7 +604,7 @@ export default function SpecificationLibrary({
             <Box
               sx={{
                 px: 3,
-                py: 6,
+                py: { xs: 4, sm: 5 },
                 textAlign: "center",
                 borderTop: "1px solid",
                 borderColor: "divider",
@@ -609,21 +635,36 @@ export default function SpecificationLibrary({
             </Box>
           ) : (
             <TableContainer
-              sx={{ maxHeight: "calc(100dvh - 280px)", minHeight: 240 }}
+              role="region"
+              aria-label="Specification table scroll area"
+              tabIndex={0}
+              sx={{ maxHeight: "min(760px, calc(100dvh - 280px))" }}
             >
               <Table
                 stickyHeader
                 size="small"
                 aria-label="Saved customer specifications"
                 sx={{
+                  minWidth: 960,
+                  tableLayout: "fixed",
                   "& th": {
                     bgcolor: "#f5f7fb",
                     color: "#53647b",
                     fontWeight: 650,
                   },
                   "& td": { py: 1.75, borderColor: "#e6ebf2" },
+                  "& tbody tr:last-child td": { borderBottom: 0 },
                 }}
               >
+                <colgroup>
+                  <col style={{ width: 144 }} />
+                  <col />
+                  <col style={{ width: 132 }} />
+                  <col style={{ width: 60 }} />
+                  <col style={{ width: 140 }} />
+                  <col style={{ width: 116 }} />
+                  <col style={{ width: 88 }} />
+                </colgroup>
                 <TableHead>
                   <TableRow>
                     <TableCell>Customer</TableCell>
@@ -636,7 +677,7 @@ export default function SpecificationLibrary({
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filtered.map((document) => (
+                  {visibleFamilies.map((document) => (
                     <TableRow
                       key={document.family_id}
                       selected={document.family_id === selectedFamily}
@@ -647,11 +688,12 @@ export default function SpecificationLibrary({
                           color: document.company_name
                             ? "text.primary"
                             : "text.secondary",
+                          overflowWrap: "anywhere",
                         }}
                       >
                         {document.company_name || "Not assigned"}
                       </TableCell>
-                      <TableCell sx={{ minWidth: 220 }}>
+                      <TableCell>
                         <Button
                           onClick={() =>
                             setParams({ document: document.document_id })
@@ -661,6 +703,8 @@ export default function SpecificationLibrary({
                             minWidth: 0,
                             textAlign: "left",
                             justifyContent: "flex-start",
+                            lineHeight: 1.5,
+                            overflowWrap: "anywhere",
                           }}
                         >
                           {documentTitle(document)}
@@ -669,6 +713,7 @@ export default function SpecificationLibrary({
                           variant="caption"
                           color="text.secondary"
                           display="block"
+                          sx={{ overflowWrap: "anywhere" }}
                         >
                           {document.specification_id && document.title
                             ? `${document.specification_id} · `
@@ -766,6 +811,34 @@ export default function SpecificationLibrary({
                 </TableBody>
               </Table>
             </TableContainer>
+          )}
+          {filtered.length > 10 && (
+            <TablePagination
+              component="div"
+              count={filtered.length}
+              page={visibleListPage}
+              rowsPerPage={listRowsPerPage}
+              rowsPerPageOptions={[10, 25, 50]}
+              labelRowsPerPage="Specifications per page"
+              onPageChange={(_event, value) => setListPage(value)}
+              onRowsPerPageChange={(event) =>
+                setListRowsPerPage(Number(event.target.value))
+              }
+              sx={{
+                borderTop: "1px solid",
+                borderColor: "divider",
+                "& .MuiTablePagination-toolbar": {
+                  flexWrap: "wrap",
+                  justifyContent: "flex-end",
+                  px: { xs: 1, sm: 2 },
+                  py: { xs: 0.5, sm: 0 },
+                },
+                "& .MuiTablePagination-spacer": {
+                  display: { xs: "none", sm: "block" },
+                },
+                "& .MuiTablePagination-actions": { ml: { xs: 1, sm: 2 } },
+              }}
+            />
           )}
         </Paper>
       )}
@@ -1724,7 +1797,7 @@ export default function SpecificationLibrary({
               </Typography>
             )}
             {saveError && (
-              <Alert severity="error">
+              <Alert severity="error" ref={saveErrorRef} tabIndex={-1}>
                 {saveError}
                 {uploadedId && (
                   <Typography

@@ -93,8 +93,9 @@ export default function ReportAssessmentReview({
           }),
         },
       );
-      if (!mounted.current) return;
-      setOpen(false);
+      // The parent can still refresh this assessment after the reviewer selects
+      // another test. Only this component's local state depends on mounting.
+      if (mounted.current) setOpen(false);
       onSaved(updated);
     } catch (reason) {
       if (mounted.current)
@@ -120,6 +121,7 @@ export default function ReportAssessmentReview({
         sx={{
           px: { xs: 2, sm: 2.5 },
           py: 1.25,
+          flexShrink: 0,
           borderTop: "1px solid #e0e7f0",
           bgcolor: "#fafbfd",
         }}

@@ -46,7 +46,12 @@ import CompareArrowsOutlinedIcon from "@mui/icons-material/CompareArrowsOutlined
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
 import FilterListRoundedIcon from "@mui/icons-material/FilterListRounded";
-import { apiFetch, useResource } from "../api";
+import { apiFetch, request, useResource } from "../api";
+import {
+  manualAssessmentKey,
+  manualReviewIsBehind,
+  sameManualAssessment,
+} from "../manualReviewVersions";
 import { useAuth } from "../auth";
 import PdfPageViewer from "../components/PdfPageViewer";
 import ReportGenerationControls from "../components/ReportGenerationControls";
@@ -55,6 +60,9 @@ import ReportDimensions, {
 } from "../components/ReportDimensions";
 import ReportScopeControls from "../components/ReportScopeControls";
 import ReportAssessmentReview from "../components/ReportAssessmentReview";
+import ReportReviewSummary, {
+  type ReviewSummarySelection,
+} from "../components/ReportReviewSummary";
 import DocumentRevisionNotice from "../components/DocumentRevisionNotice";
 import SourceCoverageNotice from "../components/SourceCoverageNotice";
 import DocumentNotes from "../components/DocumentNotes";
@@ -338,6 +346,85 @@ export default function Comparison({ workspace }: PageProps) {
   }, [views]);
   const report =
     data.data?.document.document_id === documentId ? data.data : null;
+  // Update synchronously, including between two write callbacks batched by React.
+  const latestManualView = useRef({ documentId, report });
+  latestManualView.current = { documentId, report };
+  const manualRead = useRef<AbortController | null>(null);
+  const manualSequence = useRef(0);
+  const manualViewAlive = useRef(true);
+  useEffect(() => {
+    manualViewAlive.current = true;
+    return () => {
+      manualViewAlive.current = false;
+    };
+  }, []);
+  const [manualSyncIssue, setManualSyncIssue] = useState<string | null>(null);
+  const currentManualKey = report ? manualAssessmentKey(report) : null;
+  useEffect(() => {
+    setManualSyncIssue(null);
+    return () => {
+      manualRead.current?.abort();
+      manualSequence.current += 1;
+    };
+  }, [documentId, currentManualKey]);
+
+  function applyManualReview(updated: ComparisonData) {
+    if (!manualViewAlive.current) return;
+    const current = latestManualView.current;
+    if (
+      !current.report ||
+      current.documentId !== updated.document?.document_id ||
+      !sameManualAssessment(current.report, updated)
+    )
+      return;
+    manualRead.current?.abort();
+    const sequence = ++manualSequence.current;
+    if (!manualReviewIsBehind(current.report, updated)) {
+      latestManualView.current = { ...current, report: updated };
+      setManualSyncIssue(null);
+      data.setData(updated);
+      return;
+    }
+    // Do not merge overlays: an export ID belongs to one exact saved snapshot.
+    const controller = new AbortController();
+    manualRead.current = controller;
+    const key = manualAssessmentKey(current.report);
+    void request<ComparisonData>(
+      `/api/comparisons/${encodeURIComponent(current.documentId)}`,
+      { signal: controller.signal },
+    )
+      .then((fresh) => {
+        if (controller.signal.aborted || manualSequence.current !== sequence)
+          return;
+        const latest = latestManualView.current;
+        if (!latest.report || manualAssessmentKey(latest.report) !== key)
+          return;
+        if (
+          !sameManualAssessment(latest.report, fresh) ||
+          manualReviewIsBehind(latest.report, fresh)
+        )
+          throw new Error("The current saved review changed.");
+        latestManualView.current = { ...latest, report: fresh };
+        setManualSyncIssue(null);
+        data.setData(fresh);
+      })
+      .catch(() => {
+        if (
+          !controller.signal.aborted &&
+          manualSequence.current === sequence &&
+          latestManualView.current.report &&
+          manualAssessmentKey(latestManualView.current.report) === key
+        )
+          setManualSyncIssue(key);
+      });
+  }
+  async function reloadSavedReport() {
+    const key = latestManualView.current.report
+      ? manualAssessmentKey(latestManualView.current.report)
+      : null;
+    const loaded = await data.refresh();
+    if (loaded) setManualSyncIssue((saved) => (saved === key ? null : saved));
+  }
   const recentJob = operationStatus.data?.recent_job;
   const lastObserved = operationStatus.data?.latest;
   const failedAt = Date.parse(recentJob?.started_at ?? "");
@@ -393,6 +480,12 @@ export default function Comparison({ workspace }: PageProps) {
   const [tab, setTab] = useState("comparison");
   const [notice, setNotice] = useState("");
   const [toolsAnchor, setToolsAnchor] = useState<HTMLElement | null>(null);
+  const [summarySelection, setSummarySelection] =
+    useState<ReviewSummarySelection | null>(null);
+  useEffect(() => {
+    setSummarySelection(null);
+    setToolsAnchor(null);
+  }, [documentId, report?.comparison_id]);
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
   useEffect(() => setFilterAnchor(null), [documentId]);
   const attentionCount =
@@ -520,6 +613,9 @@ export default function Comparison({ workspace }: PageProps) {
         : next[Math.min(Math.max(oldIndex, 0), next.length - 1)]
             ?.requirement_id || "",
     });
+    latestManualView.current = { documentId, report: updated };
+    manualRead.current?.abort();
+    manualSequence.current += 1;
     data.setData(updated);
     setNotice(
       selected?.report_scope_exclusion
@@ -534,13 +630,20 @@ export default function Comparison({ workspace }: PageProps) {
       presentation="dialog"
       review={report.document_notes_review}
       sourceReviewUrl={`/specifications?${new URLSearchParams({ document: documentId })}`}
-      onUpdated={(notes) =>
-        data.setData((saved) =>
-          saved?.comparison_id === report.comparison_id
-            ? { ...saved, document_notes_review: notes }
-            : saved,
+      onUpdated={(notes) => {
+        const saved = latestManualView.current.report;
+        if (
+          !saved ||
+          !sameManualAssessment(saved, report) ||
+          saved.document_notes_review?.source_fingerprint !==
+            notes.source_fingerprint ||
+          (saved.document_notes_review?.version ?? 0) > notes.version
         )
-      }
+          return;
+        const updated = { ...saved, document_notes_review: notes };
+        latestManualView.current = { documentId, report: updated };
+        data.setData(updated);
+      }}
     />
   ) : null;
 
@@ -685,10 +788,27 @@ export default function Comparison({ workspace }: PageProps) {
         open={Boolean(toolsAnchor)}
         onClose={() => setToolsAnchor(null)}
       >
+        {report?.export_snapshot_id && (
+          <MenuItem
+            onClick={() => {
+              setToolsAnchor(null);
+              setSummarySelection({
+                documentId,
+                comparisonId: report.comparison_id,
+                exportSnapshotId: report.export_snapshot_id!,
+                sourceRunId: report.source_run_id,
+                inputFingerprint: report.report_input_fingerprint,
+              });
+            }}
+          >
+            <DescriptionOutlinedIcon fontSize="small" sx={{ mr: 1 }} />
+            Review summary
+          </MenuItem>
+        )}
         <MenuItem
           onClick={() => {
             setToolsAnchor(null);
-            data.refresh();
+            void reloadSavedReport();
           }}
           disabled={data.loading}
         >
@@ -705,6 +825,16 @@ export default function Comparison({ workspace }: PageProps) {
           </MenuItem>
         )}
       </Menu>
+      {report &&
+        summarySelection?.documentId === documentId &&
+        summarySelection.comparisonId === report.comparison_id && (
+          <ReportReviewSummary
+            key={`${documentId}-${summarySelection.comparisonId}-${summarySelection.exportSnapshotId}`}
+            selection={summarySelection}
+            latestExportSnapshotId={report.export_snapshot_id}
+            onClose={() => setSummarySelection(null)}
+          />
+        )}
       {!documentId ? (
         <Paper variant="outlined" sx={{ p: 5, textAlign: "center" }}>
           <Typography variant="h6">
@@ -725,6 +855,23 @@ export default function Comparison({ workspace }: PageProps) {
         </Paper>
       ) : (
         <>
+          {manualSyncIssue === currentManualKey && manualSyncIssue && (
+            <Alert
+              severity="info"
+              sx={{ mb: 1.5 }}
+              action={
+                <Button
+                  disabled={data.loading}
+                  onClick={() => void reloadSavedReport()}
+                >
+                  Reload saved report
+                </Button>
+              }
+            >
+              Your changes were saved, but the latest combined review could not
+              be loaded. Your saved records have been kept.
+            </Alert>
+          )}
           {data.error && (
             <Alert
               severity="error"
@@ -864,6 +1011,7 @@ export default function Comparison({ workspace }: PageProps) {
                         md: "clamp(220px, 23%, 270px) minmax(0,1fr)",
                         xl: "clamp(250px, 22%, 290px) minmax(0,1fr)",
                       },
+                      gridTemplateRows: { md: "minmax(0, 1fr)" },
                       gap: { xs: 1.5, md: 1.5 },
                       flex: 1,
                       minHeight: 0,
@@ -1194,9 +1342,12 @@ export default function Comparison({ workspace }: PageProps) {
                     </Paper>
                     <Paper
                       variant="outlined"
+                      data-testid="report-comparison-panel"
                       sx={{
                         minWidth: 0,
                         minHeight: { xs: 380, md: 0 },
+                        alignSelf: "start",
+                        maxHeight: { md: "100%" },
                         display: "flex",
                         flexDirection: "column",
                         overflow: "hidden",
@@ -1209,7 +1360,7 @@ export default function Comparison({ workspace }: PageProps) {
                         aria-label="Selected test details"
                         tabIndex={-1}
                         sx={{
-                          flex: 1,
+                          flex: "0 1 auto",
                           minHeight: 0,
                           overflowY: { md: "auto" },
                           overflowAnchor: "none",
@@ -1407,7 +1558,7 @@ export default function Comparison({ workspace }: PageProps) {
                           documentId={documentId}
                           report={report}
                           requirement={selected}
-                          onSaved={(updated) => data.setData(updated)}
+                          onSaved={applyManualReview}
                         />
                       )}
                     </Paper>

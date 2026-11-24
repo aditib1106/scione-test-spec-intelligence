@@ -12,6 +12,8 @@ import {
   IconButton,
   Link,
   Stack,
+  Tab,
+  Tabs,
   Typography,
 } from "@mui/material";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
@@ -20,6 +22,8 @@ import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import { request } from "../api";
 import { useAuth } from "../auth";
 import type { AssessmentReview, ComparisonData } from "../comparisonTypes";
+import RelatedReviewReferences from "./RelatedReviewReferences";
+import { reviewerLabel } from "../reviewerLabels";
 
 interface Props {
   documentId: string;
@@ -81,6 +85,9 @@ function HistoryPanel({ documentId, report, requirementId }: Props) {
   const [events, setEvents] = useState<HistoryEntry[] | null>(null);
   const [loadedRevision, setLoadedRevision] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [historyTab, setHistoryTab] = useState<"current" | "related">(
+    "current",
+  );
   const revision = Object.values(report.assessment_reviews ?? {})
     .map(
       (review) =>
@@ -100,7 +107,7 @@ function HistoryPanel({ documentId, report, requirementId }: Props) {
   );
 
   useEffect(() => {
-    if (!expanded) return;
+    if (!expanded || historyTab !== "current") return;
     const controller = new AbortController();
     setLoading(true);
     setError("");
@@ -144,7 +151,14 @@ function HistoryPanel({ documentId, report, requirementId }: Props) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [documentId, report.comparison_id, expanded, revision, attempt]);
+  }, [
+    documentId,
+    report.comparison_id,
+    expanded,
+    revision,
+    attempt,
+    historyTab,
+  ]);
 
   const visible =
     loadedRevision === revision
@@ -174,7 +188,7 @@ function HistoryPanel({ documentId, report, requirementId }: Props) {
         aria-labelledby={`${panelId}-title`}
         aria-describedby={`${panelId}-subtitle`}
         fullWidth
-        maxWidth="sm"
+        maxWidth={historyTab === "related" ? "md" : "sm"}
         PaperProps={{
           id: `${panelId}-dialog`,
           sx: { maxHeight: "min(80dvh, 720px)", borderRadius: 2.5 },
@@ -227,6 +241,28 @@ function HistoryPanel({ documentId, report, requirementId }: Props) {
             <CloseRoundedIcon />
           </IconButton>
         </DialogTitle>
+        {requirementId && (
+          <Tabs
+            value={historyTab}
+            onChange={(_, value: "current" | "related") => setHistoryTab(value)}
+            aria-label="Review history scope"
+            variant="fullWidth"
+            sx={{ px: { xs: 1, sm: 2 } }}
+          >
+            <Tab
+              value="current"
+              label="This assessment"
+              id={`${panelId}-current-tab`}
+              aria-controls={`${panelId}-current-panel`}
+            />
+            <Tab
+              value="related"
+              label="Related past reviews"
+              id={`${panelId}-related-tab`}
+              aria-controls={`${panelId}-related-panel`}
+            />
+          </Tabs>
+        )}
         <DialogContent
           id={panelId}
           role="region"
@@ -239,214 +275,242 @@ function HistoryPanel({ documentId, report, requirementId }: Props) {
             borderColor: "#e9edf3",
           }}
         >
-          {pending ? (
-            <Stack
-              direction="row"
-              alignItems="center"
-              gap={1}
-              role="status"
-              sx={{ py: 5, justifyContent: "center" }}
+          {historyTab === "related" && requirementId ? (
+            <Box
+              id={`${panelId}-related-panel`}
+              role="tabpanel"
+              aria-labelledby={`${panelId}-related-tab`}
             >
-              <CircularProgress size={16} />
-              <Typography variant="body2">Loading review history…</Typography>
-            </Stack>
-          ) : error ? (
-            <Alert
-              severity="info"
-              action={
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={() => setAttempt((value) => value + 1)}
-                >
-                  Retry
-                </Button>
+              <RelatedReviewReferences
+                key={JSON.stringify([
+                  documentId,
+                  report.comparison_id,
+                  requirementId,
+                  report.report_input_fingerprint,
+                ])}
+                documentId={documentId}
+                comparisonId={report.comparison_id}
+                requirementId={requirementId}
+                inputFingerprint={report.report_input_fingerprint}
+              />
+            </Box>
+          ) : (
+            <Box
+              id={`${panelId}-current-panel`}
+              role={requirementId ? "tabpanel" : undefined}
+              aria-labelledby={
+                requirementId ? `${panelId}-current-tab` : undefined
               }
             >
-              {error}
-            </Alert>
-          ) : visible?.length ? (
-            <>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: "block", mb: 2.5 }}
-              >
-                {visible.length} saved{" "}
-                {visible.length === 1 ? "decision" : "decisions"} · Newest first
-              </Typography>
-              <Box
-                component="ol"
-                aria-label="Saved assessment review entries"
-                sx={{
-                  m: 0,
-                  p: 0,
-                  listStyle: "none",
-                  display: "grid",
-                }}
-              >
-                {visible.map((event, index) => (
+              {pending ? (
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  gap={1}
+                  role="status"
+                  sx={{ py: 5, justifyContent: "center" }}
+                >
+                  <CircularProgress size={16} />
+                  <Typography variant="body2">
+                    Loading review history…
+                  </Typography>
+                </Stack>
+              ) : error ? (
+                <Alert
+                  severity="info"
+                  action={
+                    <Button
+                      color="inherit"
+                      size="small"
+                      onClick={() => setAttempt((value) => value + 1)}
+                    >
+                      Retry
+                    </Button>
+                  }
+                >
+                  {error}
+                </Alert>
+              ) : visible?.length ? (
+                <>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", mb: 2.5 }}
+                  >
+                    {visible.length} saved{" "}
+                    {visible.length === 1 ? "decision" : "decisions"} · Newest
+                    first
+                  </Typography>
                   <Box
-                    component="li"
-                    key={event.review_id}
+                    component="ol"
+                    aria-label="Saved assessment review entries"
                     sx={{
+                      m: 0,
+                      p: 0,
+                      listStyle: "none",
                       display: "grid",
-                      gridTemplateColumns: "18px minmax(0, 1fr)",
-                      gap: 1.5,
-                      overflowWrap: "anywhere",
                     }}
                   >
-                    <Box
-                      aria-hidden="true"
-                      sx={{
-                        position: "relative",
-                        pt: 0.5,
-                        "&::after":
-                          index < visible.length - 1
-                            ? {
-                                content: '""',
-                                position: "absolute",
-                                width: "1px",
-                                bgcolor: "#dce4ee",
-                                top: 18,
-                                bottom: 0,
-                                left: 6,
-                              }
-                            : {},
-                      }}
-                    >
+                    {visible.map((event, index) => (
                       <Box
+                        component="li"
+                        key={event.review_id}
                         sx={{
-                          width: 13,
-                          height: 13,
-                          borderRadius: "50%",
-                          bgcolor: index === 0 ? "#4775b8" : "#fff",
-                          border: "2px solid",
-                          borderColor: index === 0 ? "#4775b8" : "#c2cedd",
+                          display: "grid",
+                          gridTemplateColumns: "18px minmax(0, 1fr)",
+                          gap: 1.5,
+                          overflowWrap: "anywhere",
                         }}
-                      />
-                    </Box>
-                    <Box
-                      sx={{
-                        minWidth: 0,
-                        pb: index < visible.length - 1 ? 3 : 0,
-                      }}
-                    >
-                      {!requirementId && (
-                        <Typography variant="body2" fontWeight={650}>
-                          {names.get(event.requirement_id) ?? "Saved test"}
-                        </Typography>
-                      )}
-                      <Stack
-                        direction="row"
-                        alignItems="flex-start"
-                        justifyContent="space-between"
-                        gap={1}
                       >
-                        <Box sx={{ minWidth: 0 }}>
-                          <Typography
-                            variant="body2"
-                            fontWeight={700}
-                            sx={{ fontSize: 14, lineHeight: 1.5 }}
+                        <Box
+                          aria-hidden="true"
+                          sx={{
+                            position: "relative",
+                            pt: 0.5,
+                            "&::after":
+                              index < visible.length - 1
+                                ? {
+                                    content: '""',
+                                    position: "absolute",
+                                    width: "1px",
+                                    bgcolor: "#dce4ee",
+                                    top: 18,
+                                    bottom: 0,
+                                    left: 6,
+                                  }
+                                : {},
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              width: 13,
+                              height: 13,
+                              borderRadius: "50%",
+                              bgcolor: index === 0 ? "#4775b8" : "#fff",
+                              border: "2px solid",
+                              borderColor: index === 0 ? "#4775b8" : "#c2cedd",
+                            }}
+                          />
+                        </Box>
+                        <Box
+                          sx={{
+                            minWidth: 0,
+                            pb: index < visible.length - 1 ? 3 : 0,
+                          }}
+                        >
+                          {!requirementId && (
+                            <Typography variant="body2" fontWeight={650}>
+                              {names.get(event.requirement_id) ?? "Saved test"}
+                            </Typography>
+                          )}
+                          <Stack
+                            direction="row"
+                            alignItems="flex-start"
+                            justifyContent="space-between"
+                            gap={1}
                           >
-                            {decisionLabels[event.decision] ?? "Saved decision"}
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography
+                                variant="body2"
+                                fontWeight={700}
+                                sx={{ fontSize: 14, lineHeight: 1.5 }}
+                              >
+                                {decisionLabels[event.decision] ??
+                                  "Saved decision"}
+                              </Typography>
+                              {index === 0 && (
+                                <Typography
+                                  variant="caption"
+                                  color="primary.main"
+                                  fontWeight={650}
+                                >
+                                  Latest
+                                </Typography>
+                              )}
+                            </Box>
+                            <Chip
+                              size="small"
+                              label={
+                                event.review_status === "accepted"
+                                  ? "Reviewed"
+                                  : "Needs review"
+                              }
+                              sx={{
+                                height: 23,
+                                fontSize: 11,
+                                flexShrink: 0,
+                                bgcolor:
+                                  event.review_status === "accepted"
+                                    ? "#eaf5ef"
+                                    : "#fff3db",
+                                color:
+                                  event.review_status === "accepted"
+                                    ? "#2c6b4e"
+                                    : "#936315",
+                                "& .MuiChip-label": { px: 1 },
+                              }}
+                            />
+                          </Stack>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                            sx={{ mt: 0.75, lineHeight: 1.5 }}
+                          >
+                            <Box component="span" title={event.actor}>
+                              {reviewerLabel(event, session?.user)}
+                            </Box>
+                            {" · "}
+                            <Box component="time" dateTime={event.created_at}>
+                              {dateLabel(event.created_at)}
+                            </Box>
                           </Typography>
-                          {index === 0 && (
+                          {event.note && (
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                mt: 1,
+                                px: 1.5,
+                                py: 1.25,
+                                borderRadius: 1.25,
+                                bgcolor: "#f5f7fa",
+                                whiteSpace: "pre-wrap",
+                                lineHeight: 1.65,
+                              }}
+                            >
+                              {event.note}
+                            </Typography>
+                          )}
+                          {event.carried_from_review_id && (
                             <Typography
                               variant="caption"
-                              color="primary.main"
-                              fontWeight={650}
+                              color="text.secondary"
+                              display="block"
+                              sx={{ mt: 0.5 }}
                             >
-                              Latest
+                              Review carried forward from a compatible saved
+                              assessment.
                             </Typography>
                           )}
                         </Box>
-                        <Chip
-                          size="small"
-                          label={
-                            event.review_status === "accepted"
-                              ? "Reviewed"
-                              : "Needs review"
-                          }
-                          sx={{
-                            height: 23,
-                            fontSize: 11,
-                            flexShrink: 0,
-                            bgcolor:
-                              event.review_status === "accepted"
-                                ? "#eaf5ef"
-                                : "#fff3db",
-                            color:
-                              event.review_status === "accepted"
-                                ? "#2c6b4e"
-                                : "#936315",
-                            "& .MuiChip-label": { px: 1 },
-                          }}
-                        />
-                      </Stack>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        display="block"
-                        sx={{ mt: 0.75, lineHeight: 1.5 }}
-                      >
-                        <Box component="span" title={event.actor}>
-                          {event.actor === "local_reviewer"
-                            ? "Local reviewer"
-                            : event.actor === session?.user?.id
-                              ? session.user.display_name ||
-                                session.user.username
-                              : event.actor || "Reviewer not recorded"}
-                        </Box>
-                        {" · "}
-                        <Box component="time" dateTime={event.created_at}>
-                          {dateLabel(event.created_at)}
-                        </Box>
-                      </Typography>
-                      {event.note && (
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            mt: 1,
-                            px: 1.5,
-                            py: 1.25,
-                            borderRadius: 1.25,
-                            bgcolor: "#f5f7fa",
-                            whiteSpace: "pre-wrap",
-                            lineHeight: 1.65,
-                          }}
-                        >
-                          {event.note}
-                        </Typography>
-                      )}
-                      {event.carried_from_review_id && (
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          display="block"
-                          sx={{ mt: 0.5 }}
-                        >
-                          Review carried forward from a compatible saved
-                          assessment.
-                        </Typography>
-                      )}
-                    </Box>
+                      </Box>
+                    ))}
                   </Box>
-                ))}
-              </Box>
-            </>
-          ) : (
-            <Box sx={{ py: 4, textAlign: "center" }}>
-              <Typography variant="body2" fontWeight={650}>
-                No saved decisions yet
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mt: 0.75 }}
-              >
-                The first saved review for this assessment will appear here.
-              </Typography>
+                </>
+              ) : (
+                <Box sx={{ py: 4, textAlign: "center" }}>
+                  <Typography variant="body2" fontWeight={650}>
+                    No saved decisions yet
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.75 }}
+                  >
+                    The first saved review for this assessment will appear here.
+                  </Typography>
+                </Box>
+              )}
             </Box>
           )}
         </DialogContent>
@@ -457,7 +521,10 @@ function HistoryPanel({ documentId, report, requirementId }: Props) {
             justifyContent: "space-between",
           }}
         >
-          {!pending && !error && Boolean(events?.length) ? (
+          {historyTab === "current" &&
+          !pending &&
+          !error &&
+          Boolean(events?.length) ? (
             <Link
               href={`/api/comparisons/${encodeURIComponent(documentId)}/reviews?download=true`}
               variant="caption"
