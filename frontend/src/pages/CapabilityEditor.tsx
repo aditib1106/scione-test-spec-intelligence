@@ -36,6 +36,8 @@ import type {
 } from "../types";
 import { ApiError } from "../api";
 import CapabilityParameters from "../components/CapabilityParameters";
+import CapabilityResources from "../components/CapabilityResources";
+import { shortcutResources } from "../components/labResourceClaims";
 import {
   claimDraft,
   savedClaim,
@@ -162,6 +164,24 @@ export default function CapabilityEditor({
   const [detailsReviewed, setDetailsReviewed] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const submitting = useRef(false);
+  const resourceClaimIds = new Set(
+    Object.values(shortcutResources(claims)).map((claim) => claim!.id),
+  );
+  const updateClaims = (next: DraftClaim[]) => {
+    const changed = new Set(
+      claims
+        .filter(
+          (claim) => next.find((entry) => entry.id === claim.id) !== claim,
+        )
+        .map((claim) => `claim-${claim.id}`),
+    );
+    setClaims(next);
+    setFieldErrors((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([key]) => !changed.has(key)),
+      ),
+    );
+  };
 
   const clearFieldError = (key: string) =>
     setFieldErrors((current) => {
@@ -743,24 +763,11 @@ export default function CapabilityEditor({
               )}
             </Box>
           </Box>
+          <CapabilityResources claims={claims} onChange={updateClaims} />
           <CapabilityParameters
             claims={claims}
-            onChange={(next) => {
-              const changed = new Set(
-                claims
-                  .filter(
-                    (claim) =>
-                      next.find((entry) => entry.id === claim.id) !== claim,
-                  )
-                  .map((claim) => `claim-${claim.id}`),
-              );
-              setClaims(next);
-              setFieldErrors((current) =>
-                Object.fromEntries(
-                  Object.entries(current).filter(([key]) => !changed.has(key)),
-                ),
-              );
-            }}
+            onChange={updateClaims}
+            hiddenClaimIds={resourceClaimIds}
             active={open}
             validationAttempt={validationAttempt}
             errors={Object.fromEntries(

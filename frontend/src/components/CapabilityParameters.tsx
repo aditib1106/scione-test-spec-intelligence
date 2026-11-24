@@ -38,6 +38,7 @@ interface Props {
   active: boolean;
   errors?: Record<string, string | undefined>;
   validationAttempt?: number;
+  hiddenClaimIds?: ReadonlySet<string>;
 }
 const isReporting = (claim: DraftClaim) =>
   ["reporting", "criterion"].includes(claim.kind);
@@ -76,6 +77,7 @@ export default function CapabilityParameters({
   active,
   errors = {},
   validationAttempt = 0,
+  hiddenClaimIds,
 }: Props) {
   const registry = useResource<{ parameters: ParameterDefinition[] }>(
     active ? "/api/parameters" : null,
@@ -183,7 +185,8 @@ export default function CapabilityParameters({
       )}
       {[false, true].map((reporting) => {
         const group = claims.filter(
-          (claim) => isReporting(claim) === reporting,
+          (claim) =>
+            !hiddenClaimIds?.has(claim.id) && isReporting(claim) === reporting,
         );
         const title = reporting ? "Measurements & reporting" : "Conditions";
         return (
