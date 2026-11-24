@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from scione.library.assessment_reviews import SQLAssessmentReviews
 from scione.library.candidate_display import candidate_lab_entries
+from scione.library.clarifications import SQLCustomerClarifications
 from scione.library.comparison_explanations import present_comparison_explanations
 from scione.library.store import LibraryStore, digest
 from scione.matching.batching import MATCHING_BATCH_POLICY_VERSION
@@ -27,9 +28,10 @@ from scione.specifications.review import (
 )
 from scione.structured import compare_requirement, normalize_capability
 from scione.structured.models import NORMALIZER_VERSION, AtomicClaim
+from scione.structured.normalization import SOURCE_AUDIT_POLICY_VERSION
 
 COMPARISON_POLICY_VERSION = "native_atoms_first_v6"
-EXPORT_PRESENTATION_VERSION = "lab_gap_pdf_v2"
+EXPORT_PRESENTATION_VERSION = "lab_gap_pdf_v3_clarifications"
 _READ_CACHE_INITIALIZATION = Lock()
 _READ_CACHE_LIMIT = 32
 _COMPARISON_CACHE_LIMIT = 8
@@ -79,6 +81,7 @@ class LibraryWorkspace:
                 "normalizer": NORMALIZER_VERSION,
                 "registry": REGISTRY_VERSION,
                 "review_policy": REVIEW_POLICY_VERSION,
+                "source_audit_policy": SOURCE_AUDIT_POLICY_VERSION,
                 "catalog": [self.workspace.catalog.id, self.workspace.catalog.version],
             }
         )
@@ -248,6 +251,7 @@ class LibraryWorkspace:
             "policies": [
                 COMPARISON_POLICY_VERSION, NORMALIZER_VERSION, REGISTRY_VERSION,
                 REVIEW_POLICY_VERSION, MATCHING_PROMPT_VERSION, MATCHING_VALIDATION_VERSION,
+                SOURCE_AUDIT_POLICY_VERSION,
                 MATCHING_PROJECTION_VERSION, MATCHING_BATCH_POLICY_VERSION,
                 RETRIEVAL_POLICY_VERSION,
             ],
@@ -476,6 +480,7 @@ class LibraryWorkspace:
             "parameter_policy_version": REGISTRY_VERSION,
             "comparison_policy_version": COMPARISON_POLICY_VERSION,
             "source_review_policy_version": REVIEW_POLICY_VERSION,
+            "source_audit_policy_version": SOURCE_AUDIT_POLICY_VERSION,
             "requirements": rows,
             "summary": summary,
             "source_coverage_issues": source_coverage,
@@ -515,16 +520,21 @@ class LibraryWorkspace:
         reviews = SQLAssessmentReviews(
             self.store, self.workspace.labs.workspace_id
         ).latest_for_assessment(saved)
+        clarifications = SQLCustomerClarifications(
+            self.store, self.workspace.labs.workspace_id
+        ).snapshot(saved)
         # Human decisions do not alter machine identity or its immutable
         # checks. Export a separately addressed snapshot so PDF/JSON includes
         # the exact saved decision versions, while earlier exports stay fixed.
         export = self.store.save_comparison(
-            digest([EXPORT_PRESENTATION_VERSION, saved["comparison_id"], reviews]),
+            digest([EXPORT_PRESENTATION_VERSION, saved["comparison_id"], reviews, clarifications]),
             {**saved, "machine_comparison_id": saved["comparison_id"],
-             "assessment_reviews": reviews, "export_format_version": EXPORT_PRESENTATION_VERSION},
+             "assessment_reviews": reviews, "customer_clarifications": clarifications,
+             "export_format_version": EXPORT_PRESENTATION_VERSION},
         )
         return {**(explanations if explanations is not None else saved),
                 **({"assessment_reviews": reviews} if reviews else {}),
+                **({"customer_clarifications": clarifications} if clarifications else {}),
                 "document_notes_review": document_notes_view(
                     self.workspace, saved["document"]["document_id"], run=source_run
                 ),
@@ -558,6 +568,58 @@ class LibraryWorkspace:
                 409, "The assessment changed while saving. Review the current result."
             )
         return updated
+
+    @staticmethod
+    def _clarification_thread(current: dict, requirement_id: str) -> dict:
+        if not any(row["requirement_id"] == requirement_id for row in current["requirements"]):
+            raise HTTPException(400, "Select a test from this assessment.")
+        thread = current.get("customer_clarifications", {}).get(
+            requirement_id, {"version": 0, "events": []}
+        )
+        return {
+            "document_id": current["document"]["document_id"],
+            "source_run_id": current["source_run_id"],
+            "comparison_id": current["comparison_id"],
+            "input_fingerprint": current["report_input_fingerprint"],
+            "requirement_id": requirement_id,
+            **thread,
+        }
+
+    def clarification_history(
+        self, document_id: str, requirement_id: str, comparison_id: str,
+        input_fingerprint: str | None = None,
+    ) -> dict:
+        current = self.comparison(document_id)
+        if current["comparison_id"] != comparison_id or (
+            input_fingerprint is not None
+            and current["report_input_fingerprint"] != input_fingerprint
+        ):
+            raise HTTPException(409, "The assessment changed. Refresh its clarification log.")
+        return self._clarification_thread(current, requirement_id)
+
+    def record_clarification(self, document_id: str, body) -> dict:
+        current = self.comparison(document_id)
+        if (
+            current["comparison_id"] != body.comparison_id
+            or current["report_input_fingerprint"] != body.input_fingerprint
+        ):
+            raise HTTPException(
+                409, "The assessment changed. Refresh before recording a clarification."
+            )
+        self._clarification_thread(current, body.requirement_id)
+        requirement = next(
+            row for row in current["requirements"] if row["requirement_id"] == body.requirement_id
+        )
+        SQLCustomerClarifications(self.store, self.workspace.labs.workspace_id).save(
+            current, requirement, body
+        )
+        updated = self.comparison(document_id)
+        if updated["comparison_id"] != current["comparison_id"]:
+            raise HTTPException(
+                409,
+                "The assessment changed while recording. Refresh to review the saved entry.",
+            )
+        return {**self._clarification_thread(updated, body.requirement_id), "comparison": updated}
 
     def _assert_comparison_inputs_current(
         self, report, document: dict, matching_revision: str | None = None

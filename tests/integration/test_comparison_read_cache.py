@@ -10,6 +10,8 @@ from test_library_api import _seed
 from scione.api.contracts import AssessmentReview
 from scione.api.workspace import Workspace
 from scione.config import Settings
+from scione.matching import input_fingerprint
+from scione.matching.service import SemanticMatchingRunner
 from scione.structured.pdf import render_comparison_pdf
 
 
@@ -88,6 +90,45 @@ def test_live_lab_and_source_review_invalidate_cached_report(cached_report):
     reviewed = workspace.library.comparison(source.document_id)
     assert reviewed["comparison_id"] != changed["comparison_id"]
     assert counts == {"draft": 3, "compile": 3}
+
+
+def test_source_audit_policy_change_readdresses_export_without_changing_semantic_inputs(
+    cached_report, monkeypatch
+):
+    workspace, source, _run, counts = cached_report
+
+    def forbid_inference(*_args, **_kwargs):
+        pytest.fail("A source-audit diagnostic policy update must not call a model.")
+
+    monkeypatch.setattr(SemanticMatchingRunner, "run", forbid_inference)
+    original = workspace.library.comparison(source.document_id)
+    old_export = workspace.library.store.comparison(original["export_snapshot_id"])
+    old_pdf = workspace.library.store.comparison_pdf(
+        original["export_snapshot_id"], render_comparison_pdf
+    )
+    semantic_before = input_fingerprint(
+        workspace.matching.snapshot(workspace.draft(source.document_id))
+    )
+    counts_before = dict(counts)
+    monkeypatch.setattr(
+        "scione.library.workspace.SOURCE_AUDIT_POLICY_VERSION", "native_clause_literal_future_test"
+    )
+    changed = workspace.library.comparison(source.document_id)
+    assert changed["source_audit_policy_version"] == "native_clause_literal_future_test"
+    assert changed["comparison_id"] != original["comparison_id"]
+    assert changed["export_snapshot_id"] != original["export_snapshot_id"]
+    assert changed["report_input_fingerprint"] == original["report_input_fingerprint"]
+    assert changed["source_run_id"] == original["source_run_id"]
+    assert changed["requirements"] == original["requirements"]
+    assert counts == {"draft": counts_before["draft"] + 1, "compile": counts_before["compile"] + 1}
+    semantic_after = input_fingerprint(
+        workspace.matching.snapshot(workspace.draft(source.document_id))
+    )
+    assert semantic_after == semantic_before
+    assert workspace.library.store.comparison(original["export_snapshot_id"]) == old_export
+    assert workspace.library.store.comparison_pdf(
+        original["export_snapshot_id"], render_comparison_pdf
+    ) == old_pdf
 
 
 def test_warm_cache_rechecks_inputs_before_publishing(cached_report, monkeypatch):

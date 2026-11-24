@@ -51,6 +51,8 @@ from scione.structured.source_clauses import (
 )
 from scione.structured.source_occurrences import prove_same_numeric_occurrence
 
+SOURCE_AUDIT_POLICY_VERSION = "native_clause_literal_v2"
+
 _NUMBER = NUMBER
 _QUANTITY = re.compile(
     rf"{NUMBER_START}(?P<op>>=|<=|≥|≤|>|<)?\s*(?P<first>{_NUMBER})"
@@ -1791,7 +1793,11 @@ def _native_clause_audit(
                 break
             # An explicitly preserved structured categorical/dimensional value
             # may own its literal quantities; its broad source quote may not.
-            value = _text(claim.text_value or "")
+            # Literal ownership must use the recorded wording. `_text` rewrites
+            # number words ("three" -> "3"), so comparing that transformed value
+            # against the untouched clause falsely reports retained quantities as
+            # missing. Parse quantities only after the original text is located.
+            value = claim.text_value or ""
             if value and citation_contains(clause, value):
                 if any(
                     item.value == quantity.value and item.unit == quantity.unit

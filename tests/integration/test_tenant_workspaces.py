@@ -452,6 +452,7 @@ def test_real_auth_sessions_are_isolated_and_normal_views_keep_latest_filename(t
     source = a.specs.import_pdf("immutable-original.pdf", pdf())
     b.specs.import_pdf("private-b.pdf", a.specs.read_pdf(source.document_id))
     run = seed_run(a, source)
+    actor_a = manager.store.user_by_username("account-a")["id"]
     manager.close()
     registry.close_all()
     app = create_app(config, frontend_dir=tmp_path / "no-frontend")
@@ -521,6 +522,52 @@ def test_real_auth_sessions_are_isolated_and_normal_views_keep_latest_filename(t
             assert accepted.json()["assessment_reviews"]["req_gloss"]["review_status"] == (
                 "accepted"
             )
+            clarification_path = comparison_path + "/clarifications"
+            clarification_body = {
+                "comparison_id": report["comparison_id"],
+                "input_fingerprint": report["report_input_fingerprint"],
+                "requirement_id": "req_gloss", "expected_version": 0,
+                "client_request_id": "876fe716-fdf1-4ef0-9099-c9e0a96cb388",
+                "event_kind": "question", "text": "Private lab A customer question.",
+                "contact": "Customer engineering team",
+            }
+            no_csrf = await client_a.post(clarification_path, json=clarification_body)
+            assert no_csrf.status_code == 403
+            recorded = await client_a.post(
+                clarification_path, headers={"X-CSRF-Token": csrf},
+                json=clarification_body,
+            )
+            assert recorded.status_code == 200, recorded.text
+            assert recorded.json()["version"] == 1
+            assert recorded.json()["events"][0]["text"] == clarification_body["text"]
+            own_thread = await client_a.get(clarification_path, params={
+                "comparison_id": report["comparison_id"],
+                "input_fingerprint": report["report_input_fingerprint"],
+                "requirement_id": "req_gloss",
+            })
+            assert own_thread.status_code == 200, own_thread.text
+            assert own_thread.json()["version"] == 1
+            assert own_thread.json()["events"][0]["actor"] == actor_a
+            assert own_thread.json()["events"][0]["actor_label"] == "Laboratory A"
+            foreign_thread = await client_b.get(clarification_path, params={
+                "comparison_id": report["comparison_id"],
+                "input_fingerprint": report["report_input_fingerprint"],
+                "requirement_id": "req_gloss",
+            })
+            foreign_write = await client_b.post(
+                clarification_path,
+                headers={"X-CSRF-Token": login_b.json()["csrf_token"]},
+                json=clarification_body,
+            )
+            for foreign_action in (foreign_thread, foreign_write):
+                assert foreign_action.status_code in (400, 404, 409)
+                assert clarification_body["text"] not in foreign_action.text
+            assert recorded.json()["comparison"]["requirements"][0]["comparison"][
+                "status"
+            ] == machine_status
+            assert recorded.json()["comparison"]["assessment_reviews"]["req_gloss"][
+                "review_status"
+            ] == "accepted"
             for excluded in (True, False):
                 action = await client_a.post(
                     f"/api/reports/{source.document_id}/exclusions",

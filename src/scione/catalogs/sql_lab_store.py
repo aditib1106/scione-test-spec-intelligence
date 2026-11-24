@@ -409,45 +409,115 @@ class SQLLabStore:
                     aliases=[alias.model_dump(mode="json") for alias in method.aliases],
                 )
             )
-        connection.execute(delete(lab_claims).where(lab_claims.c.workspace_id == self.workspace_id))
-        connection.execute(
-            delete(lab_entries).where(lab_entries.c.workspace_id == self.workspace_id)
-        )
-        for position, capability in enumerate(lab.capabilities):
-            payload = capability.model_dump(mode="json")
+        # Keep current rows stable when one field or only profile metadata changes.
+        # Full immutable profile revisions are still recorded separately below.
+        current_entries = {
+            row["capability_id"]: dict(row)
+            for row in connection.execute(
+                select(lab_entries).where(lab_entries.c.workspace_id == self.workspace_id)
+            ).mappings()
+        }
+        current_claims = {}
+        for row in connection.execute(
+            select(lab_claims).where(lab_claims.c.workspace_id == self.workspace_id)
+        ).mappings():
+            current_claims.setdefault(row["capability_id"], {})[row["claim_id"]] = dict(row)
+        identifiers = [capability.id for capability in lab.capabilities]
+        if len(set(identifiers)) != len(identifiers):
+            raise LabStoreError("Each capability must have a unique ID.")
+        removed = set(current_entries) - set(identifiers)
+        if removed:
             connection.execute(
-                insert(lab_entries).values(
-                    workspace_id=self.workspace_id,
-                    capability_id=capability.id,
-                    position=position,
-                    canonical_test_id=capability.canonical_test_id,
-                    method_ids=capability.method_ids,
-                    declared_constraints=capability.declared_constraints,
-                    structured_limits=payload["structured_limits"],
-                    explicit_claims=payload["atomic_claims"],
-                    notes=capability.notes,
-                    price=str(capability.price) if capability.price is not None else None,
-                    currency=capability.currency,
-                    pricing_basis=capability.pricing_basis,
+                delete(lab_claims).where(
+                    lab_claims.c.workspace_id == self.workspace_id,
+                    lab_claims.c.capability_id.in_(removed),
                 )
             )
-            for atom_position, claim in enumerate(normalize_capability(capability)):
+            connection.execute(
+                delete(lab_entries).where(
+                    lab_entries.c.workspace_id == self.workspace_id,
+                    lab_entries.c.capability_id.in_(removed),
+                )
+            )
+        for position, capability in enumerate(lab.capabilities):
+            payload = capability.model_dump(mode="json")
+            entry = {
+                "workspace_id": self.workspace_id,
+                "capability_id": capability.id,
+                "position": position,
+                "canonical_test_id": capability.canonical_test_id,
+                "method_ids": capability.method_ids,
+                "declared_constraints": capability.declared_constraints,
+                "structured_limits": payload["structured_limits"],
+                "explicit_claims": payload["atomic_claims"],
+                "notes": capability.notes,
+                "price": str(capability.price) if capability.price is not None else None,
+                "currency": capability.currency,
+                "pricing_basis": capability.pricing_basis,
+            }
+            previous = current_entries.get(capability.id)
+            if previous is None:
+                connection.execute(insert(lab_entries).values(**entry))
+            else:
+                changes = {key: value for key, value in entry.items() if previous[key] != value}
+                if changes:
+                    connection.execute(
+                        update(lab_entries)
+                        .where(
+                            lab_entries.c.workspace_id == self.workspace_id,
+                            lab_entries.c.capability_id == capability.id,
+                        )
+                        .values(**changes)
+                    )
+
+            # Normalize as before so current policy changes cannot be skipped simply
+            # because the entered wording is unchanged. Only SQL writes are reduced.
+            indexed = normalize_capability(capability)
+            claim_ids = [claim.id for claim in indexed]
+            if len(set(claim_ids)) != len(claim_ids):
+                raise LabStoreError("Each indexed capability field must have a unique ID.")
+            existing = current_claims.get(capability.id, {})
+            removed_claims = set(existing) - set(claim_ids)
+            if removed_claims:
                 connection.execute(
-                    insert(lab_claims).values(
-                        workspace_id=self.workspace_id,
-                        capability_id=capability.id,
-                        claim_id=claim.id,
-                        position=atom_position,
-                        parameter_id=claim.parameter_id,
-                        kind=claim.kind,
-                        stage=claim.stage,
-                        configuration=claim.configuration,
-                        sequence=claim.sequence,
-                        unit=claim.unit,
-                        normalizer_version=NORMALIZER_VERSION,
-                        payload=claim.model_dump(mode="json"),
+                    delete(lab_claims).where(
+                        lab_claims.c.workspace_id == self.workspace_id,
+                        lab_claims.c.capability_id == capability.id,
+                        lab_claims.c.claim_id.in_(removed_claims),
                     )
                 )
+            for atom_position, claim in enumerate(indexed):
+                row = {
+                    "workspace_id": self.workspace_id,
+                    "capability_id": capability.id,
+                    "claim_id": claim.id,
+                    "position": atom_position,
+                    "parameter_id": claim.parameter_id,
+                    "kind": claim.kind,
+                    "stage": claim.stage,
+                    "configuration": claim.configuration,
+                    "sequence": claim.sequence,
+                    "unit": claim.unit,
+                    "normalizer_version": NORMALIZER_VERSION,
+                    "payload": claim.model_dump(mode="json"),
+                }
+                previous_claim = existing.get(claim.id)
+                if previous_claim is None:
+                    connection.execute(insert(lab_claims).values(**row))
+                else:
+                    changes = {
+                        key: value for key, value in row.items() if previous_claim[key] != value
+                    }
+                    if changes:
+                        connection.execute(
+                            update(lab_claims)
+                            .where(
+                                lab_claims.c.workspace_id == self.workspace_id,
+                                lab_claims.c.capability_id == capability.id,
+                                lab_claims.c.claim_id == claim.id,
+                            )
+                            .values(**changes)
+                        )
 
     def _revision(self, connection, lab: LabProfile) -> None:
         connection.execute(

@@ -287,6 +287,7 @@ class TenantWorkspaceRegistry:
         _ = workspace.library.store.engine
         from scione.catalogs.sql_lab_store import upgrade_lab_schema
         from scione.library.assessment_reviews import upgrade_assessment_reviews_schema
+        from scione.library.clarifications import upgrade_clarifications_schema
         from scione.matching.store import upgrade_matching_schema
         from scione.monitoring.store import upgrade_monitoring_schema
         from scione.specifications.corrections import upgrade_corrections_schema
@@ -297,6 +298,7 @@ class TenantWorkspaceRegistry:
             upgrade_matching_schema,
             upgrade_corrections_schema,
             upgrade_assessment_reviews_schema,
+            upgrade_clarifications_schema,
             upgrade_monitoring_schema,
             upgrade_document_notes_schema,
         ):

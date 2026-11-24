@@ -76,6 +76,7 @@ def prepare_data_directory(settings: Settings, *, environ=None) -> Path:
 def upgrade_business_workspace(workspace) -> None:
     from scione.catalogs.sql_lab_store import upgrade_lab_schema
     from scione.library.assessment_reviews import upgrade_assessment_reviews_schema
+    from scione.library.clarifications import upgrade_clarifications_schema
     from scione.matching.store import upgrade_matching_schema
     from scione.monitoring.store import upgrade_monitoring_schema
     from scione.specifications.corrections import upgrade_corrections_schema
@@ -86,6 +87,7 @@ def upgrade_business_workspace(workspace) -> None:
     upgrade_matching_schema(store)
     upgrade_corrections_schema(store)
     upgrade_assessment_reviews_schema(store)
+    upgrade_clarifications_schema(store)
     upgrade_monitoring_schema(store)
     upgrade_document_notes_schema(store)
 
