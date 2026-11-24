@@ -7,6 +7,95 @@ the deployed commit and environment. Do not include credentials or private accou
 
 ## Unreleased
 
+### Library layout, saved review updates and capability chronology — 2026-11-24
+
+Local implementation; not deployed. Hosted accounts and records are unchanged.
+These are interface and persistence changes, not a new AI accuracy result.
+
+- Let short specification lists and collapsed report details use their content
+  height. Paginate specification families, retain searchable older versions, and
+  keep expanded report comparisons scrollable without displacing review actions.
+- Route form errors to the relevant inputs and retain unsaved drafts. Preserve
+  the existing validation, explicit cancellation and save-locking behavior.
+  Clear a corrected local validation message without hiding unresolved validation
+  or backend save errors.
+- Guard delayed review and clarification save responses by assessment identity
+  and manual-record versions. Reload the complete saved snapshot when needed;
+  do not combine unrelated manual overlays under one export reference.
+  A completed review save still updates the report after selecting another test;
+  obsolete responses after leaving the document are ignored.
+- Record a readable reviewer name on new assessment reviews, using the authenticated
+  server identity. Preserve older events and carried-forward names; related history
+  and review summaries use the stored name when available.
+- Add display-only capability creation metadata in the independent
+  `lab_capability_creation=1` schema component. New additions appear newest first;
+  edits do not reset dates. Imported/older records keep unknown dates and their
+  relative order. This does not reorder or extend the saved lab declaration,
+  alter matching fingerprints, or rewrite historical lab revisions.
+- Save creation metadata inside the existing version-checked lab transaction.
+  Keep first-known dates, or undated legacy markers, across deletion/restoration.
+  No historical-date backfill, account reset or storage purge is performed.
+
+### Resource declarations, method search and past-review references — 2026-11-24
+
+Local implementation; not deployed. Existing client workspaces and cloud data are
+unchanged. No new database schema, provider, model prompt or capability seed.
+
+- Add optional equipment-category and consumables/materials fields to capability
+  forms, with a compact read-only resource section. Reuse existing atomic claims;
+  preserve legacy/context-specific fields and remove only explicitly cleared
+  shortcut entries. Supplies remain distinct from specimen material. Resource
+  presence alone does not establish method support.
+- Add a read-only **Methods** catalog view with search, visibility filters,
+  pagination and linked tests. Preserve shared/private boundaries. This is method
+  metadata browsing, not a procedure/source-file library or equivalence engine.
+- Add **Related past reviews** inside Review history. Read only same-lab,
+  nonarchived earlier documents with the same test name and recorded method set.
+  Show earlier findings and notes, flag different customers/lab revisions, and
+  never apply an old decision to new inputs. Bound candidate/payload reads and
+  skip oversized historical snapshots without truncating their findings.
+- Correct date-only labels in that new view so a specification date does not
+  move back one day in time zones west of UTC.
+- Narrowly route a source-proved regional-annex child-window warning to its
+  explicit method-owning tests while keeping the document note and unresolved
+  scientific questions. One historical 55-item replay has 11 fewer unrelated
+  row flags; a second long run and CSP301–310 are unchanged. This is not an AI
+  accuracy measurement or an achieved human-review target.
+  If method-owner spelling, edition or coverage is uncertain, retain the original
+  global review warning rather than silently omit a potentially affected test.
+- Stamp chunk-warning diagnostics separately in derived caches and assessments.
+  Preserve immutable old exports and unchanged reviews; changed checks, source
+  states, notes, other policies or inputs still require a new review.
+- Add an [Azure provisioning/handoff plan](docs/deployment/azure-handoff.md),
+  including proxy, persistent-storage, TLS, backup and client ownership checks.
+  No Azure provisioning or migration has been performed.
+
+### Saved review summaries and source-backed additions — 2026-11-24
+
+Local implementation; not deployed. No database schema, model prompt, matching
+policy or authentication change.
+
+- Add **Review summary** under the gap report's **Report options** menu. It reads
+  one saved export snapshot and lists all tests, comparison findings, current
+  review decisions, follow-up notes and customer-clarification counts.
+- Keep included/excluded and reviewed/not-reviewed counts separate. A recorded
+  reply does not resolve a gap, and this summary is not a final approval.
+- Export a CSV with business-facing columns and a saved-report reference. It
+  includes all snapshot rows regardless of page filters, escapes multiline text,
+  and neutralizes spreadsheet formulas. Opening/downloading runs no model.
+- Keep an open summary frozen; when a newer saved review becomes available, ask
+  the user to close and reopen it rather than silently mixing versions.
+- Show the current source PDF page immediately on **Add missing test → Test &
+  method**, beside the input on desktop and stacked on narrow screens. Default
+  to width fitting so the page can be read and scrolled; the existing evidence
+  and save checks are unchanged.
+- Verify that a source-backed custom test can reach review and the report without
+  adding a lab capability or modifying the reference catalog.
+- Validated 42 distinct affected desktop/narrow browser cases; four explicit
+  laptop cases are inapplicable on narrow screens and skipped. The final rerun
+  covers original upload, edit/confirm, report generation and PDF/JSON export.
+  Production build, formatting and diff checks pass; fixtures forbid live models.
+
 ### Compact report actions and clearer records — 2026-11-24
 
 Local implementation; not deployed. No additional API, schema, model or
@@ -171,5 +260,6 @@ hosted pilot and its lab workspaces have not been changed by this update.
   deployment configuration change. Historical PDF snapshots are not rewritten.
 - Normal **Save under** selection is tested. The originally reported unresponsive
   interaction has not been reproduced, so its root cause is not claimed as fixed.
-- Full review-layout redesign, global cross-spec worklists, creation-time sorting,
-  method-library expansion, approvals and historical-review reuse remain separate work.
+- At this initial checkpoint, full review-layout redesign, global cross-spec worklists,
+  creation-time sorting, method-library expansion, approvals and historical-review reuse
+  remained separate work. Later Unreleased entries record the subsequent slices.

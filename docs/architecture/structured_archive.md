@@ -1,8 +1,10 @@
 # Structured archive and SQL lab/matching storage
 
 The lab-facing application is React/MUI and FastAPI. SQL stores the archive and primary
-lab declarations. Original source artifacts and review/report-scope workspaces remain
-file-backed pending authenticated storage migration.
+lab declarations. Original source artifacts and source/report-scope workspaces remain
+file-backed in each authenticated lab's persistent directory. Hosted lab workspaces use
+separate business SQL schemas; the account/session database is separate. This describes
+repository behavior, not confirmation that an Unreleased change has been deployed.
 
 | Record                        | Purpose                                                                                    |
 | ----------------------------- | ------------------------------------------------------------------------------------------ |
@@ -18,6 +20,7 @@ file-backed pending authenticated storage migration.
 | customer_clarification_events | Append-only questions and manually recorded replies, scoped to a lab, document, source run and test |
 | lab_workspaces                | Current SQL lab identity/version, scoped by a server-selected workspace ID                 |
 | lab_capability_entries        | Separate current capability/test/method/price declarations                                 |
+| lab_capability_creation       | Display-only first-known creation dates or undated removal markers; outside lab declarations |
 | lab_capability_claims         | Queryable parameter/role/stage/configuration/unit plus typed payload                       |
 | lab_profile_revisions         | Immutable full lab declaration and normalizer version per edit                             |
 | semantic_matching_runs        | Scoped immutable attempts: input, raw response, validated links, failures and comparisons  |
@@ -38,6 +41,41 @@ deleted and reinserted when a lab changes one field. The complete lab revision i
 retained for assessment provenance. See [storage lifecycle](storage_lifecycle.md) for
 export sharing, retention boundaries and operational checks.
 The old Streamlit interface remains file-backed and must not be used as a SQL lab editor.
+
+## Display metadata and review presentation
+
+The November 24 follow-up remains local and unreleased. Capability creation dates use
+an independent `lab_capability_creation=1` component; `lab_storage` remains version 2.
+Initialization and legacy import do not invent dates. A successful later lab save
+records newly added IDs inside the same compare-and-swap transaction as current rows
+and the immutable profile revision. An edit does not reset a timestamp. Removal retains
+the first-known date, or an undated marker for a legacy entry, so restoring the same
+tracked ID does not create a new date. Chronology is prospective, not a reconstruction
+of pre-upgrade history.
+
+`/api/workspace` exposes the optional `capability_creation` envelope with `lab_id`,
+`lab_version` and a `created_at` map containing only dated, current capabilities. One
+SQL statement captures its current entry/version scope; a concurrent version change
+returns no hint. The UI rejects mismatched hints and sorts a copied display list:
+known dates newest first, equal/unknown dates in their original relative order.
+`LabProfile`, capability arrays, matching inputs/fingerprints and profile revision
+payloads contain no creation metadata and are not reordered by this feature.
+
+New assessment-review events record both the stable `actor` ID and a server-captured
+`actor_label`, following the same display-name/username fallback as clarifications.
+Old events remain field-absent; names are not backfilled from today's account profile.
+Carry-forward preserves the original event's label or absence. Related-reference
+lineage checks also compare that label. Neither a renamed account nor viewing history
+changes old events, machine findings or delivered export snapshots.
+
+Library families are paginated as a display list; an older version's filename/date
+remains searchable. Short library lists and collapsed report details use their content
+height, while expanded comparisons can scroll internally. These layout choices do not
+change stored order or filter findings out of exports. Form errors identify the relevant
+inputs and preserve drafts. Report review/clarification save responses must still match
+the current document, source run, assessment and input fingerprint, and must not regress
+saved manual-record versions. When a delayed response is behind, the UI reloads a complete
+saved snapshot instead of merging overlays under an incompatible export ID.
 
 ## Version boundaries
 
@@ -75,6 +113,13 @@ The old Streamlit interface remains file-backed and must not be used as a SQL la
   or replace source review. Threads follow the same source run across reassessments;
   a fresh extraction has a new thread. Export JSON/PDF freezes the applicable thread,
   so a later reply cannot change an earlier export.
+- Related past reviews are a read-only lookup of other nonarchived documents in the
+  authenticated lab. It requires the same normalized test name and exact recorded
+  method-reference set, including any supplied editions. Missing edition metadata
+  does not prove identical procedures. Latest events remain pending or reviewed as
+  recorded; different customers and lab revisions are flagged. Prior decisions are
+  never applied to new source facts. Candidate and stored-payload budgets bound the
+  lookup, but it is not an exhaustive or large-history search index.
 - Matching attempts freeze exact candidate facts and normalizer version. A later
   normalization change can rebuild an archive index without changing old run artifacts.
 - Matching cache includes source review/identity choices, capability/catalog facts,
@@ -91,6 +136,14 @@ The old Streamlit interface remains file-backed and must not be used as a SQL la
   in saved comparisons and source/read-cache signatures. This diagnostic stamp is not
   added to semantic matching inputs. Changed warning content still changes an affected
   input's digest; unchanged inputs are not globally invalidated.
+  Chunk-warning routing has its own `chunk_document_context_v4` diagnostic stamp in
+  source read caches, source-review audits and saved machine assessments. A proved
+  regional child-window note stays document-visible and blocks its explicit method
+  owners rather than unrelated rows. This never establishes method equivalence or
+  lab support. Unproved shared-condition ambiguity remains conservative. The stamp
+  alone does not invalidate semantic matching; unchanged human reviews can carry
+  across this diagnostic-only metadata addition only when the input fingerprint and
+  every remaining semantic field, source state, check and note still agree.
 - Report-only scope actions and quantities do not invalidate semantic matching. Editing
   lab, extraction or source/identity review inputs does; old attempts remain downloadable.
 
@@ -193,7 +246,8 @@ unresolved identity can use null, and candidate-free rows have empty unresolved 
 Runtime validation still checks the actual selected capability's claim ownership,
 cross-field identity, complete coverage and scientific compatibility. Schema-valid
 output remains a fallible proposal. No partial plan is accepted. Source extraction
-still has a 60,000-character total input guard and is not shared-clause-aware chunking.
+has separate finite input/chunk-planning limits and retains shared source context
+through its own pipeline; see [inference policy](inference_policy.md).
 
 A source-proved unapproved alternative can remain an informational route note while
 the explicit primary criterion is assessed. Matching snapshots preserve the physical
@@ -223,27 +277,32 @@ recompiling an old response with new code. Original run/score artifacts stay unc
 
 ## Runtime and migration
 
-`SCIONE_DATABASE_URL` accepts a SQLAlchemy MySQL/PyMySQL URL. Local Compose runs MySQL 8.4
-with a project volume and loopback-only port. No URL uses embedded SQLite in the workspace.
-SQLite is used by offline tests; MySQL DDL is compiled in tests. MySQL runtime needs the
-user-started container and separate integration validation.
+`SCIONE_DATABASE_URL` accepts a SQLAlchemy MySQL/PyMySQL URL. Local Compose can run
+MySQL 8.4 with a project volume and loopback-only port; hosted deployments use their
+configured SQL service. Without a URL, local storage uses embedded SQLite in the
+workspace. Offline tests use disposable storage; production migration remains an
+explicit operator deployment step.
 
 Matching history queries sort metadata rather than full JSON artifacts. Latest-run
 selection first orders identifiers, then loads candidate payloads by key. This fixes
 MySQL sort-buffer failures without increasing server buffers, changing schema versions,
 resetting records or altering historical output.
 
-The archive remains component `library=1`; additive migrations introduce `lab_storage=1`,
-`semantic_matching=1` and `reviewed_extractions=1`, recorded in `schema_versions`.
-Run `scione database-upgrade` before starting application processes.
-Local lazy initialization is serialized per shared
-store; deployment migration must precede multiple web/worker processes. Existing archive
-tables are preserved. Incompatible component versions fail without resetting data.
-This is not yet the full tenant/auth schema migration: document hash identities, company
-uniqueness and file ownership still need the planned migration before public use.
+Schema versions are component-specific: the current archive uses `library=2` and
+`lab_storage=2`, with separate additive matching, reviewed-extraction, assessment-review,
+clarification and document-note components. Capability chronology adds only
+`lab_capability_creation=1`; its migration is included in `upgrade_lab_schema`, so the
+existing hosted startup, tenant-provisioning, CLI and local lazy-upgrade paths reach it.
+Run `scione database-upgrade` for a configured local business database before serving;
+authenticated hosted startup upgrades each provisioned lab's own business schema.
+Local lazy initialization is serialized per shared store. Existing archive tables are
+preserved; incompatible component versions fail without resetting data. The supported
+hosted configuration remains one replica and one worker.
 Switching engines or servers does not copy data. Document IDs/run IDs and source artifacts
 must migrate together. A production client setup should own the database, object storage,
-credentials, authentication and backup policy. No public deployment is configured here.
+credentials, authentication and backup policy. See the
+[deployment/handoff guides](../deployment/railway.md) for hosted setup; Unreleased
+repository updates are not automatically applied to a running pilot.
 
 Embedded reset closes connections and moves database/files into recovery storage. A
 configured external database blocks reset rather than performing a partial destructive

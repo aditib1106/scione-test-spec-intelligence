@@ -16,6 +16,34 @@ Some information deliberately exists in several forms: the original source, a cu
 queryable view and the historical inputs used by an assessment. Do not remove an old
 lab revision or machine assessment just because it is absent from the current UI.
 
+## Display-only capability chronology
+
+The local follow-up adds `lab_capability_creation`, keyed by workspace and capability
+ID, under its own `lab_capability_creation=1` schema marker. It does not change
+`lab_storage=2`, extend `LabProfile`, reorder its arrays, enter matching fingerprints,
+or rewrite full lab revisions. An existing v2 database gains only the empty sidecar
+and component marker; initial/imported capabilities receive no guessed dates.
+
+On a successful version-checked save, newly added current IDs receive a server UTC
+timestamp in the same transaction as the lab update and immutable revision. A stale
+save or later transaction failure leaves neither a declaration update nor a timestamp.
+Edits preserve the first timestamp. Deletions keep that timestamp, or a null marker for
+an undated legacy ID, so subsequent restoration preserves the original known/unknown
+date. The public display map excludes null markers and removed IDs. These records are
+small chronology hints, not a replacement for revision history or historical-date
+reconstruction.
+
+An overview's display hint is bound to the profile ID/version observed with current
+entries in one SQL read. A race yields no hint; the UI then preserves stored order.
+Only a copied display list is sorted, with known dates first and unknown/equal dates
+stable. Embedded reset moves the whole database, including this table and its marker,
+into the recovery backup; external-database reset remains unavailable.
+
+The migration is additive and runs through existing lab-upgrade entry points. Older
+binaries that otherwise support the current database can ignore this sidecar, but do
+not record dates for their own changes. This does not remove the export-reference
+rollback boundary below: reverting to an arbitrary older image is still unsafe.
+
 ## Changes that reduce future writes
 
 1. **Incremental current lab rows.** A save compares current entry/claim columns and
@@ -47,6 +75,14 @@ an export-JSON measurement, not a claim that the whole MySQL volume shrinks by 9
 - Questions and replies are append-only records bound to the lab, document, extraction
   run and test. A reply cannot silently turn a gap into a match. Concurrent edits use
   thread versions; retrying the same save request does not insert another event.
+- New assessment reviews capture a server-owned readable author label beside the
+  stable actor ID. Existing review JSON is not backfilled, and carried-forward events
+  retain their original label or absence. Renaming an account does not rewrite old
+  review records or export snapshots. This adds no SQL column or schema version.
+- The UI checks delayed review/reply save responses against the current assessment
+  and saved manual versions. It reloads a complete saved report when needed, rather
+  than combining manual overlays with an export ID from a different snapshot. This
+  guard does not modify stored events or resolve scientific findings.
 - The clarification table is an additive, idempotent schema component. Existing rows
   are not transformed during its initialization.
 - Existing full assessment/export rows remain readable. Old PDF snapshots are stable.
