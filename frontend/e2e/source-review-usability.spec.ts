@@ -27,8 +27,23 @@ test("source review groups fields, locates citations, and adds or removes a miss
   );
   const details = page.getByRole("table", { name: "Test details" });
   await expect(
-    details.getByRole("rowheader", { name: /^Test name/ }),
+    details.getByRole("heading", {
+      level: 2,
+      name: selected.original_test_name,
+      exact: true,
+    }),
   ).toBeVisible();
+  await expect(details.getByText("Method", { exact: true })).toBeVisible();
+  await expect(
+    details.getByRole("button", { name: /^View name source on page/ }).first(),
+  ).toBeVisible();
+  await expect(
+    details
+      .getByRole("button", { name: /^View method source on page/ })
+      .first(),
+  ).toBeVisible();
+  for (const method of selected.requested_methods)
+    await expect(details).toContainText(method.code);
   await expect(page.getByRole("tab", { name: /^Conditions/ })).toBeVisible();
   await expect(
     page.getByRole("tab", { name: /^Test specification/ }),

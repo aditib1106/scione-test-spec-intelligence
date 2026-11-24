@@ -243,7 +243,7 @@ test("document source coverage stays visible while filtering extracted report it
   page.on("request", (request) => {
     if (
       request.method() === "POST" &&
-      /\/(?:analyze|matching)$/.test(request.url())
+      /\/(?:analysis|analyze|matching)$/.test(request.url())
     )
       modelCalls += 1;
   });
@@ -330,7 +330,7 @@ test("result explanations show recorded evidence and distinguish AI assistance f
   page.on("request", (request) => {
     if (
       request.method() === "POST" &&
-      /\/(?:analyze|matching)$/.test(request.url())
+      /\/(?:analysis|analyze|matching)$/.test(request.url())
     )
       modelCalls += 1;
   });

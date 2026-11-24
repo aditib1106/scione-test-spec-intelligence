@@ -27,15 +27,17 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `${python} ../tests/fixtures/workspace_server.py --port 8010`,
+      command: `exec ${python} ../tests/fixtures/workspace_server.py --port 8010`,
       url: "http://127.0.0.1:8010/api/health",
       reuseExistingServer: false,
+      gracefulShutdown: { signal: "SIGINT", timeout: 10_000 },
       timeout: 120_000,
     },
     {
-      command: `${python} ../tests/fixtures/workspace_server.py --port 8011 --seed-review`,
+      command: `exec ${python} ../tests/fixtures/workspace_server.py --port 8011 --seed-review`,
       url: "http://127.0.0.1:8011/api/health",
       reuseExistingServer: false,
+      gracefulShutdown: { signal: "SIGINT", timeout: 10_000 },
       timeout: 120_000,
     },
   ],

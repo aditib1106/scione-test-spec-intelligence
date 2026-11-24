@@ -61,10 +61,19 @@ test("failed analysis is not retried and requires fresh consent before another c
       modelPosts++;
       failed = true;
       await route.fulfill({
-        status: 400,
+        status: 202,
         json: {
-          detail:
-            "Fixture structured output did not conform to the schema. No automatic retry was made.",
+          operation_id: `00000000-0000-4000-8000-${String(modelPosts).padStart(12, "0")}`,
+          request_id: route.request().headers()["x-inference-request-id"],
+          document_id: documentId,
+          kind: "extraction",
+          state: "failed",
+          started_at: new Date().toISOString(),
+          error: {
+            status: 400,
+            detail:
+              "Fixture structured output did not conform to the schema. No automatic retry was made.",
+          },
         },
       });
     },

@@ -25,9 +25,10 @@ export default defineConfig({
     { name: "narrow", use: { viewport: { width: 390, height: 844 } } },
   ],
   webServer: {
-    command: `${python} ../tests/fixtures/auth_server.py --port 8012`,
+    command: `exec ${python} ../tests/fixtures/auth_server.py --port 8012`,
     url: "http://127.0.0.1:8012/api/health",
     reuseExistingServer: false,
+    gracefulShutdown: { signal: "SIGINT", timeout: 10_000 },
     timeout: 120_000,
   },
 });
