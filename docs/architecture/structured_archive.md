@@ -136,11 +136,13 @@ saved snapshot instead of merging overlays under an incompatible export ID.
   in saved comparisons and source/read-cache signatures. This diagnostic stamp is not
   added to semantic matching inputs. Changed warning content still changes an affected
   input's digest; unchanged inputs are not globally invalidated.
-  Chunk-warning routing has its own `chunk_document_context_v4` diagnostic stamp in
+  Chunk-warning routing has its own `chunk_document_context_v5` diagnostic stamp in
   source read caches, source-review audits and saved machine assessments. A proved
   regional child-window note stays document-visible and blocks its explicit method
-  owners rather than unrelated rows. This never establishes method equivalence or
-  lab support. Unproved shared-condition ambiguity remains conservative. The stamp
+  owners rather than unrelated rows. Uncertain method spelling, edition or owner
+  coverage keeps the original global warning instead of omitting a potential owner.
+  This never establishes method equivalence or lab support. Unproved shared-condition
+  ambiguity remains conservative. The stamp
   alone does not invalidate semantic matching; unchanged human reviews can carry
   across this diagnostic-only metadata addition only when the input fingerprint and
   every remaining semantic field, source state, check and note still agree.
