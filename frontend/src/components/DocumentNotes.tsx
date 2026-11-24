@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
   Accordion,
@@ -9,12 +9,18 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
   Stack,
   Typography,
 } from "@mui/material";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import { ApiError, request, reviewDocumentNotes } from "../api";
 import type { DocumentNotesReview } from "../documentNotesTypes";
 
@@ -24,12 +30,15 @@ export default function DocumentNotes({
   review,
   sourceReviewUrl,
   onUpdated,
+  presentation = "inline",
 }: {
   documentId: string;
   review: DocumentNotesReview;
   sourceReviewUrl?: string;
   onUpdated: (next: DocumentNotesReview) => void;
+  presentation?: "inline" | "dialog";
 }) {
+  const titleId = useId();
   const [current, setCurrent] = useState(review);
   const [expanded, setExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -100,6 +109,204 @@ export default function DocumentNotes({
 
   if (!current.notes.length) return null;
   const pending = current.notes.filter((note) => !note.reviewed);
+  const notesBody = (
+    <>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        These notes concern the whole document. Checking them records your
+        review; test confirmations and lab findings stay unchanged.
+      </Typography>
+      {error && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 1.5 }}
+          action={
+            stale ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={reload}
+                disabled={saving}
+              >
+                Load current notes
+              </Button>
+            ) : undefined
+          }
+        >
+          {error}
+        </Alert>
+      )}
+      <Stack gap={1.25}>
+        {current.notes.map((note) => (
+          <Box
+            key={note.id}
+            sx={{
+              p: 1.5,
+              border: "1px solid #e6ebf2",
+              borderRadius: 1.5,
+              bgcolor: note.reviewed ? "#fafcfb" : "#f8fafc",
+            }}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              gap={1}
+            >
+              <Typography variant="body2" fontWeight={650}>
+                {note.title}
+              </Typography>
+              {note.reviewed ? (
+                <Stack direction="row" gap={0.5} alignItems="center">
+                  <Chip
+                    size="small"
+                    label="Checked"
+                    icon={<CheckRoundedIcon />}
+                    sx={{ height: 24, bgcolor: "#eaf5ef", color: "#236647" }}
+                  />
+                  <Button
+                    size="small"
+                    disabled={saving || stale}
+                    onClick={() => update([note.id], false)}
+                  >
+                    Reopen
+                  </Button>
+                </Stack>
+              ) : (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={saving || stale}
+                  startIcon={
+                    saving ? (
+                      <CircularProgress size={14} />
+                    ) : (
+                      <CheckRoundedIcon />
+                    )
+                  }
+                  onClick={() => update([note.id], true)}
+                >
+                  Mark checked
+                </Button>
+              )}
+            </Stack>
+            {note.quote && (
+              <Typography
+                variant="body2"
+                sx={{ mt: 0.75, overflowWrap: "anywhere" }}
+              >
+                {note.quote}
+              </Typography>
+            )}
+            {note.detail && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 0.5, overflowWrap: "anywhere" }}
+              >
+                {note.detail}
+              </Typography>
+            )}
+            {note.page && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mt: 0.75 }}
+              >
+                Page {note.page}
+              </Typography>
+            )}
+          </Box>
+        ))}
+      </Stack>
+      {(sourceReviewUrl || pending.length > 1) && (
+        <Stack
+          direction="row"
+          gap={1}
+          justifyContent="flex-end"
+          flexWrap="wrap"
+          sx={{ mt: 1.5 }}
+        >
+          {sourceReviewUrl && (
+            <Button component={RouterLink} to={sourceReviewUrl} size="small">
+              Open specification
+            </Button>
+          )}
+          {pending.length > 1 && (
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={saving || stale}
+              onClick={() =>
+                update(
+                  pending.map((note) => note.id),
+                  true,
+                )
+              }
+            >
+              Mark notes checked
+            </Button>
+          )}
+        </Stack>
+      )}
+    </>
+  );
+  if (presentation === "dialog")
+    return (
+      <>
+        <Button
+          size="small"
+          color={pending.length ? "warning" : "inherit"}
+          startIcon={<DescriptionOutlinedIcon fontSize="small" />}
+          aria-haspopup="dialog"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(true)}
+          sx={{ whiteSpace: "nowrap", flexShrink: 0, gap: 0.75 }}
+        >
+          Document notes
+          <Box component="span" sx={{ fontWeight: 500, fontSize: 12 }}>
+            {pending.length ? `${pending.length} to check` : "Reviewed"}
+          </Box>
+        </Button>
+        <Dialog
+          open={expanded}
+          onClose={(_, reason) => {
+            if (!saving && reason !== "backdropClick") setExpanded(false);
+          }}
+          disableEscapeKeyDown={saving}
+          maxWidth="sm"
+          fullWidth
+          aria-labelledby={titleId}
+        >
+          <DialogTitle id={`${titleId}-heading`} sx={{ pr: 7 }}>
+            <Box component="span" id={titleId}>
+              Document notes
+            </Box>
+            <Typography
+              component="span"
+              variant="body2"
+              color="text.secondary"
+              sx={{ ml: 1.5 }}
+            >
+              {pending.length ? `${pending.length} to check` : "Reviewed"}
+            </Typography>
+            <IconButton
+              aria-label="Close document notes"
+              disabled={saving}
+              onClick={() => setExpanded(false)}
+              sx={{ position: "absolute", top: 12, right: 12 }}
+            >
+              <CloseRoundedIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent dividers>{notesBody}</DialogContent>
+          <DialogActions sx={{ px: 3, py: 1.5 }}>
+            <Button disabled={saving} onClick={() => setExpanded(false)}>
+              Done
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </>
+    );
   return (
     <Accordion
       expanded={expanded}
@@ -138,143 +345,7 @@ export default function DocumentNotes({
         </Stack>
       </AccordionSummary>
       <AccordionDetails sx={{ pt: 0, px: 2.5, pb: 2 }}>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          These notes concern the whole document. Checking them records your
-          review; test confirmations and lab findings stay unchanged.
-        </Typography>
-        {error && (
-          <Alert
-            severity="warning"
-            sx={{ mb: 1.5 }}
-            action={
-              stale ? (
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={reload}
-                  disabled={saving}
-                >
-                  Load current notes
-                </Button>
-              ) : undefined
-            }
-          >
-            {error}
-          </Alert>
-        )}
-        <Stack gap={1.25}>
-          {current.notes.map((note) => (
-            <Box
-              key={note.id}
-              sx={{
-                p: 1.5,
-                border: "1px solid #e6ebf2",
-                borderRadius: 1.5,
-                bgcolor: note.reviewed ? "#fafcfb" : "#f8fafc",
-              }}
-            >
-              <Stack
-                direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-                gap={1}
-              >
-                <Typography variant="body2" fontWeight={650}>
-                  {note.title}
-                </Typography>
-                {note.reviewed ? (
-                  <Stack direction="row" gap={0.5} alignItems="center">
-                    <Chip
-                      size="small"
-                      label="Checked"
-                      icon={<CheckRoundedIcon />}
-                      sx={{ height: 24, bgcolor: "#eaf5ef", color: "#236647" }}
-                    />
-                    <Button
-                      size="small"
-                      disabled={saving || stale}
-                      onClick={() => update([note.id], false)}
-                    >
-                      Reopen
-                    </Button>
-                  </Stack>
-                ) : (
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    disabled={saving || stale}
-                    startIcon={
-                      saving ? (
-                        <CircularProgress size={14} />
-                      ) : (
-                        <CheckRoundedIcon />
-                      )
-                    }
-                    onClick={() => update([note.id], true)}
-                  >
-                    Mark checked
-                  </Button>
-                )}
-              </Stack>
-              {note.quote && (
-                <Typography
-                  variant="body2"
-                  sx={{ mt: 0.75, overflowWrap: "anywhere" }}
-                >
-                  {note.quote}
-                </Typography>
-              )}
-              {note.detail && (
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 0.5, overflowWrap: "anywhere" }}
-                >
-                  {note.detail}
-                </Typography>
-              )}
-              {note.page && (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: "block", mt: 0.75 }}
-                >
-                  Page {note.page}
-                </Typography>
-              )}
-            </Box>
-          ))}
-        </Stack>
-        {(sourceReviewUrl || pending.length > 1) && (
-          <Stack
-            direction="row"
-            gap={1}
-            justifyContent="flex-end"
-            flexWrap="wrap"
-            sx={{ mt: 1.5 }}
-          >
-            {sourceReviewUrl && (
-              <Button component={RouterLink} to={sourceReviewUrl} size="small">
-                Open specification
-              </Button>
-            )}
-            {pending.length > 1 && (
-              <Button
-                variant="outlined"
-                size="small"
-                disabled={saving || stale}
-                onClick={() =>
-                  update(
-                    pending.map((note) => note.id),
-                    true,
-                  )
-                }
-              >
-                Mark notes checked
-              </Button>
-            )}
-          </Stack>
-        )}
+        {notesBody}
       </AccordionDetails>
     </Accordion>
   );

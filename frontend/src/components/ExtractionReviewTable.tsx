@@ -38,6 +38,7 @@ export default function ExtractionReviewTable({
   sourceField,
   sourceClaimId,
   onSource,
+  compactIdentity = false,
 }: {
   requirement: Requirement;
   claims?: SourceReviewClaim[];
@@ -45,6 +46,7 @@ export default function ExtractionReviewTable({
   sourceField: SourceField | null;
   sourceClaimId?: string | null;
   onSource: (field: SourceField, page: number, claimId?: string) => void;
+  compactIdentity?: boolean;
 }) {
   const atoms = claims ?? requirement.atomic_claims ?? [];
   const conditions = atoms.filter(
@@ -74,6 +76,7 @@ export default function ExtractionReviewTable({
       {pages(claim).map((page) => (
         <SourcePageReference
           key={page}
+          compact={compactIdentity}
           page={page}
           label={`View ${field === "criterion" ? "test specification" : field} source on page ${page}${claim ? ` for ${claim.label}` : ""}`}
           onClick={() => onSource(field, page, claim?.id)}
@@ -94,6 +97,7 @@ export default function ExtractionReviewTable({
       <Box sx={{ display: "inline-flex", flexShrink: 0 }}>
         <SourcePageReference
           page={page}
+          compact={compactIdentity}
           label={`View ${field} source on page ${page}`}
           onClick={() => onSource(field, page)}
         />
@@ -128,8 +132,29 @@ export default function ExtractionReviewTable({
       ))}
     </Stack>
   );
+  const methodChips = requirement.requested_methods.map((method, index) => (
+    <Tooltip
+      key={index}
+      title={
+        method.role
+          ? `Source use: ${method.role}`
+          : "Method stated in the specification"
+      }
+    >
+      <Chip
+        size="small"
+        variant="outlined"
+        label={`${method.code}${method.revision ? ` (${method.revision})` : ""}`}
+        sx={{
+          fontWeight: 600,
+          bgcolor: "#f8faff",
+          borderColor: "#cfdcf5",
+        }}
+      />
+    </Tooltip>
+  ));
   return (
-    <Stack gap={1.5}>
+    <Stack gap={compactIdentity ? 0.5 : 1.5}>
       <TableContainer sx={{ borderBottom: "1px solid #dce4ef" }}>
         <Table
           aria-label="Test details"
@@ -144,92 +169,142 @@ export default function ExtractionReviewTable({
           }}
         >
           <TableBody>
-            <TableRow
-              sx={{ bgcolor: sourceField === "name" ? "#f1f6ff" : "#fff" }}
-            >
-              <TableCell
-                component="th"
-                scope="row"
-                sx={{ width: 106, fontWeight: 650, color: "text.secondary" }}
-              >
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  gap={0.5}
-                  flexWrap="wrap"
+            {compactIdentity ? (
+              <TableRow>
+                <TableCell sx={{ "&&": { px: 0.5, py: 0.5 } }}>
+                  <Stack gap={0.25}>
+                    <Stack
+                      direction="row"
+                      alignItems="flex-start"
+                      gap={0.5}
+                      sx={{
+                        bgcolor: sourceField === "name" ? "#f1f6ff" : "#fff",
+                      }}
+                    >
+                      <Typography
+                        component="h2"
+                        variant="body2"
+                        fontWeight={700}
+                        title={requirement.original_test_name}
+                        sx={{
+                          flex: 1,
+                          minWidth: 0,
+                          overflowWrap: "anywhere",
+                          lineHeight: 1.45,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {displayName || requirement.original_test_name}
+                      </Typography>
+                      {identitySource("name")}
+                    </Stack>
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      gap={0.5}
+                      flexWrap="wrap"
+                      sx={{
+                        bgcolor: sourceField === "method" ? "#f1f6ff" : "#fff",
+                      }}
+                    >
+                      <Typography
+                        component="span"
+                        variant="caption"
+                        fontWeight={650}
+                        color="text.secondary"
+                      >
+                        Method
+                      </Typography>
+                      {identitySource("method")}
+                      {methodChips}
+                      {!requirement.requested_methods.length && (
+                        <Typography variant="body2" color="text.secondary">
+                          No method number stated
+                        </Typography>
+                      )}
+                    </Stack>
+                  </Stack>
+                </TableCell>
+              </TableRow>
+            ) : (
+              <>
+                <TableRow
+                  sx={{ bgcolor: sourceField === "name" ? "#f1f6ff" : "#fff" }}
                 >
-                  <span>Test name</span>
-                  {identitySource("name")}
-                </Stack>
-              </TableCell>
-              <TableCell>
-                <Typography
-                  component="h2"
-                  variant="body2"
-                  fontWeight={700}
-                  title={requirement.original_test_name}
+                  <TableCell
+                    component="th"
+                    scope="row"
+                    sx={{
+                      width: 120,
+                      fontWeight: 650,
+                      color: "text.secondary",
+                    }}
+                  >
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      gap={0.5}
+                      flexWrap="wrap"
+                    >
+                      <span>Test name</span>
+                      {identitySource("name")}
+                    </Stack>
+                  </TableCell>
+                  <TableCell>
+                    <Typography
+                      component="h2"
+                      variant="body2"
+                      fontWeight={700}
+                      title={requirement.original_test_name}
+                      sx={{
+                        overflowWrap: "anywhere",
+                        lineHeight: 1.5,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {displayName || requirement.original_test_name}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+                <TableRow
                   sx={{
-                    overflowWrap: "anywhere",
-                    lineHeight: 1.5,
-                    display: "-webkit-box",
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: "vertical",
-                    overflow: "hidden",
+                    bgcolor: sourceField === "method" ? "#f1f6ff" : "#fff",
                   }}
                 >
-                  {displayName || requirement.original_test_name}
-                </Typography>
-              </TableCell>
-            </TableRow>
-            <TableRow
-              sx={{ bgcolor: sourceField === "method" ? "#f1f6ff" : "#fff" }}
-            >
-              <TableCell
-                component="th"
-                scope="row"
-                sx={{ fontWeight: 650, color: "text.secondary" }}
-              >
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  gap={0.5}
-                  flexWrap="wrap"
-                >
-                  <span>Method</span>
-                  {identitySource("method")}
-                </Stack>
-              </TableCell>
-              <TableCell>
-                <Stack direction="row" flexWrap="wrap" gap={0.75}>
-                  {requirement.requested_methods.map((method, index) => (
-                    <Tooltip
-                      key={index}
-                      title={
-                        method.role
-                          ? `Source use: ${method.role}`
-                          : "Method stated in the specification"
-                      }
+                  <TableCell
+                    component="th"
+                    scope="row"
+                    sx={{ fontWeight: 650, color: "text.secondary" }}
+                  >
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      gap={0.5}
+                      flexWrap="wrap"
                     >
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={`${method.code}${method.revision ? ` (${method.revision})` : ""}`}
-                        sx={{
-                          fontWeight: 600,
-                          bgcolor: "#f8faff",
-                          borderColor: "#cfdcf5",
-                        }}
-                      />
-                    </Tooltip>
-                  ))}
-                  {!requirement.requested_methods.length && (
-                    <Typography variant="body2" color="text.secondary">
-                      No method number stated
-                    </Typography>
-                  )}
-                </Stack>
-              </TableCell>
-            </TableRow>
+                      <span>Method</span>
+                      {identitySource("method")}
+                    </Stack>
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" flexWrap="wrap" gap={0.75}>
+                      {methodChips}
+                      {!requirement.requested_methods.length && (
+                        <Typography variant="body2" color="text.secondary">
+                          No method number stated
+                        </Typography>
+                      )}
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              </>
+            )}
           </TableBody>
         </Table>
       </TableContainer>
@@ -240,11 +315,11 @@ export default function ExtractionReviewTable({
           variant="fullWidth"
           aria-label="Requirement groups"
           sx={{
-            minHeight: 40,
+            minHeight: compactIdentity ? 36 : 40,
             borderBottom: "1px solid #dce4ef",
             "& .MuiTab-root": {
-              minHeight: 40,
-              py: 1,
+              minHeight: compactIdentity ? 36 : 40,
+              py: compactIdentity ? 0.5 : 1,
               fontSize: 13,
               fontWeight: 700,
             },
@@ -274,7 +349,7 @@ export default function ExtractionReviewTable({
                   verticalAlign: "top",
                   borderColor: "#e1e8f1",
                   px: 1.25,
-                  py: 1.25,
+                  py: compactIdentity ? 0.75 : 1.25,
                 },
                 "& tbody tr:nth-of-type(even)": { bgcolor: "#f8fafd" },
               }}
@@ -297,14 +372,21 @@ export default function ExtractionReviewTable({
                     sx={{ "&.Mui-selected": { bgcolor: "#edf4ff" } }}
                   >
                     <TableCell>
-                      <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        sx={{ overflowWrap: "anywhere" }}
+                      <Stack
+                        direction={compactIdentity ? "row" : "column"}
+                        alignItems={compactIdentity ? "center" : "flex-start"}
+                        gap={compactIdentity ? 0.25 : 0}
+                        flexWrap={compactIdentity ? "wrap" : undefined}
                       >
-                        {claim.label}
-                      </Typography>
-                      {sourceLinks(group, claim)}
+                        <Typography
+                          variant="body2"
+                          fontWeight={600}
+                          sx={{ overflowWrap: "anywhere" }}
+                        >
+                          {claim.label}
+                        </Typography>
+                        {sourceLinks(group, claim)}
+                      </Stack>
                     </TableCell>
                     <TableCell>
                       <Typography

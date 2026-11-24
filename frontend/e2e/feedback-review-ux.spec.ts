@@ -1,3 +1,4 @@
+import { reviewAction } from "./workspaceActions";
 import {
   expect,
   test,
@@ -226,9 +227,7 @@ for (const count of [1, 2]) {
       await route.fulfill({ json: source });
     });
     await page.goto(`/specifications?document=${id}`);
-    await page
-      .getByRole("button", { name: "Batch review", exact: true })
-      .click();
+    await (await reviewAction(page, "Review selected tests")).click();
     const dialog = page.getByRole("dialog", {
       name: "Review selected tests",
       exact: true,
@@ -302,7 +301,7 @@ test("a single-test batch failure stays visible with the draft intact and retrie
     await route.fulfill({ json: source });
   });
   await page.goto(`/specifications?document=${id}`);
-  await page.getByRole("button", { name: "Batch review", exact: true }).click();
+  await (await reviewAction(page, "Review selected tests")).click();
   const dialog = page.getByRole("dialog", {
     name: "Review selected tests",
     exact: true,

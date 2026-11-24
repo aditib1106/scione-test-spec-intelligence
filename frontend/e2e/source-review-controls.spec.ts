@@ -1,3 +1,4 @@
+import { reviewAction } from "./workspaceActions";
 import { expect, test } from "@playwright/test";
 import type { SpecificationData } from "../src/types";
 import { editRequirement } from "./sourceEditor";
@@ -263,7 +264,7 @@ test("batch actions use a secondary dialog and cancelling cannot submit review",
   ).json()) as SpecificationData;
   await page.goto(`/specifications?document=${id}`);
   await expect(page.getByText("Batch review", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Batch review", exact: true }).click();
+  await (await reviewAction(page, "Review selected tests")).click();
   const dialog = page.getByRole("dialog", {
     name: "Review selected tests",
     exact: true,

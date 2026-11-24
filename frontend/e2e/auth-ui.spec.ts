@@ -1,3 +1,4 @@
+import { documentAction } from "./workspaceActions";
 import { expect, test, type Page } from "@playwright/test";
 import type { Session } from "../src/auth";
 
@@ -180,9 +181,8 @@ test("lab review uses one analysis action and keeps model controls out of the in
     await route.fulfill({ json: source });
   });
   await page.goto(`/specifications?document=${id}`);
-  await expect(
-    page.getByRole("button", { name: "Analyze again", exact: true }),
-  ).toBeVisible();
+  await expect(await documentAction(page, "Analyze again")).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(
     page.getByRole("combobox", { name: "Provider", exact: true }),
   ).toHaveCount(0);
@@ -195,10 +195,20 @@ test("lab review uses one analysis action and keeps model controls out of the in
   await expect(
     page.getByText("Manually prepared example requirements.", { exact: false }),
   ).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Analyze again", exact: true })
-    .click();
+  await (await documentAction(page, "Analyze again")).click();
   await expect.poll(() => analysisCalls).toBe(1);
+  let reportReads = 0;
+  let reportWrites = 0;
+  page.on("request", (sent) => {
+    const path = new URL(sent.url()).pathname;
+    if (sent.method() === "GET" && path === `/api/comparisons/${id}`)
+      reportReads++;
+    if (
+      path.startsWith("/api/") &&
+      ["POST", "PUT", "PATCH", "DELETE"].includes(sent.method())
+    )
+      reportWrites++;
+  });
   await page.goto(`/reports?document=${id}`);
   await expect(
     page.getByRole("heading", { name: "Gap report", exact: true }),
@@ -206,9 +216,26 @@ test("lab review uses one analysis action and keeps model controls out of the in
   await expect(
     page.getByRole("button", { name: "Developer report tools", exact: true }),
   ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Report options", exact: true })
+    .click();
+  const reloadSaved = page.getByRole("menuitem", {
+    name: "Reload saved report",
+    exact: true,
+  });
+  await expect(reloadSaved).toBeEnabled();
   await expect(
-    page.getByRole("button", { name: "Report options", exact: true }),
+    page.getByText("Review test matching", { exact: true }),
   ).toHaveCount(0);
+  await expect(
+    page.getByRole("combobox", { name: "Provider", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Model", { exact: true })).toHaveCount(0);
+  const readsBeforeReload = reportReads;
+  await reloadSaved.click();
+  await expect.poll(() => reportReads).toBeGreaterThan(readsBeforeReload);
+  expect(reportWrites).toBe(0);
+  expect(analysisCalls).toBe(1);
 });
 
 test("maintainer lab switching rotates request identity and drops previous lab view state", async ({

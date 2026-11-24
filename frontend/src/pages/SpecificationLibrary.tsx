@@ -14,6 +14,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
   FormHelperText,
   InputAdornment,
@@ -21,6 +22,7 @@ import {
   IconButton,
   List,
   ListItemButton,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -46,9 +48,11 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
-import DocumentScannerOutlinedIcon from "@mui/icons-material/DocumentScannerOutlined";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
+import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
+import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import { ApiError, request, useResource } from "../api";
 import { useAuth } from "../auth";
 import {
@@ -170,6 +174,9 @@ export default function SpecificationLibrary({
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState("");
   const [removeStale, setRemoveStale] = useState(false);
+  const [specificationActions, setSpecificationActions] =
+    useState<HTMLElement | null>(null);
+  const [versionsFamilyId, setVersionsFamilyId] = useState<string | null>(null);
 
   useEffect(() => {
     library.refresh();
@@ -180,6 +187,8 @@ export default function SpecificationLibrary({
     setDetailTab("tests");
     setRecordQuery("");
     setRecordPage(0);
+    setSpecificationActions(null);
+    setVersionsFamilyId(null);
   }, [selectedId]);
 
   useEffect(() => {
@@ -213,17 +222,39 @@ export default function SpecificationLibrary({
     0,
   );
 
-  const families = useMemo(() => {
-    const latest = new Map<string, LibraryDocument>();
+  const versionGroups = useMemo(() => {
+    const groups = new Map<string, LibraryDocument[]>();
     for (const document of documents) {
-      const current = latest.get(document.family_id);
-      if (!current || compareSpecificationDates(document, current) < 0)
-        latest.set(document.family_id, document);
+      const versions = groups.get(document.family_id) ?? [];
+      versions.push(document);
+      groups.set(document.family_id, versions);
     }
-    return [...latest.values()].sort((a, b) =>
-      b.updated_at.localeCompare(a.updated_at),
-    );
+    for (const versions of groups.values())
+      versions.sort(compareSpecificationDates);
+    return groups;
   }, [documents]);
+  const families = useMemo(
+    () =>
+      [...versionGroups.values()]
+        .map((versions) => versions[0])
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
+    [versionGroups],
+  );
+  const versionChoices = useMemo(() => {
+    if (!versionsFamilyId) return [];
+    const detailed =
+      detail.data?.document.document_id === selectedId &&
+      detail.data.document.family_id === versionsFamilyId
+        ? detail.data.versions
+        : undefined;
+    return [...(detailed ?? versionGroups.get(versionsFamilyId) ?? [])]
+      .filter((document) => document.family_id === versionsFamilyId)
+      .sort(compareSpecificationDates);
+  }, [versionsFamilyId, versionGroups, detail.data, selectedId]);
+  const versionFamily = versionChoices[0];
+  useEffect(() => {
+    if (versionsFamilyId && !versionChoices.length) setVersionsFamilyId(null);
+  }, [versionsFamilyId, versionChoices]);
 
   const companies = useMemo(
     () =>
@@ -243,21 +274,24 @@ export default function SpecificationLibrary({
           : document.company_name === company);
       return (
         companyMatches &&
-        [
-          document.company_name,
-          document.specification_id,
-          document.title,
-          document.original_name,
-          document.revision,
-          document.specification_date,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLocaleLowerCase()
-          .includes(needle)
+        (versionGroups.get(document.family_id) ?? [document]).some((version) =>
+          [
+            version.company_name,
+            version.specification_id,
+            version.title,
+            version.original_name,
+            version.revision,
+            version.specification_date,
+            specificationVersionLabel(version),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLocaleLowerCase()
+            .includes(needle),
+        )
       );
     });
-  }, [families, query, company]);
+  }, [families, versionGroups, query, company]);
 
   const current = detail.data?.document;
   const selectedTest =
@@ -641,6 +675,22 @@ export default function SpecificationLibrary({
                             : ""}
                           {document.original_name}
                         </Typography>
+                        {(versionGroups.get(document.family_id)?.length ?? 0) >
+                          1 && (
+                          <Button
+                            size="small"
+                            startIcon={
+                              <HistoryRoundedIcon sx={{ fontSize: 15 }} />
+                            }
+                            onClick={() =>
+                              setVersionsFamilyId(document.family_id)
+                            }
+                            sx={{ mt: 0.25, p: 0, minWidth: 0, fontSize: 12 }}
+                          >
+                            {versionGroups.get(document.family_id)!.length}{" "}
+                            versions
+                          </Button>
+                        )}
                       </TableCell>
                       <TableCell>
                         {specificationVersionLabel(document)}
@@ -777,25 +827,13 @@ export default function SpecificationLibrary({
                   {` · ${specificationVersionLabel(current)}`}
                 </Typography>
               </Box>
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                <Tooltip title="Remove from library">
-                  <IconButton
-                    aria-label="Remove specification"
-                    onClick={() => {
-                      setRemoving(current);
-                      setRemoveError("");
-                      setRemoveStale(false);
-                    }}
-                  >
-                    <DeleteOutlineRoundedIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Button
-                  startIcon={<EditOutlinedIcon />}
-                  onClick={() => openEdit(current)}
-                >
-                  Edit details
-                </Button>
+              <Stack
+                direction="row"
+                spacing={1}
+                flexWrap="wrap"
+                useFlexGap
+                sx={{ flexShrink: 0 }}
+              >
                 <Button
                   component={RouterLink}
                   to={reviewUrl(
@@ -804,7 +842,7 @@ export default function SpecificationLibrary({
                       ? selectedTest?.requirement_id
                       : selectedTestId || undefined,
                   )}
-                  variant="outlined"
+                  variant="contained"
                   endIcon={<ArrowForwardRoundedIcon />}
                 >
                   Read PDF & review
@@ -813,9 +851,60 @@ export default function SpecificationLibrary({
                   component={RouterLink}
                   to={`/reports?document=${encodeURIComponent(current.document_id)}`}
                   startIcon={<AssessmentOutlinedIcon />}
+                  variant="outlined"
                 >
                   Gap report
                 </Button>
+                <Tooltip title="Specification actions">
+                  <IconButton
+                    id="specification-actions-button"
+                    aria-label="Specification actions"
+                    aria-haspopup="menu"
+                    aria-expanded={Boolean(specificationActions)}
+                    aria-controls={
+                      specificationActions
+                        ? "specification-actions-menu"
+                        : undefined
+                    }
+                    onClick={(event) =>
+                      setSpecificationActions(event.currentTarget)
+                    }
+                  >
+                    <MoreHorizRoundedIcon />
+                  </IconButton>
+                </Tooltip>
+                <Menu
+                  id="specification-actions-menu"
+                  anchorEl={specificationActions}
+                  open={Boolean(specificationActions)}
+                  onClose={() => setSpecificationActions(null)}
+                  slotProps={{
+                    list: {
+                      "aria-labelledby": "specification-actions-button",
+                    },
+                  }}
+                >
+                  <MenuItem
+                    onClick={() => {
+                      setSpecificationActions(null);
+                      openEdit(current);
+                    }}
+                  >
+                    <EditOutlinedIcon fontSize="small" sx={{ mr: 1 }} />
+                    Edit details
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      setSpecificationActions(null);
+                      setRemoving(current);
+                      setRemoveError("");
+                      setRemoveStale(false);
+                    }}
+                  >
+                    <DeleteOutlineRoundedIcon fontSize="small" sx={{ mr: 1 }} />
+                    Remove from library
+                  </MenuItem>
+                </Menu>
               </Stack>
             </Stack>
             <Stack
@@ -825,33 +914,15 @@ export default function SpecificationLibrary({
               sx={{ mt: 2 }}
             >
               {detail.data.versions.length > 1 && (
-                <FormControl size="small" sx={{ minWidth: 240 }}>
-                  <InputLabel id="library-version-label">
-                    Specification date
-                  </InputLabel>
-                  <Select
-                    labelId="library-version-label"
-                    label="Specification date"
-                    value={current.document_id}
-                    onChange={(event) =>
-                      setParams({ document: event.target.value })
-                    }
-                  >
-                    {[...detail.data.versions]
-                      .sort(compareSpecificationDates)
-                      .map((version) => (
-                        <MenuItem
-                          key={version.document_id}
-                          value={version.document_id}
-                        >
-                          {specificationVersionLabel(version)}
-                          {!version.specification_date
-                            ? ` · ${version.original_name}`
-                            : ""}
-                        </MenuItem>
-                      ))}
-                  </Select>
-                </FormControl>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<HistoryRoundedIcon fontSize="small" />}
+                  onClick={() => setVersionsFamilyId(current.family_id)}
+                  sx={{ alignSelf: "flex-start", flexShrink: 0 }}
+                >
+                  Versions ({detail.data.versions.length})
+                </Button>
               )}
               <Typography variant="caption" color="text.secondary">
                 {current.original_name} · {current.page_count} pages ·{" "}
@@ -864,16 +935,10 @@ export default function SpecificationLibrary({
               <Typography fontWeight={600}>
                 No extracted requirements yet
               </Typography>
-              <Typography color="text.secondary" sx={{ mt: 0.5, mb: 1 }}>
-                The PDF is saved. Open it to extract its test requirements.
+              <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                The PDF is saved. Choose Read PDF &amp; review above to extract
+                its test requirements.
               </Typography>
-              <Button
-                component={RouterLink}
-                to={reviewUrl(current.document_id)}
-                endIcon={<ArrowForwardRoundedIcon />}
-              >
-                Analyze this specification
-              </Button>
             </Box>
           ) : (
             <>
@@ -1309,6 +1374,97 @@ export default function SpecificationLibrary({
       )}
 
       <Dialog
+        open={Boolean(versionsFamilyId && versionFamily)}
+        onClose={() => setVersionsFamilyId(null)}
+        maxWidth="sm"
+        fullWidth
+        scroll="paper"
+        aria-labelledby="specification-versions-title"
+      >
+        <DialogTitle id="specification-versions-heading">
+          <Box component="span" id="specification-versions-title">
+            Specification versions
+          </Box>
+          {versionFamily && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mt: 0.5, overflowWrap: "anywhere" }}
+            >
+              {versionFamily.company_name || "Customer not assigned"} ·{" "}
+              {documentTitle(versionFamily)}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 0 }}>
+          <List disablePadding aria-label="Saved specification versions">
+            {versionChoices.map((version) => (
+              <ListItemButton
+                key={version.document_id}
+                selected={version.document_id === selectedId}
+                aria-label={`Open version ${specificationVersionLabel(version)}: ${version.original_name}`}
+                onClick={() => {
+                  setVersionsFamilyId(null);
+                  if (version.document_id !== selectedId)
+                    setParams({ document: version.document_id });
+                }}
+                sx={{
+                  px: 2.5,
+                  py: 1.75,
+                  gap: 1.25,
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                  alignItems: "center",
+                }}
+              >
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    gap={0.75}
+                    useFlexGap
+                    flexWrap="wrap"
+                  >
+                    <Typography variant="body2" fontWeight={650}>
+                      {specificationVersionLabel(version)}
+                    </Typography>
+                    {version.document_id === selectedId && (
+                      <Chip
+                        size="small"
+                        label="Viewing"
+                        color="primary"
+                        variant="outlined"
+                        sx={{ height: 20, fontSize: 11 }}
+                      />
+                    )}
+                  </Stack>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.5, overflowWrap: "anywhere" }}
+                  >
+                    {version.original_name}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", mt: 0.25 }}
+                  >
+                    {version.run_id
+                      ? `${version.requirement_count} tests · ${version.review_count ? `${version.review_count} to review` : "Extracted"}`
+                      : "Ready to analyze"}
+                  </Typography>
+                </Box>
+                <ChevronRightRoundedIcon fontSize="small" color="action" />
+              </ListItemButton>
+            ))}
+          </List>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5 }}>
+          <Button onClick={() => setVersionsFamilyId(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
         open={Boolean(removing)}
         onClose={() => {
           if (!removeBusy) setRemoving(null);
@@ -1462,23 +1618,23 @@ export default function SpecificationLibrary({
                       Remove PDF
                     </Button>
                   )}
-                  <Tooltip title="Scan and handwriting support is coming soon.">
-                    <span>
-                      <Button
-                        disabled
-                        startIcon={<DocumentScannerOutlinedIcon />}
-                        sx={{
-                          color: "#566476 !important",
-                          bgcolor: "#e6eaf0 !important",
-                          border: "1px solid #d2d9e3",
-                        }}
-                      >
-                        OCR · coming soon
-                      </Button>
-                    </span>
-                  </Tooltip>
                 </Stack>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                  sx={{ mt: 1.25 }}
+                >
+                  Scanned PDFs are not supported yet. OCR is coming soon.
+                </Typography>
               </Box>
+            )}
+            {!editing && (
+              <Divider textAlign="left">
+                <Typography variant="subtitle2" color="text.secondary">
+                  Specification details
+                </Typography>
+              </Divider>
             )}
             {!editing && (
               <FormControl fullWidth size="small">

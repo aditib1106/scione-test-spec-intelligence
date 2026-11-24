@@ -1,3 +1,4 @@
+import { documentAction } from "./workspaceActions";
 import { expect, test, type Page } from "@playwright/test";
 import type { SpecificationData, Workspace } from "../src/types";
 
@@ -122,10 +123,7 @@ for (const reload of [false, true]) {
       await route.fulfill({ json: updated }).catch(() => {});
     });
     await page.goto(`/specifications?document=${id}`);
-    const analyze = page.getByRole("button", {
-      name: "Analyze again",
-      exact: true,
-    });
+    const analyze = await documentAction(page, "Analyze again");
     await expect(analyze).toBeEnabled();
     await analyze.evaluate((button: HTMLButtonElement) => {
       button.click();
@@ -157,9 +155,8 @@ for (const reload of [false, true]) {
         .getByRole("link", { name: "View progress", exact: true })
         .click();
     }
-    await expect(
-      page.getByRole("button", { name: "Analyzing…", exact: true }),
-    ).toBeDisabled();
+    await expect(await documentAction(page, "Analyze again")).toBeDisabled();
+    await page.keyboard.press("Escape");
     await expect(
       page.getByRole("status", {
         name: "Document analysis in progress",

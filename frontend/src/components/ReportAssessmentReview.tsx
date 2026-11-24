@@ -15,6 +15,8 @@ import {
 } from "@mui/material";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import ReportReviewHistory from "./ReportReviewHistory";
+import CustomerClarifications from "./CustomerClarifications";
 import { ApiError, request } from "../api";
 import type {
   AssessmentReview,
@@ -117,67 +119,107 @@ export default function ReportAssessmentReview({
         aria-label="Your assessment review"
         sx={{
           px: { xs: 2, sm: 2.5 },
-          py: 2,
+          py: 1.25,
           borderTop: "1px solid #e0e7f0",
-          bgcolor: "#f5f8fe",
+          bgcolor: "#fafbfd",
         }}
       >
-        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.25 }}>
-          Your review
-        </Typography>
-        <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
-          {accepted ? (
-            <Chip
-              icon={<CheckRoundedIcon />}
-              size="medium"
-              color="success"
-              label="Assessment reviewed"
-            />
-          ) : (
+        <Stack
+          direction="row"
+          gap={1.5}
+          alignItems="center"
+          justifyContent="space-between"
+          flexWrap="wrap"
+        >
+          <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mr: 0.5 }}>
+              Your review
+            </Typography>
+            {accepted ? (
+              <Chip
+                icon={<CheckRoundedIcon />}
+                size="small"
+                variant="outlined"
+                label="Assessment reviewed"
+                sx={{
+                  bgcolor: "#f1f5fa",
+                  color: "#52677f",
+                  borderColor: "#dce5ef",
+                  "& .MuiChip-icon": { color: "#4166a3" },
+                }}
+              />
+            ) : (
+              <Button
+                size="medium"
+                variant="contained"
+                startIcon={<CheckRoundedIcon />}
+                disabled={busy}
+                onClick={() => void save(true)}
+              >
+                {busy ? "Saving…" : "Accept assessment"}
+              </Button>
+            )}
             <Button
               size="medium"
-              variant="contained"
-              startIcon={<CheckRoundedIcon />}
+              variant="outlined"
+              startIcon={<EditOutlinedIcon />}
               disabled={busy}
-              onClick={() => void save(true)}
+              onClick={() => {
+                setDecision(current?.decision ?? "keep");
+                setReviewStatus(current?.review_status ?? "accepted");
+                setNote(current?.note ?? "");
+                setError("");
+                setOpen(true);
+              }}
             >
-              {busy ? "Saving…" : "Accept assessment"}
+              Edit decision
             </Button>
-          )}
-          <Button
-            size="medium"
-            variant="outlined"
-            startIcon={<EditOutlinedIcon />}
-            disabled={busy}
-            onClick={() => {
-              setDecision(current?.decision ?? "keep");
-              setReviewStatus(current?.review_status ?? "accepted");
-              setNote(current?.note ?? "");
-              setError("");
-              setOpen(true);
-            }}
+          </Stack>
+          <Stack
+            direction="row"
+            gap={0.5}
+            flexWrap="wrap"
+            role="group"
+            aria-label="Review records"
+            sx={{ pl: { sm: 1.5 }, borderLeft: { sm: "1px solid #d7e1ef" } }}
           >
-            Edit decision
-          </Button>
-          {current && current.decision !== "keep" && (
-            <Typography variant="body2" fontWeight={600}>
-              {decisions[current.decision]}
-            </Typography>
-          )}
+            <ReportReviewHistory
+              documentId={documentId}
+              report={report}
+              requirementId={requirement.requirement_id}
+            />
+            <CustomerClarifications
+              documentId={documentId}
+              report={report}
+              requirementId={requirement.requirement_id}
+              onSaved={onSaved}
+            />
+          </Stack>
         </Stack>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          display="block"
-          sx={{ mt: 0.75 }}
-        >
-          Review acknowledges these findings; gaps and missing information stay
-          visible.
-        </Typography>
+        {(!accepted || (current && current.decision !== "keep")) && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            display="block"
+            sx={{ mt: 0.75 }}
+          >
+            {current && current.decision !== "keep"
+              ? decisions[current.decision]
+              : "Accept records your review; comparison findings stay unchanged."}
+          </Typography>
+        )}
         {current?.note && (
           <Typography
             variant="body2"
-            sx={{ mt: 0.75, overflowWrap: "anywhere" }}
+            title={current.note}
+            sx={{
+              mt: 0.5,
+              overflowWrap: "anywhere",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
           >
             {current.note}
           </Typography>
@@ -190,9 +232,10 @@ export default function ReportAssessmentReview({
       </Box>
       <Dialog
         open={open}
-        onClose={() => {
-          if (!busy) setOpen(false);
+        onClose={(_, reason) => {
+          if (!busy && reason !== "backdropClick") setOpen(false);
         }}
+        disableEscapeKeyDown={busy}
         maxWidth="sm"
         fullWidth
       >
@@ -201,7 +244,13 @@ export default function ReportAssessmentReview({
           <Typography fontWeight={650} sx={{ mb: 2 }}>
             {requirement.test_name}
           </Typography>
-          <Stack gap={2}>
+          <Stack
+            component="fieldset"
+            disabled={busy}
+            inert={busy}
+            gap={2}
+            sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}
+          >
             {error && <Alert severity="error">{error}</Alert>}
             <TextField
               select
@@ -230,7 +279,14 @@ export default function ReportAssessmentReview({
               value={note}
               onChange={(event) => setNote(event.target.value)}
               fullWidth
-              inputProps={{ maxLength: 4000 }}
+              required={decision !== "keep"}
+              inputProps={{
+                maxLength: 4000,
+                "aria-label":
+                  decision === "keep"
+                    ? "Review note (optional)"
+                    : "Follow-up note",
+              }}
               helperText={
                 decision === "clarify_customer"
                   ? "Records follow-up needed; no customer message is sent."
@@ -257,14 +313,6 @@ export default function ReportAssessmentReview({
               The comparison findings stay unchanged. Use the source or lab
               links in this report to correct the underlying information.
             </Typography>
-            <Button
-              component="a"
-              href={`/api/comparisons/${encodeURIComponent(documentId)}/reviews?download=true`}
-              size="small"
-              sx={{ alignSelf: "flex-start" }}
-            >
-              Download review history
-            </Button>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

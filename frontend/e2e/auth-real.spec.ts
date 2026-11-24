@@ -1,4 +1,4 @@
-import { openReportScope } from "./reportScope";
+import { reportTestAction } from "./reportScope";
 import { expect, test, type Page } from "@playwright/test";
 
 const password = "Synthetic-fixture-password-2026";
@@ -217,33 +217,28 @@ test("a lab can review the report, export PDF, and exclude then restore a test",
   expect(pdf.ok()).toBeTruthy();
   expect((await pdf.body()).subarray(0, 4).toString()).toBe("%PDF");
   await page.getByRole("tab", { name: "Comparison", exact: true }).click();
-  await openReportScope(page);
-  await page
-    .getByRole("button", { name: "Remove from this report", exact: true })
-    .click();
+  await (await reportTestAction(page, "Remove from this report")).click();
   let dialog = page.getByRole("dialog");
   await dialog
-    .getByLabel("Scope note (optional)", { exact: true })
+    .getByLabel("Note (optional)", { exact: true })
     .fill("Customer deferred this test.");
   await dialog
     .getByRole("button", { name: "Remove test", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Restore to this report", exact: true }),
+    await reportTestAction(page, "Restore to this report"),
   ).toBeVisible();
   const excluded = await (
     await page.request.get(`/api/comparisons/${id}`)
   ).json();
   expect(excluded.requirements[0].comparison.status).toBe("excluded");
-  await page
-    .getByRole("button", { name: "Restore to this report", exact: true })
-    .click();
+  await (await reportTestAction(page, "Restore to this report")).click();
   dialog = page.getByRole("dialog");
   await dialog
     .getByRole("button", { name: "Restore test", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Remove from this report", exact: true }),
+    await reportTestAction(page, "Remove from this report"),
   ).toBeVisible();
   const restored = await (
     await page.request.get(`/api/comparisons/${id}`)

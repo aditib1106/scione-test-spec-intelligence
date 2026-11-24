@@ -1,3 +1,4 @@
+import { documentAction, reviewAction } from "./workspaceActions";
 import { expect, test } from "@playwright/test";
 import type { SpecificationData } from "../src/types";
 
@@ -39,9 +40,8 @@ test("source review groups fields, locates citations, and adds or removes a miss
   await expect(
     page.getByRole("combobox", { name: "Selected test", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "OCR · coming soon" }),
-  ).toBeDisabled();
+  await expect(await documentAction(page, "OCR · coming soon")).toBeDisabled();
+  await page.keyboard.press("Escape");
 
   const previewRequest = page.waitForRequest(
     (sent) =>
@@ -87,9 +87,7 @@ test("source review groups fields, locates citations, and adds or removes a miss
     await expect(source).toHaveAttribute("aria-expanded", "true");
   }
 
-  await page
-    .getByRole("button", { name: "Add missing test", exact: true })
-    .click();
+  await (await reviewAction(page, "Add missing test")).click();
   const dialog = page.getByRole("dialog", {
     name: "Add missing test",
     exact: true,
@@ -127,7 +125,7 @@ test("source review groups fields, locates citations, and adds or removes a miss
   expect(after.facts_version).toBe(1);
   const added = after.run!.extraction.requirements.at(-1)!;
 
-  await page.getByRole("button", { name: "Remove", exact: true }).click();
+  await (await reviewAction(page, "Remove selected test")).click();
   const removeDialog = page.getByRole("dialog", { name: "Remove this test?" });
   await expect(removeDialog).toBeVisible();
   await expect(
@@ -232,13 +230,12 @@ for (const action of ["edit", "add"] as const) {
         delivered();
       },
     );
-    await page
-      .getByRole("button", {
-        name:
-          action === "edit" ? "Correct extracted content" : "Add missing test",
-        exact: true,
-      })
-      .click();
+    if (action === "add")
+      await (await reviewAction(page, "Add missing test")).click();
+    else
+      await page
+        .getByRole("button", { name: "Correct extracted content", exact: true })
+        .click();
     const dialog = page.getByRole("dialog", {
       name:
         action === "edit" ? "Correct extracted content" : "Add missing test",
@@ -357,7 +354,9 @@ test("an obsolete source-location response cannot scroll a browsed page or anoth
   await page.route(
     (url) =>
       url.pathname === `/api/specifications/${documentId}/pages/1` &&
-      url.searchParams.get("field") === "condition",
+      url.searchParams.get("field") === "condition" &&
+      url.searchParams.get("requirement_id") === selected.id &&
+      url.searchParams.get("claim_id") === parameter.id,
     async (route) => {
       const response = await route.fetch();
       received();
@@ -369,6 +368,7 @@ test("an obsolete source-location response cannot scroll a browsed page or anoth
       }
       delivered();
     },
+    { times: 1 },
   );
   await details
     .getByRole("button", {
@@ -429,4 +429,5 @@ test("an obsolete source-location response cannot scroll a browsed page or anoth
   expect(await viewport.evaluate((element) => element.scrollTop)).toBe(
     otherScroll,
   );
+  await page.unrouteAll({ behavior: "wait" });
 });

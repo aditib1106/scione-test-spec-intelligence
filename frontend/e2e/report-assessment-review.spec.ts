@@ -1,5 +1,8 @@
+import { selectReportFilter } from "./workspaceActions";
 import { expect, test } from "@playwright/test";
 import type { ComparisonData } from "../src/comparisonTypes";
+
+test.use({ actionTimeout: 15_000 });
 
 test("report assessment acceptance and follow-up persist without approving unknown checks", async ({
   page,
@@ -66,6 +69,11 @@ test("report assessment acceptance and follow-up persist without approving unkno
   await expect(
     page.getByText("Assessment reviewed", { exact: true }),
   ).toBeVisible();
+  await expect(page.getByText("Report scope", { exact: true })).toHaveCount(0);
+  await page.screenshot({
+    path: testInfo.outputPath("report-reviewed-actions.png"),
+    animations: "disabled",
+  });
   const accepted = (await (await request.get(url)).json()) as ComparisonData;
   expect(accepted.comparison_id).toBe(before.comparison_id);
   expect(accepted.requirements).toEqual(before.requirements);
@@ -78,8 +86,7 @@ test("report assessment acceptance and follow-up persist without approving unkno
   await expect(
     page.getByText("Assessment reviewed", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("combobox", { name: "Show", exact: true }).click();
-  await page.getByRole("option", { name: "Not reviewed", exact: true }).click();
+  await selectReportFilter(page, "Not reviewed");
   await expect(
     page
       .getByRole("navigation", { name: "Requested tests" })
@@ -88,8 +95,7 @@ test("report assessment acceptance and follow-up persist without approving unkno
         exact: true,
       }),
   ).toHaveCount(0);
-  await page.getByRole("combobox", { name: "Show", exact: true }).click();
-  await page.getByRole("option", { name: "All tests", exact: true }).click();
+  await selectReportFilter(page, "All tests");
   await select();
   await page
     .getByRole("button", { name: "Edit decision", exact: true })

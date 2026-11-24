@@ -49,6 +49,9 @@ interface Props {
   selected: Requirement;
   onSaved: (data: SpecificationData) => void;
   adding?: boolean;
+  hideTrigger?: boolean;
+  openRequest?: number;
+  onOpenRequestHandled?: (nonce: number) => void;
   editRequest?: { claimId: string; nonce: number } | null;
   onEditRequestHandled?: () => void;
 }
@@ -173,6 +176,9 @@ export default function SourceFactsEditor({
   selected,
   onSaved,
   adding = false,
+  hideTrigger = false,
+  openRequest,
+  onOpenRequestHandled,
   editRequest,
   onEditRequestHandled,
 }: Props) {
@@ -213,6 +219,7 @@ export default function SourceFactsEditor({
   const wordingRebuildAllowed = wordingRebuildAcknowledged || rebuildDetails;
   const mounted = useRef(true);
   const lastRequest = useRef<number | null>(null);
+  const lastOpenRequest = useRef<number | undefined>(undefined);
   const errorRef = useRef<HTMLDivElement>(null);
   const submitting = useRef(false);
   useEffect(() => {
@@ -276,6 +283,13 @@ export default function SourceFactsEditor({
       onEditRequestHandled?.();
     }
   }, [editRequest?.nonce]);
+  useEffect(() => {
+    if (openRequest !== undefined && openRequest !== lastOpenRequest.current) {
+      lastOpenRequest.current = openRequest;
+      begin();
+      onOpenRequestHandled?.(openRequest);
+    }
+  }, [openRequest]);
   const patch = (values: Partial<Requirement>) =>
     setDraft((old) => ({ ...old, ...values }));
   const patchAtom = (identifier: string, changes: Partial<AtomicClaim>) => {
@@ -951,24 +965,30 @@ export default function SourceFactsEditor({
   }
   return (
     <>
-      <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
-        <Button
-          size="small"
-          variant="outlined"
-          aria-label={adding ? "Add missing test" : "Correct extracted content"}
-          onClick={() => begin()}
-        >
-          {adding ? "Add missing test" : "Edit test"}
-        </Button>
-        {data.facts_revision?.changed_requirement_ids.includes(selected.id) && (
-          <Chip
+      {!hideTrigger && (
+        <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
+          <Button
             size="small"
-            color="info"
             variant="outlined"
-            label="Corrected draft"
-          />
-        )}
-      </Stack>
+            aria-label={
+              adding ? "Add missing test" : "Correct extracted content"
+            }
+            onClick={() => begin()}
+          >
+            {adding ? "Add missing test" : "Edit test"}
+          </Button>
+          {data.facts_revision?.changed_requirement_ids.includes(
+            selected.id,
+          ) && (
+            <Chip
+              size="small"
+              color="info"
+              variant="outlined"
+              label="Corrected draft"
+            />
+          )}
+        </Stack>
+      )}
       <Dialog
         open={open}
         aria-labelledby="source-editor-title"

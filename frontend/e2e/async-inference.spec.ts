@@ -1,3 +1,4 @@
+import { documentAction } from "./workspaceActions";
 import {
   expect,
   test,
@@ -192,10 +193,7 @@ async function fixture(page: Page, request: APIRequestContext) {
 
 async function start(page: Page, id: string) {
   await page.goto(`/specifications?document=${id}`);
-  const button = page.getByRole("button", {
-    name: "Analyze again",
-    exact: true,
-  });
+  const button = await documentAction(page, "Analyze again");
   await expect(button).toBeEnabled();
   await button.evaluate((element: HTMLButtonElement) => {
     element.click();
@@ -210,9 +208,8 @@ test("202 admission releases the POST while real progress stays pending across r
   const { id, state } = await fixture(page, request);
   await start(page, id);
   await expect.poll(() => state.posts).toBe(1);
-  await expect(
-    page.getByRole("button", { name: "Analyzing…", exact: true }),
-  ).toBeDisabled();
+  await expect(await documentAction(page, "Analyze again")).toBeDisabled();
+  await page.keyboard.press("Escape");
   await expect(page.getByText(/AI steps completed 1\/6/).first()).toBeVisible();
   if ((page.viewportSize()?.width ?? 1440) < 1200)
     await page
@@ -233,9 +230,8 @@ test("202 admission releases the POST while real progress stays pending across r
   await expect(
     page.getByRole("combobox", { name: "Selected test", exact: true }),
   ).toContainText("Completed:");
-  await expect(
-    page.getByRole("button", { name: "Analyzing…", exact: true }),
-  ).toHaveCount(0);
+  await expect(await documentAction(page, "Analyze again")).toBeEnabled();
+  await page.keyboard.press("Escape");
   expect(state.posts).toBe(1);
 });
 
@@ -275,9 +271,8 @@ test("a terminal failure is shown once and does not leak into another document",
   await expect(
     page.getByText(/Offline job failed validation/).first(),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Analyzing…", exact: true }),
-  ).toHaveCount(0);
+  await expect(await documentAction(page, "Analyze again")).toBeEnabled();
+  await page.keyboard.press("Escape");
   expect(state.posts).toBe(1);
   const otherId = "abcdef0123456789";
   const other = (await (
@@ -348,12 +343,8 @@ test("persistent observation loss releases local busy state with an unknown outc
   await expect(
     page.getByText(/completion could not be confirmed/).first(),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Analyzing…", exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Analyze again", exact: true }),
-  ).toBeEnabled();
+  await expect(await documentAction(page, "Analyze again")).toBeEnabled();
+  await page.keyboard.press("Escape");
   expect(state.posts).toBe(1);
 });
 
@@ -491,9 +482,8 @@ test("an unrelated newer saved source does not prove a dropped admission complet
   await expect(
     page.getByRole("combobox", { name: "Selected test", exact: true }),
   ).toContainText("Completed:");
-  await expect(
-    page.getByRole("button", { name: "Analyzing…", exact: true }),
-  ).toHaveCount(0);
+  await expect(await documentAction(page, "Analyze again")).toBeEnabled();
+  await page.keyboard.press("Escape");
   expect(state.posts).toBe(1);
 });
 

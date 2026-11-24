@@ -1,24 +1,25 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
   Alert,
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
-  Box,
   Button,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Stack,
+  IconButton,
+  ListItemIcon,
+  Menu,
+  MenuItem,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import RemoveCircleOutlineRoundedIcon from "@mui/icons-material/RemoveCircleOutlineRounded";
 import UndoRoundedIcon from "@mui/icons-material/UndoRounded";
-import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import { request } from "../api";
 import type { ComparisonData, ComparisonRequirement } from "../comparisonTypes";
 
@@ -37,13 +38,23 @@ export default function ReportScopeControls({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [expanded, setExpanded] = useState(
-    Boolean(requirement.report_scope_exclusion) ||
-      requirement.source_review_state === "excluded",
-  );
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const menuId = useId();
+  const dialogTitleId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
-  const submitting = useRef(false);
+  const submitting = useRef<symbol | null>(null);
   const mounted = useRef(true);
+  const context = JSON.stringify([
+    documentId,
+    report.source_run_id,
+    report.report_input_fingerprint,
+    report.report_workspace_version,
+    requirement.requirement_id,
+    requirement.source_review_state,
+    Boolean(requirement.report_scope_exclusion),
+  ]);
+  const currentContext = useRef(context);
+  currentContext.current = context;
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -52,13 +63,12 @@ export default function ReportScopeControls({
   }, []);
   useEffect(() => {
     setOpen(false);
+    setAnchor(null);
     setNote("");
     setError("");
-    setExpanded(
-      Boolean(requirement.report_scope_exclusion) ||
-        requirement.source_review_state === "excluded",
-    );
-  }, [requirement.requirement_id]);
+    setBusy(false);
+    submitting.current = null;
+  }, [context]);
 
   const restoreFocus = () =>
     requestAnimationFrame(() => {
@@ -81,8 +91,11 @@ export default function ReportScopeControls({
   const excluded = Boolean(requirement.report_scope_exclusion);
 
   const save = async () => {
-    if (submitting.current) return;
-    submitting.current = true;
+    if (submitting.current || requirement.source_review_state === "excluded")
+      return;
+    const submission = Symbol();
+    const savedContext = context;
+    submitting.current = submission;
     setBusy(true);
     setError("");
     try {
@@ -100,138 +113,92 @@ export default function ReportScopeControls({
           }),
         },
       );
-      if (!mounted.current) return;
+      if (!mounted.current || currentContext.current !== savedContext) return;
       setOpen(false);
       onSaved(updated);
       restoreFocus();
     } catch (reason) {
-      if (mounted.current)
+      if (mounted.current && currentContext.current === savedContext)
         setError(
           reason instanceof Error
             ? reason.message
             : "The report scope could not be saved.",
         );
     } finally {
-      if (mounted.current) {
-        submitting.current = false;
+      if (mounted.current && submitting.current === submission) {
+        submitting.current = null;
         setBusy(false);
       }
     }
   };
 
   return (
-    <Box
-      sx={{
-        borderTop: "1px solid",
-        borderColor: "divider",
-      }}
-    >
-      <Accordion
-        disableGutters
-        elevation={0}
-        expanded={expanded}
-        onChange={(_, value) => setExpanded(value)}
-        sx={{ "&:before": { display: "none" }, borderRadius: "0 !important" }}
-      >
-        <AccordionSummary
-          aria-label="Report scope"
-          expandIcon={<ExpandMoreRoundedIcon fontSize="small" />}
-          sx={{
-            px: { xs: 2, sm: 2.5 },
-            minHeight: 46,
-            "& .MuiAccordionSummary-content": { my: 1 },
-          }}
+    <>
+      <Tooltip title="More test actions">
+        <IconButton
+          ref={trigger}
+          aria-label="More test actions"
+          aria-haspopup="menu"
+          aria-controls={anchor ? menuId : undefined}
+          aria-expanded={Boolean(anchor)}
+          disabled={busy}
+          size="small"
+          onClick={(event) => setAnchor(event.currentTarget)}
+          sx={{ flexShrink: 0 }}
         >
-          <Stack direction="row" gap={1.25} alignItems="baseline">
-            <Typography variant="body2" fontWeight={650}>
-              Report scope
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {excluded || requirement.source_review_state === "excluded"
-                ? "Excluded"
-                : "Included"}
-            </Typography>
-          </Stack>
-        </AccordionSummary>
-        <AccordionDetails sx={{ px: { xs: 2, sm: 2.5 }, pt: 0, pb: 2 }}>
-          {requirement.source_review_state === "excluded" ? (
-            <Alert
-              severity="info"
-              action={
-                <Button
-                  component={RouterLink}
-                  to={`/specifications?${new URLSearchParams({ document: documentId, requirement: requirement.requirement_id })}`}
-                >
-                  Review source exclusion
-                </Button>
-              }
-            >
-              This test was excluded during specification review. Restore it
-              there to include it in a report.
-            </Alert>
-          ) : (
-            <>
-              {excluded && (
-                <Alert severity="info" sx={{ mb: 1.5 }}>
-                  Removed from this report's scope. The extracted requirement
-                  and matching results are preserved.
-                  {requirement.report_scope_exclusion?.note && (
-                    <Typography
-                      variant="caption"
-                      component="p"
-                      sx={{ mt: 0.5 }}
-                    >
-                      Note: {requirement.report_scope_exclusion.note}
-                    </Typography>
-                  )}
-                </Alert>
+          <MoreHorizRoundedIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        id={menuId}
+        anchorEl={anchor}
+        open={Boolean(anchor)}
+        onClose={() => setAnchor(null)}
+      >
+        {requirement.source_review_state === "excluded" ? (
+          <MenuItem
+            component={RouterLink}
+            to={`/specifications?${new URLSearchParams({ document: documentId, requirement: requirement.requirement_id })}`}
+            onClick={() => setAnchor(null)}
+          >
+            <ListItemIcon>
+              <DescriptionOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            Review source exclusion
+          </MenuItem>
+        ) : (
+          <MenuItem
+            disabled={busy}
+            onClick={() => {
+              setAnchor(null);
+              setNote("");
+              setError("");
+              setOpen(true);
+            }}
+            sx={{ color: excluded ? "primary.main" : "error.main" }}
+          >
+            <ListItemIcon sx={{ color: "inherit" }}>
+              {excluded ? (
+                <UndoRoundedIcon fontSize="small" />
+              ) : (
+                <RemoveCircleOutlineRoundedIcon fontSize="small" />
               )}
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                alignItems={{ sm: "center" }}
-                spacing={1.5}
-              >
-                <Button
-                  ref={trigger}
-                  disabled={busy}
-                  variant={excluded ? "outlined" : "text"}
-                  size="small"
-                  color={excluded ? "primary" : "error"}
-                  startIcon={
-                    excluded ? (
-                      <UndoRoundedIcon />
-                    ) : (
-                      <RemoveCircleOutlineRoundedIcon />
-                    )
-                  }
-                  onClick={() => {
-                    setNote("");
-                    setError("");
-                    setOpen(true);
-                  }}
-                  sx={{ alignSelf: "flex-start" }}
-                >
-                  {excluded
-                    ? "Restore to this report"
-                    : "Remove from this report"}
-                </Button>
-                <Typography variant="caption" color="text.secondary">
-                  Changes this report's scope only.
-                </Typography>
-              </Stack>
-            </>
-          )}
-        </AccordionDetails>
-      </Accordion>
+            </ListItemIcon>
+            {excluded ? "Restore to this report" : "Remove from this report"}
+          </MenuItem>
+        )}
+      </Menu>
       <Dialog
         open={open}
+        aria-labelledby={dialogTitleId}
         disableRestoreFocus
-        onClose={() => {
-          if (!busy) close();
+        disableEscapeKeyDown={busy}
+        onClose={(_, reason) => {
+          if (!busy && reason !== "backdropClick") close();
         }}
         maxWidth="sm"
       >
-        <DialogTitle>
+        <DialogTitle id={dialogTitleId}>
           {excluded
             ? "Restore this test?"
             : "Remove this test from the report?"}
@@ -245,6 +212,19 @@ export default function ReportScopeControls({
               ? "This test will return to the report with its current comparison result."
               : "The test will be excluded from this report's active scope and totals. Its extracted requirements and original matching result remain saved. You can restore it later."}
           </Typography>
+          {excluded && requirement.report_scope_exclusion?.note && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="body2" fontWeight={650}>
+                Reason for removal
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
+              >
+                {requirement.report_scope_exclusion.note}
+              </Typography>
+            </Alert>
+          )}
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}
@@ -254,7 +234,7 @@ export default function ReportScopeControls({
             fullWidth
             multiline
             minRows={2}
-            label="Scope note (optional)"
+            label="Note (optional)"
             value={note}
             disabled={busy}
             onChange={(event) => setNote(event.target.value)}
@@ -275,6 +255,6 @@ export default function ReportScopeControls({
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </>
   );
 }

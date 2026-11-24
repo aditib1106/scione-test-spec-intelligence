@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { AtomicClaim, LabProfile } from "../src/types";
+import { ensureCapabilityFieldOpen } from "./capabilityActions";
 
 test("lab enters typed conditions, reporting and unknown custom facts without technical keys", async ({
   page,
@@ -146,6 +147,7 @@ test("lab enters typed conditions, reporting and unknown custom facts without te
   await page.getByRole("button", { name: "Edit", exact: true }).first().click();
   const reopened = page.getByRole("dialog");
   const water = reopened.getByRole("group", { name: "Conditions field 1" });
+  await ensureCapabilityFieldOpen(water);
   await expect(water.getByLabel("Maximum", { exact: true })).toHaveValue("80");
   await reopened
     .getByRole("button", { name: "Save capability", exact: true })
@@ -239,6 +241,7 @@ test("lab parameter edits persist and unrelated edits preserve declared facts", 
     .click();
   dialog = page.getByRole("dialog");
   const details = dialog.getByRole("group", { name: "Conditions field 1" });
+  await ensureCapabilityFieldOpen(details);
   await details.getByLabel("Maximum", { exact: true }).fill("7");
   await details.getByRole("button", { name: /Context and wording/ }).click();
   await details

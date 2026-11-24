@@ -153,6 +153,7 @@ export default function CapabilityEditor({
   const [limits, setLimits] = useState<DraftLimit[]>([]);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [validationAttempt, setValidationAttempt] = useState(0);
   const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
   const [limitType, setLimitType] = useState<Parameter>("temperature");
@@ -243,6 +244,7 @@ export default function CapabilityEditor({
     setDetailsReviewed(false);
     setError("");
     setFieldErrors({});
+    setValidationAttempt(0);
     setConflict(false);
     setSaving(false);
     submitting.current = false;
@@ -341,6 +343,7 @@ export default function CapabilityEditor({
     }
     setFieldErrors(problems);
     if (Object.keys(problems).length) {
+      setValidationAttempt((attempt) => attempt + 1);
       focusErrors();
       return;
     }
@@ -759,6 +762,7 @@ export default function CapabilityEditor({
               );
             }}
             active={open}
+            validationAttempt={validationAttempt}
             errors={Object.fromEntries(
               claims.map((claim) => [
                 claim.id,

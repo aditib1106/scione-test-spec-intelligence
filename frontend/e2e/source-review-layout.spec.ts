@@ -196,15 +196,72 @@ test("review keeps a tall PDF, separates parameters from prose, and opens one fo
     name: "View extraction evidence",
     exact: true,
   });
+  const waitForAccordions = () =>
+    expect
+      .poll(() =>
+        page
+          .locator(".MuiCollapse-root")
+          .evaluateAll((nodes) =>
+            nodes.every(
+              (node) =>
+                node.classList.contains("MuiCollapse-entered") ||
+                node.classList.contains("MuiCollapse-hidden"),
+            ),
+          ),
+      )
+      .toBe(true);
   await expect(evidence).toHaveAttribute("aria-expanded", "false");
-  expect((await evidence.boundingBox())!.y).toBeLessThan(
-    (await page.getByRole("table", { name: "Test details" }).boundingBox())!.y,
+  await waitForAccordions();
+  const identities = page.getByRole("table", { name: "Test details" });
+  await expect(identities.getByRole("row")).toHaveCount(1);
+  await expect(identities.getByRole("heading", { level: 2 })).toHaveAttribute(
+    "title",
+    selected.original_test_name,
   );
+  await expect(identities.getByText("Method", { exact: true })).toBeVisible();
+  await expect(
+    identities.getByRole("button", { name: /^View name source on page/ }),
+  ).toBeVisible();
+  await expect(
+    identities.getByRole("button", { name: /^View method source on page/ }),
+  ).toBeVisible();
+  await expect(identities).toContainText(selected.requested_methods[0].code);
+  // Read one layout frame. Separate boundingBox calls can straddle the
+  // analysis-settings collapse and falsely reverse the nearby elements.
+  await expect
+    .poll(() =>
+      evidence.evaluate((button) => {
+        const identity = document.querySelector(
+          'table[aria-label="Test details"]',
+        )!;
+        const name = identity.querySelector("h2")!;
+        const method = identity.querySelector(
+          '[aria-label^="View method source on page"]',
+        )!;
+        const parameters = document.querySelector(
+          'table[aria-label="Condition parameters"]',
+        )!;
+        return (
+          Boolean(
+            button.compareDocumentPosition(identity) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+          ) &&
+          button.getBoundingClientRect().bottom <=
+            identity.getBoundingClientRect().top &&
+          name.getBoundingClientRect().bottom <=
+            method.getBoundingClientRect().top + 1 &&
+          identity.getBoundingClientRect().bottom <=
+            parameters.getBoundingClientRect().top
+        );
+      }),
+    )
+    .toBe(true);
   await evidence.click();
   await expect(evidence).toHaveAttribute("aria-expanded", "true");
   await expect(
     page.getByText(selected.evidence[0].quote, { exact: true }).first(),
   ).toBeVisible();
+  await waitForAccordions();
   await page.screenshot({
     path: testInfo.outputPath("extraction-evidence.png"),
     animations: "disabled",
@@ -250,7 +307,25 @@ test("review keeps a tall PDF, separates parameters from prose, and opens one fo
     const viewport = page.getByRole("region", {
       name: "Source document scroll area",
     });
-    expect((await viewport.boundingBox())!.height).toBeGreaterThan(480);
+    // The workbench now uses available laptop height instead of overflowing
+    // below the viewport to maintain a fixed 680px panel.
+    await expect
+      .poll(() =>
+        viewport.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const actions = document.querySelector(
+            '[aria-label="Source review actions"]',
+          )!;
+          const footer = actions.getBoundingClientRect();
+          return (
+            bounds.height >= 280 &&
+            bounds.bottom <= innerHeight &&
+            footer.top >= 0 &&
+            footer.bottom <= innerHeight
+          );
+        }),
+      )
+      .toBe(true);
     await viewport.evaluate((element) => {
       element.scrollTop = 30;
     });

@@ -57,7 +57,7 @@ async function openUpload(page: Page) {
   return page.getByRole("dialog", { name: "Add customer specification" });
 }
 
-test("selected PDF can be removed and reselected without uploading or losing metadata", async ({
+test("selected PDF can be replaced, removed and reselected without uploading or losing metadata", async ({
   page,
 }, testInfo) => {
   let uploads = 0;
@@ -73,16 +73,44 @@ test("selected PDF can be removed and reselected without uploading or losing met
   await dialog
     .getByLabel("Customer company", { exact: true })
     .fill("New customer");
+  await dialog
+    .getByLabel("Specification number", { exact: true })
+    .fill("CSP-EN-405");
+  await dialog
+    .getByLabel("Specification date", { exact: true })
+    .fill("2026-11-24");
+  await dialog
+    .getByLabel("Specification title", { exact: true })
+    .fill("Customer-defined coating requirements");
   await input.setInputFiles(pdf);
   await expect(dialog.getByText(pdf.name, { exact: true })).toBeVisible();
   await expect(dialog.getByText(/Selected, not uploaded yet/)).toBeVisible();
   await expect(
     dialog.getByRole("button", { name: "Replace PDF" }),
   ).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /OCR/ })).toHaveCount(0);
+  await expect(
+    dialog.getByText("Scanned PDFs are not supported yet. OCR is coming soon."),
+  ).toBeVisible();
 
   // Cancelling the native file chooser must not discard the previous choice.
   await input.setInputFiles([]);
   await expect(dialog.getByText(pdf.name, { exact: true })).toBeVisible();
+  const replacement = { ...pdf, name: "replacement-customer-version.pdf" };
+  await input.setInputFiles(replacement);
+  await expect(
+    dialog.getByText(replacement.name, { exact: true }),
+  ).toBeVisible();
+  await expect(dialog.getByText(pdf.name, { exact: true })).toHaveCount(0);
+  await expect(
+    dialog.getByLabel("Specification number", { exact: true }),
+  ).toHaveValue("CSP-EN-405");
+  await expect(
+    dialog.getByLabel("Specification date", { exact: true }),
+  ).toHaveValue("2026-11-24");
+  await expect(
+    dialog.getByLabel("Specification title", { exact: true }),
+  ).toHaveValue("Customer-defined coating requirements");
   if (testInfo.project.name === "desktop") {
     await dialog.screenshot({
       path: testInfo.outputPath("selected-pdf-before-upload.png"),
@@ -93,7 +121,9 @@ test("selected PDF can be removed and reselected without uploading or losing met
   }
 
   await dialog.getByRole("button", { name: "Remove PDF" }).click();
-  await expect(dialog.getByText(pdf.name, { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText(replacement.name, { exact: true })).toHaveCount(
+    0,
+  );
   await expect(
     dialog.getByRole("button", { name: "Choose PDF" }),
   ).toBeVisible();

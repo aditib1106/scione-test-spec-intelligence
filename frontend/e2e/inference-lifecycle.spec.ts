@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { SpecificationData, Workspace } from "../src/types";
+import { documentAction } from "./workspaceActions";
 
 test("failed analysis is not retried and requires fresh consent before another call", async ({
   page,
@@ -70,7 +71,7 @@ test("failed analysis is not retried and requires fresh consent before another c
   );
 
   await page.goto(`/specifications?document=${documentId}`);
-  await page.getByRole("button", { name: /^Analysis settings/ }).click();
+  await (await documentAction(page, "Analysis settings")).click();
   await expect(
     page.getByText(/browse other pages while analysis continues/),
   ).toBeVisible();

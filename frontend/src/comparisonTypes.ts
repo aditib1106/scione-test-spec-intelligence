@@ -90,6 +90,10 @@ export interface ComparisonData {
   summary: Partial<Record<ComparisonStatus, number>>;
   pdf_page_count?: number;
   assessment_reviews?: Record<string, AssessmentReview>;
+  customer_clarifications?: Record<
+    string,
+    { version: number; events: CustomerClarificationEvent[] }
+  >;
 }
 
 export interface AssessmentReview {
@@ -104,4 +108,32 @@ export interface AssessmentReview {
   created_at: string;
   machine_status: ComparisonStatus;
   input_fingerprint: string;
+}
+
+export interface CustomerClarificationEvent {
+  event_id: string;
+  question_id: string;
+  client_request_id: string;
+  event_kind: "question" | "customer_reply";
+  text: string;
+  contact: string;
+  actor: string;
+  actor_label?: string;
+  created_at: string;
+  version: number;
+  comparison_id: string;
+  input_fingerprint: string;
+  document_id: string;
+  source_run_id: string;
+  requirement_id: string;
+}
+
+export interface CustomerClarificationThread {
+  document_id: string;
+  source_run_id: string;
+  comparison_id: string;
+  input_fingerprint: string;
+  requirement_id: string;
+  version: number;
+  events: CustomerClarificationEvent[];
 }
