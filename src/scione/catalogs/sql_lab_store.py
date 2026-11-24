@@ -27,6 +27,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from scione.catalogs.capability_creation import (
+    capability_creation_view,
+    record_capability_creation,
+    upgrade_capability_creation_schema,
+)
 from scione.catalogs.lab_store import FileLabStore, LabStoreError, LabVersionConflict
 from scione.catalogs.models import LabProfile, ReferenceCatalog, validate_lab_references
 from scione.library.store import LibraryStore, LibraryStoreError, digest, now, schema_versions
@@ -132,6 +137,7 @@ def upgrade_lab_schema(library: LibraryStore) -> None:
     """
     with library.schema_upgrade() as engine:
         _upgrade_lab_schema(engine)
+        upgrade_capability_creation_schema(engine)
 
 
 def _upgrade_lab_schema(engine) -> None:
@@ -286,7 +292,10 @@ class SQLLabStore:
                 if changed.rowcount != 1:
                     raise LabVersionConflict("The lab has changed. Reload before saving.")
                 saved = candidate.model_copy(update={"version": candidate.version + 1})
-                self._write_entries(connection, saved)
+                added_ids, removed_ids = self._write_entries(connection, saved)
+                record_capability_creation(
+                    connection, self.workspace_id, added_ids=added_ids, removed_ids=removed_ids
+                )
                 self._revision(connection, saved)
         except (SQLAlchemyError, ValueError) as exc:
             raise LabStoreError(
@@ -382,7 +391,7 @@ class SQLLabStore:
             )
         )
 
-    def _write_entries(self, connection, lab: LabProfile) -> None:
+    def _write_entries(self, connection, lab: LabProfile) -> tuple[set[str], set[str]]:
         for position, test in enumerate(lab.custom_tests):
             connection.execute(
                 insert(lab_custom_tests).values(
@@ -519,6 +528,8 @@ class SQLLabStore:
                             .values(**changes)
                         )
 
+        return set(identifiers) - set(current_entries), removed
+
     def _revision(self, connection, lab: LabProfile) -> None:
         connection.execute(
             insert(lab_revisions).values(
@@ -530,6 +541,16 @@ class SQLLabStore:
                 payload=lab.model_dump(mode="json"),
             )
         )
+
+    def creation_metadata(self, lab: LabProfile) -> dict | None:
+        """Return a version-bound display hint without changing the lab model."""
+        try:
+            with self._engine().connect() as connection:
+                return capability_creation_view(connection, self.workspace_id, lab)
+        except SQLAlchemyError as exc:
+            raise LabStoreError(
+                "Unable to load the capability list. Existing declarations have been preserved."
+            ) from exc
 
     def records(self) -> dict:
         """Read indexed facts from SQL, without reparsing prose or calling a model."""

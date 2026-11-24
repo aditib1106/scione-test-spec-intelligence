@@ -10,6 +10,8 @@ from test_library_api import _seed
 from scione.api.contracts import AssessmentReview
 from scione.api.workspace import Workspace
 from scione.config import Settings
+from scione.library.assessment_reviews import SQLAssessmentReviews
+from scione.library.store import digest
 from scione.matching import input_fingerprint
 from scione.matching.service import SemanticMatchingRunner
 from scione.structured.pdf import render_comparison_pdf
@@ -92,8 +94,18 @@ def test_live_lab_and_source_review_invalidate_cached_report(cached_report):
     assert counts == {"draft": 3, "compile": 3}
 
 
-def test_source_audit_policy_change_readdresses_export_without_changing_semantic_inputs(
-    cached_report, monkeypatch
+@pytest.mark.parametrize(("constant", "field", "version"), [
+    (
+        "SOURCE_AUDIT_POLICY_VERSION", "source_audit_policy_version",
+        "native_clause_literal_future_test",
+    ),
+    (
+        "CHUNK_REVIEW_PROJECTION_POLICY_VERSION", "chunk_review_projection_policy_version",
+        "chunk_review_future_test",
+    ),
+])
+def test_diagnostic_policy_change_readdresses_export_without_changing_semantic_inputs(
+    cached_report, monkeypatch, constant, field, version,
 ):
     workspace, source, _run, counts = cached_report
 
@@ -111,10 +123,10 @@ def test_source_audit_policy_change_readdresses_export_without_changing_semantic
     )
     counts_before = dict(counts)
     monkeypatch.setattr(
-        "scione.library.workspace.SOURCE_AUDIT_POLICY_VERSION", "native_clause_literal_future_test"
+        "scione.library.workspace." + constant, version,
     )
     changed = workspace.library.comparison(source.document_id)
-    assert changed["source_audit_policy_version"] == "native_clause_literal_future_test"
+    assert changed[field] == version
     assert changed["comparison_id"] != original["comparison_id"]
     assert changed["export_snapshot_id"] != original["export_snapshot_id"]
     assert changed["report_input_fingerprint"] == original["report_input_fingerprint"]
@@ -151,6 +163,47 @@ def test_warm_cache_rechecks_inputs_before_publishing(cached_report, monkeypatch
     with pytest.raises(HTTPException) as caught:
         workspace.library.comparison(source.document_id)
     assert caught.value.status_code == 409
+
+
+@pytest.mark.parametrize("change", [
+    "legacy_to_stamped", "stamped_to_legacy", "check", "source_state", "notes",
+    "other_policy", "fingerprint",
+])
+def test_chunk_diagnostic_stamp_preserves_only_semantically_identical_reviews(
+    cached_report, change,
+):
+    workspace, source, _run, _counts = cached_report
+    current = workspace.library.comparison(source.document_id)
+    base = workspace.library.store.comparison(current["comparison_id"])
+    unstamped = deepcopy(base)
+    for key in ("comparison_id", "created_at", "chunk_review_projection_policy_version"):
+        unstamped.pop(key, None)
+    legacy = workspace.library.store.save_comparison(digest(unstamped), unstamped)
+    previous, target = (base, legacy) if change == "stamped_to_legacy" else (legacy, base)
+    target = deepcopy(target)
+    if change == "check":
+        target["requirements"][0]["comparison"]["checks"][0]["reason"] = "A changed finding."
+    elif change == "source_state":
+        target["requirements"][0]["source_review_state"] = "changed_source_state"
+    elif change == "notes":
+        target["notes"] = [*target["notes"], "A new source applicability concern."]
+    elif change == "other_policy":
+        target["source_audit_policy_version"] = "different-scientific-audit"
+    elif change == "fingerprint":
+        target["report_input_fingerprint"] = "changed-inputs"
+    events = SQLAssessmentReviews(workspace.library.store, workspace.labs.workspace_id)
+    body = review_body(previous)
+    row = next(item for item in previous["requirements"]
+               if item["requirement_id"] == body.requirement_id)
+    original_review = events.save(previous, row, body)
+    result = events.latest_for_assessment(target)
+    if change in {"legacy_to_stamped", "stamped_to_legacy"}:
+        saved = result[body.requirement_id]
+        assert saved["carried_from_review_id"] == original_review["review_id"]
+        assert saved["decision"] == original_review["decision"]
+        assert saved["note"] == original_review["note"]
+    else:
+        assert result == {}
 
 
 def test_metadata_date_preserves_decision_and_exports_new_frozen_snapshot(cached_report):

@@ -18,6 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from scione.api.public_views import current_actor
+from scione.auth.models import current_principal
 from scione.library.store import (
     LibraryConflict,
     LibraryStore,
@@ -118,8 +119,15 @@ class SQLAssessmentReviews:
             return current
 
         def semantic(payload):
+            # Chunk-warning ownership has a separate diagnostic stamp. A new
+            # stamp alone must not discard an unchanged human review. Actual
+            # requirements, source states, checks, notes and all other policy
+            # fields still have to agree byte-for-byte after canonicalization.
             return digest({key: value for key, value in payload.items()
-                           if key not in {"document", "comparison_id", "created_at"}})
+                           if key not in {
+                               "document", "comparison_id", "created_at",
+                               "chunk_review_projection_policy_version",
+                           }})
 
         expected = semantic(assessment)
         with self.library.engine.connect() as connection:
@@ -182,6 +190,10 @@ class SQLAssessmentReviews:
     def save(self, assessment: dict, requirement: dict, body) -> dict:
         upgrade_assessment_reviews_schema(self.library)
         comparison_id, identifier = assessment["comparison_id"], requirement["requirement_id"]
+        principal = current_principal()
+        actor_label = "Local reviewer"
+        if principal is not None and principal.user_id != "local":
+            actor_label = principal.display_name.strip() or principal.username.strip() or "Lab user"
         event = {
             "review_id": str(uuid4()),
             "comparison_id": comparison_id,
@@ -189,6 +201,7 @@ class SQLAssessmentReviews:
             "version": body.expected_version + 1,
             "created_at": now(),
             "actor": current_actor(),
+            "actor_label": actor_label,
             "input_fingerprint": assessment["report_input_fingerprint"],
             "machine_status": requirement["comparison"]["status"],
             "review_status": body.review_status,

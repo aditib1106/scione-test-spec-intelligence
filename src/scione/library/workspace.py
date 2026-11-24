@@ -19,6 +19,7 @@ from scione.matching.projection import MATCHING_PROJECTION_VERSION
 from scione.matching.retrieval import RETRIEVAL_POLICY_VERSION
 from scione.parameters import REGISTRY_VERSION
 from scione.reports.matching import lab_fingerprint
+from scione.specifications.chunk_review_projection import CHUNK_REVIEW_PROJECTION_POLICY_VERSION
 from scione.specifications.document_notes import document_notes_view
 from scione.specifications.extraction import coverage_issues
 from scione.specifications.review import (
@@ -82,6 +83,7 @@ class LibraryWorkspace:
                 "registry": REGISTRY_VERSION,
                 "review_policy": REVIEW_POLICY_VERSION,
                 "source_audit_policy": SOURCE_AUDIT_POLICY_VERSION,
+                "chunk_review_projection_policy": CHUNK_REVIEW_PROJECTION_POLICY_VERSION,
                 "catalog": [self.workspace.catalog.id, self.workspace.catalog.version],
             }
         )
@@ -252,6 +254,7 @@ class LibraryWorkspace:
                 COMPARISON_POLICY_VERSION, NORMALIZER_VERSION, REGISTRY_VERSION,
                 REVIEW_POLICY_VERSION, MATCHING_PROMPT_VERSION, MATCHING_VALIDATION_VERSION,
                 SOURCE_AUDIT_POLICY_VERSION,
+                CHUNK_REVIEW_PROJECTION_POLICY_VERSION,
                 MATCHING_PROJECTION_VERSION, MATCHING_BATCH_POLICY_VERSION,
                 RETRIEVAL_POLICY_VERSION,
             ],
@@ -481,6 +484,7 @@ class LibraryWorkspace:
             "comparison_policy_version": COMPARISON_POLICY_VERSION,
             "source_review_policy_version": REVIEW_POLICY_VERSION,
             "source_audit_policy_version": SOURCE_AUDIT_POLICY_VERSION,
+            "chunk_review_projection_policy_version": CHUNK_REVIEW_PROJECTION_POLICY_VERSION,
             "requirements": rows,
             "summary": summary,
             "source_coverage_issues": source_coverage,

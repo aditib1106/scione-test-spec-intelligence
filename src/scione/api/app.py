@@ -550,6 +550,16 @@ def create_app(settings: Settings | None = None, frontend_dir: Path | None = Non
             document_id, requirement_id, comparison_id, input_fingerprint
         )
 
+    @app.get("/api/comparisons/{document_id}/related-reviews")
+    def related_assessment_reviews(
+        document_id: str, requirement_id: str, comparison_id: str, input_fingerprint: str,
+    ):
+        from scione.library.related_reviews import related_review_references
+
+        return related_review_references(
+            workspace, document_id, requirement_id, comparison_id, input_fingerprint
+        )
+
     @app.post("/api/comparisons/{document_id}/clarifications")
     def record_customer_clarification(document_id: str, body: CustomerClarification):
         return workspace.library.record_clarification(document_id, body)
