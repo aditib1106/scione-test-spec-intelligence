@@ -228,7 +228,8 @@ __marimo__/
 
 # Client feedback originals and annotated review copies remain local.
 /docs/Feedback 2026-11-19.docx
-/docs/Feedback 2026-11-19 - Implementation Review 2026-11-24.docx
+/docs/Feedback 2026-11-19 - Implementation Review*.docx
+/docs/~$*.docx
 
 # Local copies of the team's bank inputs. The exact CSV is packaged losslessly
 # as catalogs/data/synthetic_method_bank_v1.csv.gz; retain the small audit below.

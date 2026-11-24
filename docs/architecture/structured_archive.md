@@ -15,6 +15,7 @@ file-backed pending authenticated storage migration.
 | capability_revisions          | Saved lab declaration used in an assessment                                                |
 | comparison_runs               | Immutable business assessment JSON and first-rendered PDF bytes                            |
 | assessment_review_events      | Append-only per-test processing decisions bound to an exact assessment and input fingerprint |
+| customer_clarification_events | Append-only questions and manually recorded replies, scoped to a lab, document, source run and test |
 | lab_workspaces                | Current SQL lab identity/version, scoped by a server-selected workspace ID                 |
 | lab_capability_entries        | Separate current capability/test/method/price declarations                                 |
 | lab_capability_claims         | Queryable parameter/role/stage/configuration/unit plus typed payload                       |
@@ -32,6 +33,10 @@ not replaced; OCR/non-native inputs do not enter that reorder path.
 An existing lab.json is imported only when the SQL workspace is empty, without editing
 the source file. Later reads/edits use SQL. Current entries and claims update in one
 transaction with compare-and-swap version checks; historical snapshots remain unchanged.
+Current capability entries and claims are updated incrementally: unchanged rows are not
+deleted and reinserted when a lab changes one field. The complete lab revision is still
+retained for assessment provenance. See [storage lifecycle](storage_lifecycle.md) for
+export sharing, retention boundaries and operational checks.
 The old Streamlit interface remains file-backed and must not be used as a SQL lab editor.
 
 ## Version boundaries
@@ -61,6 +66,15 @@ The old Streamlit interface remains file-backed and must not be used as a SQL la
   policy version and coverage warnings. A warning-policy upgrade creates a new snapshot
   even with unchanged source/lab inputs; earlier PDF/JSON snapshots stay immutable.
 - PDF bytes are frozen at first export. UI and JSON use that saved comparison.
+  New review-only export records can reference the immutable machine assessment and
+  freeze their own manual overlays, rather than duplicating its full evidence JSON.
+  Reads validate both the base and reconstructed snapshot. Existing full exports remain
+  readable; historical rows and PDF bytes are not rewritten.
+- Customer clarification history records questions and manually entered replies with
+  server-recorded author/time. It does not send messages, change a comparison finding,
+  or replace source review. Threads follow the same source run across reassessments;
+  a fresh extraction has a new thread. Export JSON/PDF freezes the applicable thread,
+  so a later reply cannot change an earlier export.
 - Matching attempts freeze exact candidate facts and normalizer version. A later
   normalization change can rebuild an archive index without changing old run artifacts.
 - Matching cache includes source review/identity choices, capability/catalog facts,
@@ -69,10 +83,14 @@ The old Streamlit interface remains file-backed and must not be used as a SQL la
   Requested model aliases and resolved response versions
   are saved separately so an alias does not trigger a new call on every click.
 - Parameter-policy and input-projection revisions also bind the application matching
-  fingerprint. The current source normalizer is `atomic_requirements_v0_38`, parameter
-  policy `pilot_parameters_v7`, source review `0.16`, and semantic validation
-  `semantic_alignment_guards_v0_24`. Extraction uses `customer_requirements_compact_v0.18`
+  fingerprint. The current source normalizer is `atomic_requirements_v0_40`, parameter
+  policy `pilot_parameters_v7`, source review `0.21`, and semantic validation
+  `semantic_alignment_guards_v0_26`. Extraction uses `customer_requirements_compact_v0.18`
   and semantic matching uses `semantic_matching_v0_11`.
+  The literal source-quantity audit is separately stamped as `native_clause_literal_v2`
+  in saved comparisons and source/read-cache signatures. This diagnostic stamp is not
+  added to semantic matching inputs. Changed warning content still changes an affected
+  input's digest; unchanged inputs are not globally invalidated.
 - Report-only scope actions and quantities do not invalidate semantic matching. Editing
   lab, extraction or source/identity review inputs does; old attempts remain downloadable.
 
@@ -99,7 +117,7 @@ warning with exact expandable notes and a link to the current specification. Fil
 extracted items cannot hide that document warning; it does not rewrite per-claim
 verdicts or establish that an unverified phrase is a semantic omission.
 
-The comparison and source views use `atomic_requirements_v0_38_native_first`.
+The comparison and source views use `atomic_requirements_v0_40_native_first`.
 Grounded native atoms are the authoritative fact set. Legacy parser proposals,
 duplicates and residual wording stay in source-linked `normalization_actions`;
 genuinely uncovered numbers or material restrictions become source-review issues,

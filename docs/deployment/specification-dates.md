@@ -39,5 +39,17 @@ replace older PDFs or copy their dates. Each version retains its own date. The U
 orders dated versions newest first and keeps undated versions explicitly undated.
 Upload timestamps only resolve ordering ties and remain separate metadata.
 
+The library shows one entry per specification family. Its **Versions** control opens
+a dated list with each original filename and its existing extraction/review status.
+The details page provides the same list for switching the viewed version. Searching
+a filename or date from an older version still finds the family. The **Viewing** label
+marks the version currently open in the browser; the newest date is not an approval
+or an active-version declaration.
+
+Switching versions does not copy confirmations, rerun a model, overwrite a source
+file or modify the previous assessment. Removing a version archives that version;
+the remaining family members stay accessible. Company boundaries and optimistic
+metadata-edit checks still apply. This UI update adds no database schema.
+
 Previously exported report snapshots remain immutable. Changing metadata creates
 a new current comparison when needed; it does not silently rewrite an older PDF.
