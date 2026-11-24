@@ -226,6 +226,10 @@ __marimo__/
 !/docs/samples/MS-PNT-410_demo_spec.pdf
 !/docs/samples/CSP-EN-301_demo_spec.pdf
 
+# Client feedback originals and annotated review copies remain local.
+/docs/Feedback 2026-11-19.docx
+/docs/Feedback 2026-11-19 - Implementation Review 2026-11-24.docx
+
 # Local copies of the team's bank inputs. The exact CSV is packaged losslessly
 # as catalogs/data/synthetic_method_bank_v1.csv.gz; retain the small audit below.
 /docs/Generated Customer Spec/*.csv

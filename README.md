@@ -4,6 +4,9 @@ CMU Heinz Capstone: a lab-facing customer-specification archive and capability-g
 React, TypeScript and MUI provide the interface; FastAPI handles extraction, comparison,
 storage and PDF generation. Streamlit remains a legacy compatibility tool.
 
+See [CHANGELOG.md](CHANGELOG.md) for changes and release status. Entries under
+**Unreleased** have not been deployed; the hosted pilot can be on an earlier revision.
+
 ## Quickstart: local preview with login
 
 Use Python 3.11+, Node.js 22.12+ and uv. From the repository root:
@@ -94,8 +97,8 @@ A checkout or local preview does not mean a public deployment is already live.
 | Area                              | Purpose                                                                                                                                                                                          |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Specifications → Library**      | Save customer/company metadata and revisions; search, view or remove a saved version. Expand detailed requirements when needed.                                                                  |
-| **Specifications → PDF & review** | Compare extracted test items, test methods, conditions and acceptance criteria against highlighted PDF evidence. Confirm, edit, remove or add a missing source-backed test.                      |
-| **Gap report**                    | Select a test item, inspect its assessment, and expand Conditions or Acceptance criteria for detailed comparisons. Filter and prioritize items needing attention. PDF/JSON exports are optional. |
+| **Specifications → PDF & review** | Compare extracted test items, test methods, conditions and test specifications against highlighted PDF evidence. Confirm, edit, remove or add a missing source-backed test.                      |
+| **Gap report**                    | Select a test item, inspect its assessment, and expand Conditions or Test specification for detailed comparisons. Filter and prioritize items needing attention. PDF/JSON exports are optional. |
 | **Lab capability**                | Maintain supported test methods, conditions, reportable outputs and optional prices. Typed fields support values, ranges, units and context, including custom parameters.                        |
 | **Test catalog**                  | Read shared test/method identities and aliases. A catalog entry does not establish lab capability or method equivalence.                                                                         |
 | **Developer Tools**               | Maintainer-only run history, original provider output, diagnostics and maintenance.                                                                                                              |
